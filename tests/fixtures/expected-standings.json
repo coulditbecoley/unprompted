@@ -1,0 +1,9 @@
+{
+  "_comment": "One shared expectation for two implementations. Python computes the checks, TypeScript renders the site, and if either drifts from this file the metric definition has silently changed. That is the failure this project can least afford.",
+  "totalRuns": 3,
+  "standings": [
+    { "brand": "PSA", "named": 3, "totalRuns": 3, "rotation": 1.0, "firstNamed": 2, "firstShare": 0.6667, "cells": [true, true, true] },
+    { "brand": "CGC", "named": 2, "totalRuns": 3, "rotation": 0.6667, "firstNamed": 1, "firstShare": 0.3333, "cells": [true, true, false] }
+  ],
+  "topSource": ["psacard.com", 2]
+}

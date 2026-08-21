@@ -1,0 +1,18 @@
+{
+  "category": "sample",
+  "run_date": "2026-01-06",
+  "method_version": 1,
+  "runs_per_question": 2,
+  "engines": ["claude", "chatgpt"],
+  "quarantined": [],
+  "extractions": [
+    { "engine": "claude", "question_id": "q01", "run_index": 0, "refused": false, "error": null, "sources": ["https://www.psacard.com/a"],
+      "brands": [{"name":"PSA","position":1,"sentiment":"neutral"},{"name":"CGC","position":2,"sentiment":"neutral"}] },
+    { "engine": "claude", "question_id": "q01", "run_index": 1, "refused": false, "error": null, "sources": ["https://reddit.com/r/x"],
+      "brands": [{"name":"CGC","position":1,"sentiment":"neutral"},{"name":"PSA","position":2,"sentiment":"neutral"}] },
+    { "engine": "chatgpt", "question_id": "q01", "run_index": 0, "refused": false, "error": null, "sources": ["https://psacard.com/b"],
+      "brands": [{"name":"PSA","position":1,"sentiment":"neutral"}] },
+    { "engine": "chatgpt", "question_id": "q01", "run_index": 1, "refused": true, "error": null, "sources": [], "brands": [] },
+    { "engine": "chatgpt", "question_id": "q02", "run_index": 0, "refused": false, "error": "boom", "sources": [], "brands": [] }
+  ]
+}

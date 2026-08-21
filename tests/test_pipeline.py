@@ -247,3 +247,32 @@ def test_unconfigured_engine_reports_itself_rather_than_failing():
     answers = _NoKey().ask("q01", "which grader?", runs=3)
     assert len(answers) == 3
     assert all("not configured" in a.error for a in answers)
+
+
+# --- cross-implementation agreement ----------------------------------------
+# Rotation is computed twice: here for the sanity checks, and in TypeScript for
+# the site. Two implementations of one metric drift silently, and a chart that
+# disagrees with its own checks is the failure this project can least afford.
+# Both sides assert against the same fixture, so drift in either fails a build.
+
+import json
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def test_python_matches_the_shared_expectation():
+    run = json.loads((FIXTURES / "run-sample.json").read_text(encoding="utf-8"))
+    expected = json.loads((FIXTURES / "expected-standings.json").read_text(encoding="utf-8"))
+
+    got = brand_week(run)
+    assert [b.brand for b in got] == [e["brand"] for e in expected["standings"]]
+
+    for actual, want in zip(got, expected["standings"]):
+        assert actual.named == want["named"]
+        assert actual.total_runs == want["totalRuns"]
+        assert actual.rotation == pytest.approx(want["rotation"], abs=1e-4)
+        assert actual.first_named == want["firstNamed"]
+        assert actual.first_share == pytest.approx(want["firstShare"], abs=1e-4)
+        assert actual.cells == want["cells"]
+
+    assert source_counts(run)[0] == tuple(expected["topSource"])
