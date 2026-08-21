@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { load as loadYaml } from "js-yaml";
 
+import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
 import { CATEGORY } from "@/lib/data";
 
 export const runtime = "nodejs";
@@ -22,7 +23,7 @@ const MAX_BYTES = 64 * 1024;
 export async function POST(request: Request) {
   // Defence in depth: middleware gates /admin and /api/admin, and this route
   // checks again so a routing change can never silently expose the write path.
-  if (!isAuthorised(request)) {
+  if (!(await isAuthorised(request))) {
     return NextResponse.json({ error: "Not authorised" }, { status: 401 });
   }
 
@@ -101,25 +102,18 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
 }
 
-function isAuthorised(request: Request): boolean {
+/**
+ * Defence in depth. Middleware already gates this path; checking again here
+ * means a future routing change can never silently expose the write path.
+ */
+async function isAuthorised(request: Request): Promise<boolean> {
   const secret = process.env.ADMIN_PASSWORD;
   if (!secret) return false;
   const cookie = request.headers.get("cookie") ?? "";
-  const match = /(?:^|;\s*)unprompted_admin=([^;]+)/.exec(cookie);
-  return Boolean(match && safeEqual(decodeURIComponent(match[1]), secret));
-}
-
-/** Length-independent comparison, so a wrong guess leaks no timing signal. */
-function safeEqual(a: string, b: string): boolean {
-  const enc = new TextEncoder();
-  const x = enc.encode(a);
-  const y = enc.encode(b);
-  let diff = x.length ^ y.length;
-  const len = Math.max(x.length, y.length);
-  for (let i = 0; i < len; i += 1) {
-    diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  }
-  return diff === 0;
+  const match = new RegExp(`(?:^|;\s*)${ADMIN_COOKIE}=([^;]+)`).exec(cookie);
+  if (!match) return false;
+  const expected = await deriveSessionToken(secret);
+  return safeEqual(decodeURIComponent(match[1]), expected);
 }
 
 function validate(target: Target, content: string): string | null {

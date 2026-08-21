@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
+
 /**
  * Gates the only non-public surface.
  *
@@ -11,7 +13,7 @@ import type { NextRequest } from "next/server";
  * If ADMIN_PASSWORD is unset the admin surface is closed entirely rather than
  * open — an unconfigured deploy must never be an unlocked one.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const secret = process.env.ADMIN_PASSWORD;
 
   if (!secret) {
@@ -21,12 +23,15 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  const cookie = request.cookies.get("unprompted_admin")?.value;
-  if (cookie && safeEqual(cookie, secret)) {
+  // The cookie carries an HMAC of a fixed label, never the password itself, so
+  // a leaked cookie cannot be turned back into the credential.
+  const expected = await deriveSessionToken(secret);
+  const cookie = request.cookies.get(ADMIN_COOKIE)?.value;
+  if (cookie && safeEqual(cookie, expected)) {
     return NextResponse.next();
   }
 
-  // Basic auth: the browser supplies the prompt, we set the cookie once.
+  // Basic auth: the browser supplies the prompt, we set the session once.
   const header = request.headers.get("authorization");
   if (header?.startsWith("Basic ")) {
     let decoded = "";
@@ -38,7 +43,7 @@ export function middleware(request: NextRequest) {
     const supplied = decoded.slice(decoded.indexOf(":") + 1);
     if (supplied && safeEqual(supplied, secret)) {
       const response = NextResponse.next();
-      response.cookies.set("unprompted_admin", secret, {
+      response.cookies.set(ADMIN_COOKIE, expected, {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
@@ -56,19 +61,6 @@ export function middleware(request: NextRequest) {
       "Content-Type": "text/plain",
     },
   });
-}
-
-/** Length-independent comparison, so a wrong guess leaks no timing signal. */
-function safeEqual(a: string, b: string): boolean {
-  const enc = new TextEncoder();
-  const x = enc.encode(a);
-  const y = enc.encode(b);
-  let diff = x.length ^ y.length;
-  const len = Math.max(x.length, y.length);
-  for (let i = 0; i < len; i += 1) {
-    diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  }
-  return diff === 0;
 }
 
 export const config = {
