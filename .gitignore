@@ -11,3 +11,4 @@ venv/
 .DS_Store
 .impeccable/
 .admin-pw.local
+*.egg-info/
