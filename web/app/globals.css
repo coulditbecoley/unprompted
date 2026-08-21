@@ -1,0 +1,335 @@
+/* ============================================================================
+   Unprompted design system
+   Direction: Algorave source floor. Seed 06ec8236.
+   Materials: flat graphite and Apple off-white. Carbon fibre is TRIM ONLY.
+   ========================================================================= */
+
+@font-face {
+  font-family: "Martian Mono Fallback";
+  src: local("SFMono-Regular"), local("Menlo"), local("Consolas");
+  size-adjust: 108%;
+}
+
+:root {
+  /* --- surfaces: flat, never textured --------------------------------- */
+  --graphite: #121417;
+  --graphite-raise: #1a1d21;
+  --graphite-high: #22262b;
+  --bone: #f5f4f0;
+  --bone-shade: #e6e4dc;
+  --bone-deep: #d5d2c8;
+
+  /* --- carbon: trim material, constant across both themes -------------- */
+  --carbon-base: #15171a;
+
+  /* --- the one signal -------------------------------------------------- */
+  --amber: #e8913c;
+  --amber-dim: #b06f2c;
+
+  /* --- movement: reinforcement only, never the sole carrier ------------ */
+  --rise: #3e7f6b;
+  --fall: #a8523c;
+
+  --font-mono: "Martian Mono", "Martian Mono Fallback", ui-monospace, monospace;
+  --font-sans: "Mona Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --step: 4px;
+  --rule-w: 1px;
+  --trim-w: 6px;
+
+  /* Light is the default: the primary scene is a screenshot dropped into a
+     thread, and light survives that trip better. */
+  --bg: var(--bone);
+  --surface: #fbfaf7;
+  --surface-2: var(--bone-shade);
+  --fg: #14161a;
+  --fg-2: #454b53;
+  --fg-3: #6d747d;
+  --rule: var(--bone-deep);
+  --rule-2: #bfbbaf;
+  --cell-off: var(--bone-shade);
+  --cell-on: #14161a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--graphite);
+    --surface: var(--graphite-raise);
+    --surface-2: var(--graphite-high);
+    --fg: var(--bone);
+    --fg-2: #b6b3aa;
+    --fg-3: #878d95;
+    --rule: #2b2f35;
+    --rule-2: #383d44;
+    --cell-off: #24282d;
+    --cell-on: var(--bone);
+    --rise: #5fa98f;
+    --fall: #d0755a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: var(--graphite);
+  --surface: var(--graphite-raise);
+  --surface-2: var(--graphite-high);
+  --fg: var(--bone);
+  --fg-2: #b6b3aa;
+  --fg-3: #878d95;
+  --rule: #2b2f35;
+  --rule-2: #383d44;
+  --cell-off: #24282d;
+  --cell-on: var(--bone);
+  --rise: #5fa98f;
+  --fall: #d0755a;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  font-synthesis-weight: none;
+}
+
+/* ---------------------------------------------------------------------------
+   CARBON FIBRE TRIM
+   Real 2x2 twill at a 4px tile. The tile is deliberately fine: at trim width
+   an 8px weave shows about one crossing and reads as noise or a plain dark
+   line. Matte only. No gloss, no specular, never behind text.
+   Below ~5px of width carbon stops being carbon, so there is no 1px variant.
+   ------------------------------------------------------------------------ */
+.carbon {
+  background-color: var(--carbon-base);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.055) 0 1px, rgba(0, 0, 0, 0.075) 1px 2px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.042) 0 1px, rgba(0, 0, 0, 0.062) 1px 2px);
+  background-size: 4px 4px, 4px 4px;
+  background-position: 0 0, 2px 2px;
+}
+
+.trim-top { position: absolute; inset: 0 0 auto 0; height: 5px; }
+.trim-left { position: absolute; inset: 0 auto 0 0; width: var(--trim-w); }
+
+/* --- typography ---------------------------------------------------------- */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.display {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+h1, h2, h3 { font-family: var(--font-sans); letter-spacing: -0.025em; text-wrap: balance; }
+
+a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* --- layout -------------------------------------------------------------- */
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+.rule { border: 0; border-top: var(--rule-w) solid var(--rule); margin: 0; }
+
+/* --- sequencer: the signature object ------------------------------------- */
+.seq-cell {
+  width: 14px;
+  height: 26px;
+  background: var(--cell-off);
+  border: 1px solid var(--rule);
+  flex: none;
+}
+.seq-cell[data-on="true"] { background: var(--cell-on); border-color: var(--cell-on); }
+
+@media (max-width: 560px) {
+  .seq-cell { width: 11px; height: 22px; }
+}
+
+/* --- motion --------------------------------------------------------------
+   Three motions, each carrying information: the buffer types, cells fill in
+   run order, and anything pending warms to amber first.
+   ------------------------------------------------------------------------ */
+@keyframes cell-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+.seq-cell { animation: cell-in 220ms ease-out both; }
+
+@keyframes caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  background: var(--amber);
+  vertical-align: -0.16em;
+  animation: caret 1.05s steps(1) infinite;
+}
+
+@keyframes pending {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.pending { animation: pending 2.2s ease-in-out infinite; color: var(--amber); }
+
+/* Reduced motion resolves every animation to its final state. No information
+   is carried by motion alone, so nothing is lost here. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .caret { opacity: 1; }
+}
+
+/* --- site chrome --------------------------------------------------------- */
+.site-head { border-bottom: var(--rule-w) solid var(--rule); background: var(--bg); }
+.site-head-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; padding-top: 16px; padding-bottom: 16px; flex-wrap: wrap;
+}
+.wordmark { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
+.wordmark-text { font-weight: 800; font-size: 19px; letter-spacing: -0.03em; }
+.wordmark-chip { width: 18px; height: 18px; flex: none; }
+.site-nav { display: flex; gap: 20px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; }
+.site-nav a { text-decoration: none; color: var(--fg-2); }
+.site-nav a:hover { color: var(--fg); text-decoration: underline; }
+.disclosure {
+  margin: 0; padding: 8px 20px; max-width: 1180px;
+  margin-inline: auto; font-family: var(--font-mono);
+  font-size: 10.5px; line-height: 1.5; color: var(--fg-3);
+  border-top: var(--rule-w) solid var(--rule);
+}
+.site-foot { border-top: var(--rule-w) solid var(--rule); margin-top: 72px; padding: 26px 0 48px; }
+.site-foot p { margin: 0 0 8px; font-size: 11.5px; color: var(--fg-2); }
+.site-foot .foot-dim { color: var(--fg-3); }
+
+/* --- status bar ---------------------------------------------------------- */
+.statusbar {
+  display: flex; flex-wrap: wrap; gap: 6px 22px;
+  padding: 9px 14px; font-size: 10px; letter-spacing: 0.11em;
+  color: #f5f4f0; border: var(--rule-w) solid var(--rule);
+}
+.statusbar .mono { opacity: 0.82; }
+
+/* --- sequencer board ----------------------------------------------------- */
+.seq-board { position: relative; border: var(--rule-w) solid var(--rule); background: var(--surface); padding: 5px 0 0; }
+.seq-row {
+  display: grid;
+  grid-template-columns: 34px minmax(96px, 1fr) auto 58px 48px 56px;
+  align-items: center; gap: 12px;
+  padding: 11px 16px; border-bottom: var(--rule-w) solid var(--rule);
+}
+.seq-row:last-child { border-bottom: none; }
+.seq-head { padding-top: 13px; padding-bottom: 9px; background: var(--surface-2); }
+.seq-rank { font-size: 11px; color: var(--fg-3); }
+.seq-brand { font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
+.seq-brand a:hover { text-decoration: underline; }
+.seq-cells { display: flex; gap: 3px; }
+.seq-rot { font-size: 13px; text-align: right; font-weight: 500; }
+.seq-first { font-size: 12px; text-align: right; color: var(--fg-2); }
+.seq-delta { font-size: 11.5px; text-align: right; color: var(--fg-3); }
+.seq-delta.is-up { color: var(--rise); }
+.seq-delta.is-down { color: var(--fall); }
+.seq-delta.is-new { color: var(--amber); }
+
+@media (max-width: 640px) {
+  .seq-row { grid-template-columns: 26px minmax(72px, 1fr) 50px 44px; gap: 8px; padding: 10px 12px; }
+  .seq-cells { display: none; }
+  .seq-first { display: none; }
+  .seq-brand { font-size: 15px; }
+}
+
+/* --- hero ---------------------------------------------------------------- */
+.hero { padding: 56px 0 34px; }
+.hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 40px; align-items: start; }
+@media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; gap: 28px; } }
+.hero h1 { font-size: clamp(40px, 7.5vw, 82px); margin: 0 0 20px; }
+.hero-sub { font-size: 19px; color: var(--fg-2); margin: 0 0 26px; max-width: 46ch; line-height: 1.5; }
+.verdict-brand { color: var(--amber); }
+
+/* --- query buffer -------------------------------------------------------- */
+.buffer { position: relative; border: var(--rule-w) solid var(--rule); background: var(--surface); }
+.buffer-body { padding: 18px 18px 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.85; }
+.buffer-line { display: flex; gap: 12px; color: var(--fg-2); }
+.buffer-n { color: var(--fg-3); flex: none; width: 20px; text-align: right; }
+.buffer-q { color: var(--fg); }
+
+/* --- sections ------------------------------------------------------------ */
+.section { padding: 40px 0 8px; }
+.section h2 { font-size: clamp(22px, 3.4vw, 30px); font-weight: 700; margin: 0 0 6px; }
+.section-lead { color: var(--fg-2); margin: 0 0 20px; max-width: 62ch; }
+.snub { border: var(--rule-w) solid var(--amber); padding: 18px 20px; margin: 20px 0; background: var(--surface); }
+.snub h3 { margin: 0 0 6px; font-size: 18px; }
+.snub p { margin: 0; color: var(--fg-2); font-size: 15.5px; }
+
+/* --- generic panel ------------------------------------------------------- */
+.panel { position: relative; border: var(--rule-w) solid var(--rule); background: var(--surface); padding: 20px 22px 20px 30px; margin: 0 0 14px; }
+.panel h3 { margin: 0 0 8px; font-size: 17px; }
+.panel p { margin: 0; color: var(--fg-2); font-size: 15.5px; }
+
+.empty { padding: 64px 0; max-width: 58ch; }
+.empty h2 { font-size: clamp(24px, 4vw, 34px); margin: 8px 0 14px; }
+.empty p { color: var(--fg-2); margin: 0 0 14px; }
+
+.prose { max-width: 68ch; }
+.prose h2 { font-size: 24px; margin: 40px 0 12px; }
+.prose h3 { font-size: 18px; margin: 28px 0 8px; }
+.prose p, .prose li { color: var(--fg-2); }
+.prose code { font-family: var(--font-mono); font-size: 0.86em; background: var(--surface-2); padding: 2px 5px; }
+.prose table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin: 18px 0; }
+.prose th { text-align: left; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); padding: 10px 12px; border-bottom: var(--rule-w) solid var(--rule-2); }
+.prose td { padding: 10px 12px; border-bottom: var(--rule-w) solid var(--rule); vertical-align: top; }
+
+/* --- theme toggle -------------------------------------------------------- */
+.theme-toggle {
+  position: fixed; right: 14px; bottom: 14px; z-index: 20;
+  min-width: 62px; height: 30px; padding: 0 10px;
+  font-size: 10px; letter-spacing: 0.13em;
+  background: var(--surface); color: var(--fg-2);
+  border: var(--rule-w) solid var(--rule-2); cursor: pointer;
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--fg-3); }
+
+/* --- compare ------------------------------------------------------------- */
+.cmp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.cmp-pick { position: relative; border: var(--rule-w) solid var(--rule); background: var(--surface); padding: 16px 18px 16px 28px; }
+.cmp-pick h3 { margin: 0 0 10px; font-size: 20px; }
+.cmp-stat { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: var(--rule-w) solid var(--rule); font-size: 14px; }
+.cmp-stat:last-child { border-bottom: none; }
+.cmp-stat span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* --- sparkline ----------------------------------------------------------- */
+.spark { display: block; width: 100%; height: 72px; }
+.spark-line { fill: none; stroke: var(--fg); stroke-width: 1.5; }
+.spark-dot { fill: var(--amber); }
+.spark-grid { stroke: var(--rule); stroke-width: 1; }
+
+/* --- question breakdown -------------------------------------------------- */
+.q-block { position: relative; border: var(--rule-w) solid var(--rule); background: var(--surface); padding: 18px 20px; margin: 0 0 12px; }
+.q-text { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.q-eng { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 7px 0; border-top: var(--rule-w) solid var(--rule); font-size: 14px; }
+.q-eng .label { padding-top: 3px; }
+.q-names { color: var(--fg-2); }
+.q-names em { color: var(--fg-3); font-style: normal; }

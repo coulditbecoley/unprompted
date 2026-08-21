@@ -1,0 +1,185 @@
+/**
+ * The primitives every layer reuses.
+ *
+ * Carbon appears here and nowhere else, so the trim budget for the whole site
+ * is auditable from one file.
+ */
+
+import Link from "next/link";
+import type { BrandStanding, Movement } from "@/lib/data";
+import { DISCLOSURE, slugify } from "@/lib/data";
+
+/* -- carbon trim ---------------------------------------------------------- */
+
+export function TrimTop() {
+  return <span className="carbon trim-top" aria-hidden="true" />;
+}
+
+export function TrimLeft() {
+  return <span className="carbon trim-left" aria-hidden="true" />;
+}
+
+/* -- the sequencer row: one cell per run ---------------------------------- */
+
+export function SequencerRow({
+  standing,
+  rank,
+  move,
+  href,
+}: {
+  standing: BrandStanding;
+  rank: number;
+  move?: Movement;
+  href?: string;
+}) {
+  const name = href ? (
+    <Link href={href} style={{ textDecoration: "none" }}>
+      {standing.brand}
+    </Link>
+  ) : (
+    standing.brand
+  );
+
+  return (
+    <div className="seq-row">
+      <span className="mono seq-rank">{String(rank).padStart(2, "0")}</span>
+      <span className="seq-brand">{name}</span>
+
+      <span
+        className="seq-cells"
+        role="img"
+        aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs`}
+      >
+        {standing.cells.map((on, i) => (
+          <i
+            key={i}
+            className="seq-cell"
+            data-on={on}
+            style={{ animationDelay: `${i * 26}ms` }}
+          />
+        ))}
+      </span>
+
+      <span className="mono seq-rot">
+        {standing.named}/{standing.totalRuns}
+      </span>
+      <span className="mono seq-first">{Math.round(standing.firstShare * 100)}%</span>
+      <Delta move={move} />
+    </div>
+  );
+}
+
+/**
+ * Movement is carried by the arrow glyph and the sign, not by colour. Colour is
+ * reinforcement only, so the board still reads correctly in greyscale and for
+ * anyone who cannot distinguish the two hues.
+ */
+export function Delta({ move }: { move?: Movement }) {
+  if (!move) return <span className="mono seq-delta" />;
+  if (move.isNew) return <span className="mono seq-delta is-new">NEW</span>;
+  if (move.rotationDelta === 0) return <span className="mono seq-delta">—</span>;
+
+  const up = move.rotationDelta > 0;
+  return (
+    <span className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
+      {up ? "▲" : "▼"}
+      {Math.abs(move.rotationDelta)}
+    </span>
+  );
+}
+
+export function SequencerHead() {
+  return (
+    <div className="seq-row seq-head" aria-hidden="true">
+      <span className="label seq-rank">#</span>
+      <span className="label seq-brand">Brand</span>
+      <span className="label seq-cells">Runs</span>
+      <span className="label seq-rot">Named</span>
+      <span className="label seq-first">First</span>
+      <span className="label seq-delta">Δ</span>
+    </div>
+  );
+}
+
+/* -- status bar ----------------------------------------------------------- */
+
+export function StatusBar({
+  runDate,
+  engines,
+  methodVersion,
+  runsPerQuestion,
+}: {
+  runDate: string;
+  engines: string[];
+  methodVersion: number;
+  runsPerQuestion: number;
+}) {
+  return (
+    <div className="statusbar carbon">
+      <span className="mono">RUN {runDate}</span>
+      <span className="mono">METHOD v{methodVersion}</span>
+      <span className="mono">{runsPerQuestion} RUNS/Q</span>
+      <span className="mono">
+        {engines.length} ENGINE{engines.length === 1 ? "" : "S"}: {engines.join(" · ").toUpperCase()}
+      </span>
+    </div>
+  );
+}
+
+/* -- site chrome ---------------------------------------------------------- */
+
+export function SiteHeader() {
+  return (
+    <header className="site-head">
+      <div className="shell site-head-inner">
+        <Link href="/" className="wordmark">
+          <span className="wordmark-text">Unprompted</span>
+          <span className="carbon wordmark-chip" aria-hidden="true" />
+        </Link>
+        <nav className="site-nav">
+          <Link href="/chart">Chart</Link>
+          <Link href="/compare">Compare</Link>
+          <Link href="/questions">Questions</Link>
+          <Link href="/methodology">Method</Link>
+        </nav>
+      </div>
+      {/* Disclosure sits in the header on every page, not a footer link. */}
+      <p className="disclosure">{DISCLOSURE}</p>
+    </header>
+  );
+}
+
+export function SiteFooter() {
+  return (
+    <footer className="site-foot">
+      <div className="shell">
+        <p className="mono">
+          Unprompted · what AI recommends when nobody&rsquo;s paying ·{" "}
+          <a href="https://github.com/coulditbecoley/unprompted">source and data</a>
+        </p>
+        <p className="mono foot-dim">{DISCLOSURE}</p>
+      </div>
+    </footer>
+  );
+}
+
+export function brandHref(brand: string) {
+  return `/brand/${slugify(brand)}`;
+}
+
+/* -- empty state ---------------------------------------------------------- */
+
+export function AwaitingFirstRun() {
+  return (
+    <section className="empty">
+      <p className="label">No data yet</p>
+      <h2>The first run has not happened.</h2>
+      <p>
+        Unprompted publishes nothing until it has measured something. There is no
+        sample chart here, because a sample chart is a made-up number and this
+        publication only prints real ones.
+      </p>
+      <p className="mono pending">Awaiting first measurement</p>
+    </section>
+  );
+}
