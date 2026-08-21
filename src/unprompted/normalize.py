@@ -15,6 +15,10 @@ import yaml
 from .models import Extraction
 
 _PUNCT = re.compile(r"[^a-z0-9]+")
+# Engines habitually write "Beckett (BGS)" or "PSA (Professional Sports
+# Authenticator)". Both halves are usually already known, so try the name with
+# the parenthetical removed before giving up and quarantining it.
+_PAREN = re.compile(r"\s*\([^)]*\)")
 # Trailing corporate noise that never distinguishes one brand from another.
 _SUFFIXES = (
     "llc", "inc", "incorporated", "ltd", "limited", "corp", "corporation", "co",
@@ -48,7 +52,22 @@ class AliasMap:
 
     def resolve(self, name: str) -> str | None:
         """Return the canonical name, or None when the name is unknown."""
-        return self._lookup.get(_key(name))
+        direct = self._lookup.get(_key(name))
+        if direct is not None:
+            return direct
+
+        # "Beckett (BGS)" -> try "Beckett", then try "BGS".
+        outside = _PAREN.sub("", name)
+        if outside != name:
+            found = self._lookup.get(_key(outside))
+            if found is not None:
+                return found
+            inside = re.findall(r"\(([^)]*)\)", name)
+            for part in inside:
+                found = self._lookup.get(_key(part))
+                if found is not None:
+                    return found
+        return None
 
 
 def normalize(

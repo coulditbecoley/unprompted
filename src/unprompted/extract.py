@@ -55,6 +55,7 @@ def extract_one(answer: EngineAnswer, api_key: str | None = None) -> Extraction:
         question_id=answer.question_id,
         run_index=answer.run_index,
         sources=answer.sources,
+        answer=answer.text,
     )
 
     # An engine failure upstream stays a failure; do not spend a call on it.
@@ -79,7 +80,7 @@ def extract_one(answer: EngineAnswer, api_key: str | None = None) -> Extraction:
             messages=[
                 {"role": "user", "content": EXTRACT_PROMPT.format(answer=answer.text)}
             ],
-            response_format=_Extraction,
+            output_format=_Extraction,
         )
         parsed = result.parsed_output
     except Exception as exc:  # noqa: BLE001 - recorded, not raised

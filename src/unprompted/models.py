@@ -59,6 +59,10 @@ class Extraction:
     sources: list[str] = field(default_factory=list)
     refused: bool = False
     error: str | None = None
+    # The engine's verbatim answer. Stored because the methodology promises every
+    # raw answer is public, and because a failed extraction should cost a cheap
+    # re-parse rather than re-querying every engine.
+    answer: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +73,7 @@ class Extraction:
             "sources": self.sources,
             "refused": self.refused,
             "error": self.error,
+            "answer": self.answer,
         }
 
 

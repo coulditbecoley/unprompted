@@ -276,3 +276,19 @@ def test_python_matches_the_shared_expectation():
         assert actual.cells == want["cells"]
 
     assert source_counts(run)[0] == tuple(expected["topSource"])
+
+
+def test_parenthetical_forms_resolve_rather_than_quarantine():
+    """Engines habitually write "Beckett (BGS)"; both halves are already known."""
+    cleaned, quarantined = normalize(
+        [ex(brands=["Beckett (BGS)"]), ex(brands=["PSA (Professional Sports Authenticator)"])],
+        ALIASES,
+    )
+    assert [e.brands[0].name for e in cleaned] == ["Beckett", "PSA"]
+    assert quarantined == []
+
+
+def test_parenthetical_with_unknown_halves_still_quarantines():
+    cleaned, quarantined = normalize([ex(brands=["Fake Co (FKC)"])], ALIASES)
+    assert cleaned[0].brands == []
+    assert "Fake Co (FKC)" in quarantined
