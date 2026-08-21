@@ -10,3 +10,4 @@ venv/
 .vercel
 .DS_Store
 .impeccable/refs/
+.impeccable/
