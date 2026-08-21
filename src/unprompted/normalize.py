@@ -35,10 +35,20 @@ def _key(name: str) -> str:
 
 
 class AliasMap:
-    """Maps every known spelling of a brand to one canonical name."""
+    """Maps every known spelling of a brand to one canonical name.
 
-    def __init__(self, canonical: dict[str, list[str]]):
+    Three outcomes, and the third is why the chart can ever publish:
+      known      -> canonical name, charted
+      excluded   -> dropped silently (a real thing, but not in this category)
+      unknown    -> quarantined, held for a human
+
+    Without the excluded bucket, marketplaces and grade labels would trip the
+    quarantine check every week forever.
+    """
+
+    def __init__(self, canonical: dict[str, list[str]], exclude: list[str] | None = None):
         self._lookup: dict[str, str] = {}
+        self._excluded: set[str] = {_key(x) for x in (exclude or [])}
         self.canonical_names: list[str] = sorted(canonical)
         for name, aliases in canonical.items():
             self._lookup[_key(name)] = name
@@ -48,7 +58,14 @@ class AliasMap:
     @classmethod
     def load(cls, path: str | Path) -> "AliasMap":
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-        return cls(data.get("canonical", {}))
+        return cls(data.get("canonical", {}), data.get("exclude", []))
+
+    def is_excluded(self, name: str) -> bool:
+        """Known, and deliberately not charted."""
+        if _key(name) in self._excluded:
+            return True
+        outside = _PAREN.sub("", name)
+        return outside != name and _key(outside) in self._excluded
 
     def resolve(self, name: str) -> str | None:
         """Return the canonical name, or None when the name is unknown."""
@@ -88,6 +105,8 @@ def normalize(
         kept = []
         seen: set[str] = set()
         for brand in sorted(ex.brands, key=lambda b: b.position):
+            if aliases.is_excluded(brand.name):
+                continue  # known, deliberately not charted
             canonical = aliases.resolve(brand.name)
             if canonical is None:
                 quarantined.append(brand.name.strip())

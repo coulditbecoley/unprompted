@@ -28,6 +28,12 @@ Rules:
 - Only companies the answer presents as options. Ignore companies mentioned \
 purely as context, as an aside, or as something to avoid.
 - Use the name exactly as the answer writes it. Do not expand or correct it.
+- One company per entry. If the answer writes several together, such as \
+"SGC/TAG/Ace" or "TAG and AGS", list them as separate entries in the order they \
+appear.
+- Do not list grades, tiers or service levels as companies. "PSA 10", \
+"BGS Pristine 10", "Black Label" and "Bulk" are outcomes or service tiers, not \
+companies. If the answer says "a PSA 10", the company is PSA.
 - If the answer declines to recommend anything, or names no companies at all, \
 set refused to true and return an empty brand list.
 - sentiment is how the answer treats that company: positive, neutral, or negative.

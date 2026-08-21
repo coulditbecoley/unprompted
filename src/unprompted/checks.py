@@ -14,7 +14,13 @@ from .aggregate import BrandWeek
 # methodology version when you do.
 MAX_ROTATION_SWING = 40.0    # percentage points, week over week
 MAX_ERROR_RATE = 0.20        # share of engine calls allowed to fail
-MIN_BRANDS = 2               # a grading field returns ~5-8; 20 means drift
+# Measured against the first real run: 24 distinct companies appeared, but the
+# long tail was named once or twice out of 225. Counting raw distinct names
+# would hold the week forever on a perfectly healthy result, so the bound
+# applies to brands above a noise floor. This is an operational threshold, not a
+# measurement definition: no published number changes, only whether we publish.
+MIN_ROTATION_TO_COUNT = 0.02  # named in at least ~2% of runs
+MIN_BRANDS = 2
 MAX_BRANDS = 15
 
 
@@ -72,12 +78,13 @@ def run_checks(
     else:
         reasons.append("run produced no extractions at all")
 
-    # 4. Brand count outside the expected band for a small field.
-    count = len(this_week)
+    # 4. Brand count outside the expected band, ignoring the one-mention tail.
+    count = sum(1 for b in this_week if b.rotation >= MIN_ROTATION_TO_COUNT)
     if count and not (MIN_BRANDS <= count <= MAX_BRANDS):
         reasons.append(
-            f"{count} distinct brands found, outside the expected "
-            f"{MIN_BRANDS}-{MAX_BRANDS} range"
+            f"{count} brands above the {MIN_ROTATION_TO_COUNT:.0%} floor, outside "
+            f"the expected {MIN_BRANDS}-{MAX_BRANDS} range "
+            f"({len(this_week)} distinct names in total)"
         )
 
     return CheckResult(passed=not reasons, reasons=reasons)

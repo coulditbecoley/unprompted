@@ -1,20 +1,38 @@
-# Canonical brand names. Anything not listed here is quarantined, never charted.
+# Brand canonicalisation for Pokemon card grading.
+#
+# Three buckets, and the third one matters:
+#   canonical  - a grading company. Charted.
+#   exclude    - known, and deliberately not charted. Dropped silently.
+#   anything else - unknown. Quarantined, never charted, held for review.
+#
+# Without `exclude`, marketplaces and grade labels would trip the quarantine
+# check every single week forever and the chart would never publish.
+
 canonical:
   PSA:
     - psa
     - professional sports authenticator
     - psa grading
     - psa card grading
+    - psa express
+    - psa express / super express
   CGC:
     - cgc
     - cgc cards
     - certified guaranty company
     - cgc grading
+    - cgc/ccg
+    - cgc/cgc cards
+    - cgc/cgc pristine
   Beckett:
     - beckett
     - bgs
     - beckett grading services
     - beckett grading
+    - beckett's
+    - beckett's bgs
+    - bgs/beckett
+    - beckett/bgs
   TAG:
     - tag
     - tag grading
@@ -26,5 +44,96 @@ canonical:
     - sgc
     - sportscard guaranty
     - sportscard guaranty corporation
+  AGS:
+    - ags
+    - automated grading systems
+  ARS:
+    - ars
+    - ars grading
+  Arkezon:
+    - arkezon
+  CGA:
+    - cga
+    - collectible grading authority
+  CSG:
+    - csg
+    - certified sports guaranty
+  GMA:
+    - gma
+    - gma grading
+  HGA:
+    - hga
+    - hybrid grading approach
+  ISA:
+    - isa
+    - international sports authentication
+  MGC:
+    - mgc
+    - mgc grading
+  PCGS:
+    - pcgs
+    - professional coin grading service
+  TCGrader:
+    - tcgrader
+  Rare Edition:
+    - rare edition
+  GetGraded:
+    - getgraded
+    - get graded
+  PG Grading:
+    - pg grading
+  DSG:
+    - dsg
+    - diamond service grading
+  AP Grading:
+    - ap grading
+  SnapGrade:
+    - snapgrade
   Arena Club:
     - arena club
+
+# Known, and deliberately not charted. These are real things the engines name
+# while answering, but they are not grading companies, so charting them would be
+# wrong. Dropped silently rather than quarantined, so they never hold a week.
+exclude:
+  # Grades and service tiers, not companies
+  - psa 10
+  - cgc 10
+  - cgc perfect 10
+  - cgc bulk
+  - bgs pristine 10
+  - beckett black label
+  - black label
+  - dollar slice bulk
+  # Marketplaces, auction houses and vaults
+  - ebay
+  - ebay's vault program
+  - whatnot
+  - tcgplayer
+  - comc
+  - pwcc
+  - goldin
+  - heritage
+  - collectors
+  - collectors corp
+  - collectors holdings
+  - cardvault
+  - dcsports87
+  - owlcentralgames
+  - rare candy
+  # Pricing, scanning and software tools
+  - pricecharting
+  - cardmavin
+  - ludex
+  - card grading ai
+  - cardgrade
+  # Supplies
+  - card saver i
+  - dragon shield
+  # Social platforms
+  - discord
+  - facebook
+  # Ambiguous or unresolvable as written
+  - premier
+  - gma/premier
+  - ssint

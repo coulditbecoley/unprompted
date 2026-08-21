@@ -198,7 +198,7 @@ def test_high_error_rate_holds_the_week():
     assert result.held and "errored" in " ".join(result.reasons)
 
 
-def test_too_many_brands_holds_the_week():
+def test_too_many_brands_holds_the_week_legacy():
     many = [_week(f"Brand{i}", 0.5) for i in range(20)]
     result = run_checks(_run([ex(brands=["PSA"])]), many, [])
     assert result.held and "outside the expected" in " ".join(result.reasons)
@@ -292,3 +292,30 @@ def test_parenthetical_with_unknown_halves_still_quarantines():
     cleaned, quarantined = normalize([ex(brands=["Fake Co (FKC)"])], ALIASES)
     assert cleaned[0].brands == []
     assert "Fake Co (FKC)" in quarantined
+
+
+def test_excluded_names_are_dropped_without_quarantining():
+    """Marketplaces and grade labels would otherwise hold every week forever."""
+    aliases = AliasMap({"PSA": ["psa"]}, exclude=["eBay", "PSA 10", "Whatnot"])
+    cleaned, quarantined = normalize([ex(brands=["PSA", "eBay", "PSA 10"])], aliases)
+    assert [b.name for b in cleaned[0].brands] == ["PSA"]
+    assert quarantined == []
+
+
+def test_exclusion_does_not_swallow_genuinely_unknown_names():
+    aliases = AliasMap({"PSA": ["psa"]}, exclude=["eBay"])
+    _, quarantined = normalize([ex(brands=["Some New Grader"])], aliases)
+    assert "Some New Grader" in quarantined
+
+
+def test_one_mention_tail_does_not_hold_a_healthy_week():
+    """The first real run found 24 companies, most named once out of 225."""
+    core = [_week(f"Major{i}", 0.5) for i in range(6)]
+    tail = [_week(f"Tiny{i}", 0.004) for i in range(18)]
+    assert run_checks(_run([ex(brands=["PSA"])]), core + tail, []).passed
+
+
+def test_too_many_substantial_brands_still_holds():
+    many = [_week(f"Brand{i}", 0.5) for i in range(20)]
+    result = run_checks(_run([ex(brands=["PSA"])]), many, [])
+    assert result.held and "above the" in " ".join(result.reasons)
