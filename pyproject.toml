@@ -1,0 +1,18 @@
+[project]
+name = "unprompted"
+version = "0.1.0"
+description = "Weekly public chart of which brands AI assistants recommend"
+requires-python = ">=3.11"
+dependencies = [
+  "anthropic>=0.40.0",
+  "openai>=1.60.0",
+  "pydantic>=2.0",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

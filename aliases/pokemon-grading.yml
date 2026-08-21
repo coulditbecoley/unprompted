@@ -1,0 +1,30 @@
+# Canonical brand names. Anything not listed here is quarantined, never charted.
+canonical:
+  PSA:
+    - psa
+    - professional sports authenticator
+    - psa grading
+    - psa card grading
+  CGC:
+    - cgc
+    - cgc cards
+    - certified guaranty company
+    - cgc grading
+  Beckett:
+    - beckett
+    - bgs
+    - beckett grading services
+    - beckett grading
+  TAG:
+    - tag
+    - tag grading
+    - technical authentication grading
+  ACE:
+    - ace
+    - ace grading
+  SGC:
+    - sgc
+    - sportscard guaranty
+    - sportscard guaranty corporation
+  Arena Club:
+    - arena club

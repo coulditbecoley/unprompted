@@ -1,0 +1,38 @@
+# Unprompted question bank
+# Human-owned. Editing this file is a methodology change and MUST bump
+# METHODOLOGY.md's version. See "Never break the series" in METHODOLOGY.md.
+category: pokemon-grading
+label: Pokemon Card Grading
+method_version: 1
+runs_per_question: 5
+questions:
+  - id: q01
+    text: "What is the best Pokemon card grading company?"
+  - id: q02
+    text: "PSA vs CGC for Pokemon cards, which should I use?"
+  - id: q03
+    text: "Which Pokemon card grading service has the fastest turnaround?"
+  - id: q04
+    text: "What is the cheapest way to get Pokemon cards graded?"
+  - id: q05
+    text: "Which grading company gets the highest resale value for Pokemon cards?"
+  - id: q06
+    text: "Is TAG grading legit for Pokemon cards?"
+  - id: q07
+    text: "Best card grading company for vintage Pokemon cards?"
+  - id: q08
+    text: "Which Pokemon grading company should a beginner use?"
+  - id: q09
+    text: "What grading company do serious Pokemon collectors prefer?"
+  - id: q10
+    text: "Is CGC or Beckett better for Pokemon cards?"
+  - id: q11
+    text: "Which Pokemon card grading service is most accurate?"
+  - id: q12
+    text: "Best value Pokemon card grading service for bulk submissions?"
+  - id: q13
+    text: "Which grading company has the best slab design for Pokemon cards?"
+  - id: q14
+    text: "Are there any new Pokemon card grading companies worth using?"
+  - id: q15
+    text: "Which Pokemon grading company is hardest to get a 10 from?"

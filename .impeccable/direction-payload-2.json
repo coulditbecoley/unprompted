@@ -1,0 +1,60 @@
+{
+  "title": "Choose Unprompted's visual world",
+  "question": "Re-roll two. The Pairings Sheet is eliminated. Your pin is held. The roll assigned Certificate of Analysis.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Certificate of Analysis",
+      "kicker": "THE ROLL",
+      "lineage": "Laboratory assay reporting: sample IDs, method references, replicate measurements, tolerances, instrument traces, a signed and dated result",
+      "thesis": "Unprompted does not have an opinion. It runs an assay on the machines and publishes the readout, method included.",
+      "palette": ["#0F1418", "#EDEFEA", "#00B3A4", "#F2610C"],
+      "materials": ["laminated result sheet", "chromatogram trace", "indicator dye", "instrument enamel"],
+      "viewport": "This week's result sheet: sample ID and method version in the header, brands as measured specimens down the page, each rotation figure carrying its replicate count and spread, deviations flagged in the margin.",
+      "risk": "Clinical worlds can read cold, which fights the brief's demand for heavy animation and visual pleasure.",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse.webp"
+    },
+    {
+      "id": "pinned-starship",
+      "label": "Used-Future Crew Terminal",
+      "kicker": "YOUR PIN",
+      "lineage": "Working starship terminal: green and amber phosphor on curved CRT, stencilled equipment codes, striped hazard plates",
+      "thesis": "You key a query and the glass answers in typed capitals, one line at a time.",
+      "case": "Held at your instruction. Its query-and-answer grammar genuinely fits the name, and phosphor-plus-amber is a real two-role color system rather than a decorative glow. If it wins, I solve the small-screen legibility properly rather than shipping a shrunken CRT.",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-industrial-starship-terminal-hero.webp"
+    },
+    {
+      "id": "challenger-splitflap",
+      "label": "Split-Flap Concourse",
+      "lineage": "Rail concourse departure board at rush hour: cascading letter flaps, fixed columns, amber delay lamps",
+      "thesis": "A live ranked board where every change arrives as a cascade of clacking characters.",
+      "case": "The strongest card in this hand after the roll. A departures board is already a ranked table that reorders itself on a schedule, which is exactly what a weekly chart is, and the flap cascade answers the heavy-animation requirement with motion that means something instead of decorating.",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-split-flap-concourse-hero.webp"
+    },
+    {
+      "id": "challenger-onebit",
+      "label": "One-Bit Desktop",
+      "lineage": "Early one-bit computing: dithered grays, title bars and close boxes, marching-ants selections, 32-pixel icons",
+      "thesis": "Two colors, honest chrome, and a selection border that never stops walking.",
+      "case": "Fuses better than it looks: pure black and white is unbeatable for dense tabular legibility on a phone, and it is inherently screenshot-friendly. Fights the brief's demand for modern, and a two-color world cannot carry rise-and-fall coding without inventing a third.",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-one-bit-desktop-hero.webp"
+    },
+    {
+      "id": "challenger-werkstatte",
+      "label": "Wiener Werkstätte Lattice",
+      "lineage": "Hoffmann metalwork showroom: hammered silver pierced with perfect square holes, strict black-and-white lattices",
+      "thesis": "Every cell a square, every square either pierced open or filled solid.",
+      "case": "The lattice is a genuinely good chassis for a data grid and the filled-cell active state is elegant. But a luxury showroom has nothing to say about measurement, so the world would be decoration bolted to the product rather than an argument about it.",
+      "hero": "https://impeccable.style/worlds/cards/design-canon-hoffmann-gridsmith-showroom-hero.webp"
+    }
+  ],
+  "reroll": true,
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "The analytics dashboard every AI-visibility tool ships, executed impeccably.",
+    "viewport": "Dark navy ground, card grid, a line chart hero, one accent gradient, clean sans throughout.",
+    "risk": "Indistinguishable from Profound, Peec and Otterly, which is the exact comparison this product exists to escape."
+  },
+  "steer": true
+}
