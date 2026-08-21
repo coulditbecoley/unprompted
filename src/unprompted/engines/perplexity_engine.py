@@ -18,7 +18,7 @@ TIMEOUT_SECONDS = 90
 
 class PerplexityEngine(Engine):
     name = "perplexity"
-    key_names = ("PERPLEXITY_API_KEY",)
+    key_names = ("PERPLEXITY_API_KEY", "PERPLEXITY_API")
 
     def _one_call(self, question: str) -> tuple[str, list[str]]:
         payload = json.dumps(

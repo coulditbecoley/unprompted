@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -18,12 +19,18 @@ import yaml
 from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .engines import ENGINES
-from .extract import extract_all
+from .extract import extract_one
 from .models import RunRecord
 from .normalize import AliasMap, normalize
 
 ROOT = Path(__file__).resolve().parents[2]
 HELD_EXIT_CODE = 2
+
+# These are I/O-bound HTTP calls with very different latencies (Perplexity a few
+# seconds, ChatGPT over a minute), so they run concurrently. Serially a full week
+# is roughly 2.5 hours, which would blow the CI timeout and delay the chart for
+# no reason. Kept modest so we stay well inside every provider's rate limits.
+MAX_WORKERS = 6
 
 
 def load_questions(category: str) -> dict:
@@ -50,18 +57,31 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
 
     print(f"  engines active: {', '.join(sorted(engines))}", file=sys.stderr)
 
-    answers = []
-    for question in questions:
-        for name, engine in engines.items():
-            got = engine.ask(question["id"], question["text"], runs_per_question)
-            answers.extend(got)
-            failed = sum(1 for a in got if a.error)
-            print(
-                f"  {question['id']} {name}: {len(got) - failed}/{len(got)} ok",
-                file=sys.stderr,
-            )
+    tasks = [
+        (engine, question["id"], question["text"], run_index)
+        for question in questions
+        for engine in engines.values()
+        for run_index in range(runs_per_question)
+    ]
+    print(f"  {len(tasks)} calls across {len(engines)} engine(s)", file=sys.stderr)
 
-    extractions = extract_all(answers)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        answers = list(
+            pool.map(lambda t: t[0].ask_one(t[1], t[2], t[3]), tasks)
+        )
+
+    # Deterministic order regardless of which call finished first, so the run
+    # file is stable and diffable.
+    answers.sort(key=lambda a: (a.question_id, a.engine, a.run_index))
+
+    for name in sorted(engines):
+        got = [a for a in answers if a.engine == name]
+        ok = sum(1 for a in got if not a.error)
+        print(f"  {name}: {ok}/{len(got)} ok", file=sys.stderr)
+
+    print(f"  extracting {len(answers)} answers", file=sys.stderr)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        extractions = list(pool.map(extract_one, answers))
 
     aliases = AliasMap.load(ROOT / "aliases" / f"{category}.yml")
     extractions, quarantined = normalize(extractions, aliases)

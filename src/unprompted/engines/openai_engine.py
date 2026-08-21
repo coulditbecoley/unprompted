@@ -15,7 +15,7 @@ WEB_SEARCH_TOOL = {"type": "web_search"}
 
 class OpenAIEngine(Engine):
     name = "chatgpt"
-    key_names = ("OPENAI_API_KEY",)
+    key_names = ("OPENAI_API_KEY", "OPENAI_API")
 
     def _one_call(self, question: str) -> tuple[str, list[str]]:
         from openai import OpenAI

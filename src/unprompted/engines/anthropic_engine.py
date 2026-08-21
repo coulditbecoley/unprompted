@@ -12,7 +12,8 @@ WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_use
 
 class AnthropicEngine(Engine):
     name = "claude"
-    key_names = ("ANTHROPIC_API_KEY",)
+    # CLAUDE_API accepted as an alias: it is a natural name to reach for.
+    key_names = ("ANTHROPIC_API_KEY", "CLAUDE_API")
 
     def _one_call(self, question: str) -> tuple[str, list[str]]:
         from anthropic import Anthropic
