@@ -10,7 +10,7 @@ import argparse
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
@@ -65,10 +65,23 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
     ]
     print(f"  {len(tasks)} calls across {len(engines)} engine(s)", file=sys.stderr)
 
+    # as_completed rather than map: a twenty-minute run that prints nothing until
+    # it finishes looks identical to a hung one, both here and in CI logs.
+    answers = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        answers = list(
-            pool.map(lambda t: t[0].ask_one(t[1], t[2], t[3]), tasks)
-        )
+        futures = {
+            pool.submit(engine.ask_one, qid, text, run_index): engine.name
+            for engine, qid, text, run_index in tasks
+        }
+        for done, future in enumerate(as_completed(futures), start=1):
+            answers.append(future.result())
+            if done % 10 == 0 or done == len(tasks):
+                failed = sum(1 for a in answers if a.error)
+                print(
+                    f"  {done}/{len(tasks)} calls ({failed} failed)",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
     # Deterministic order regardless of which call finished first, so the run
     # file is stable and diffable.
@@ -79,9 +92,23 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         ok = sum(1 for a in got if not a.error)
         print(f"  {name}: {ok}/{len(got)} ok", file=sys.stderr)
 
-    print(f"  extracting {len(answers)} answers", file=sys.stderr)
+    print(f"  extracting {len(answers)} answers", file=sys.stderr, flush=True)
+    extractions = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        extractions = list(pool.map(extract_one, answers))
+        futures = [pool.submit(extract_one, a) for a in answers]
+        for done, future in enumerate(as_completed(futures), start=1):
+            extractions.append(future.result())
+            if done % 25 == 0 or done == len(futures):
+                failed = sum(1 for e in extractions if e.error)
+                print(
+                    f"  extracted {done}/{len(futures)} ({failed} failed)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+    # as_completed returns out of order; restore a deterministic sort so the run
+    # file stays stable and diffable.
+    extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
 
     aliases = AliasMap.load(ROOT / "aliases" / f"{category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
