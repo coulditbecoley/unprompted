@@ -9,5 +9,5 @@ __pycache__/
 venv/
 .vercel
 .DS_Store
-.impeccable/refs/
 .impeccable/
+.admin-pw.local

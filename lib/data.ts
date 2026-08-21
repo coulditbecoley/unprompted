@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const REPO_ROOT = path.resolve(process.cwd(), "..");
+export const REPO_ROOT = process.cwd();
 const RUNS_DIR = path.join(REPO_ROOT, "data", "runs");
 
 export type BrandMention = { name: string; position: number; sentiment: string };
