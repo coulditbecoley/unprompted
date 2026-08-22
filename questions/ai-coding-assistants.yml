@@ -1,0 +1,47 @@
+# Unprompted question bank: AI coding assistants
+#
+# This category exists for a reason no other category can serve. We query
+# ChatGPT, Claude and Perplexity, and several of the answers here are products
+# made by those same companies. So this is the one place the publication can ask
+# whether an assistant favours its own side.
+#
+# The questions are therefore written to give every engine a fair chance to name
+# a rival, and none of them mention a vendor by name.
+#
+# Human-owned. Editing this file is a methodology change and MUST bump the
+# version below.
+category: ai-coding-assistants
+label: AI Coding Assistants
+method_version: 1
+runs_per_question: 5
+questions:
+  - id: q01
+    text: "What is the best AI coding assistant?"
+  - id: q02
+    text: "Which AI is best for writing code in 2026?"
+  - id: q03
+    text: "What AI coding tool should a beginner start with?"
+  - id: q04
+    text: "Which AI coding assistant is best for a large existing codebase?"
+  - id: q05
+    text: "What is the best AI pair programmer for a professional developer?"
+  - id: q06
+    text: "Which AI coding tool gives the best value for money?"
+  - id: q07
+    text: "What is the best AI agent for autonomous coding tasks?"
+  - id: q08
+    text: "Which AI coding assistant works best in the terminal?"
+  - id: q09
+    text: "What is the best AI code editor?"
+  - id: q10
+    text: "Which AI coding tool do professional software teams prefer?"
+  - id: q11
+    text: "What is the best free AI coding assistant?"
+  - id: q12
+    text: "Which AI is best at debugging existing code?"
+  - id: q13
+    text: "What is the best AI coding assistant for refactoring?"
+  - id: q14
+    text: "Which AI coding tool has the best code review capability?"
+  - id: q15
+    text: "What AI coding assistant should I use for a side project?"

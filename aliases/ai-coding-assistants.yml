@@ -1,0 +1,120 @@
+# Brand canonicalisation for AI coding assistants.
+#
+# Note on scope: we chart the *tool a developer chooses*, not the underlying
+# model. "Claude" answering "use Claude" is a model, not a coding assistant;
+# "Claude Code" is the product. Keeping those separate is what makes the
+# self-preference question answerable rather than muddy.
+
+canonical:
+  Claude Code:
+    - claude code
+    - claude-code
+    - anthropic claude code
+  GitHub Copilot:
+    - copilot
+    - github copilot
+    - gh copilot
+    - copilot workspace
+    - github copilot workspace
+  Cursor:
+    - cursor
+    - cursor ai
+    - cursor ide
+    - cursor editor
+  Codex:
+    - codex
+    - openai codex
+    - codex cli
+    - chatgpt codex
+  Windsurf:
+    - windsurf
+    - codeium windsurf
+    - codeium
+  Cline:
+    - cline
+    - claude dev
+  Aider:
+    - aider
+    - aider chat
+  Zed:
+    - zed
+    - zed editor
+  JetBrains AI:
+    - jetbrains ai
+    - jetbrains ai assistant
+    - intellij ai
+  Amazon Q:
+    - amazon q
+    - amazon q developer
+    - aws codewhisperer
+    - codewhisperer
+  Gemini Code Assist:
+    - gemini code assist
+    - google code assist
+    - gemini cli
+  Tabnine:
+    - tabnine
+  Replit Agent:
+    - replit
+    - replit agent
+    - replit ai
+  Devin:
+    - devin
+    - cognition devin
+  Sourcegraph Cody:
+    - cody
+    - sourcegraph cody
+    - sourcegraph
+  Continue:
+    - continue
+    - continue dev
+  Augment:
+    - augment
+    - augment code
+  Qodo:
+    - qodo
+    - codiumai
+    - codium ai
+
+# Known, and deliberately not charted. Real things the engines name while
+# answering, but not coding assistants, so charting them would be wrong.
+exclude:
+  # Underlying models rather than the tool a developer chooses
+  - gpt-5
+  - gpt-4
+  - gpt-4o
+  - claude opus
+  - claude sonnet
+  - claude 3.5 sonnet
+  - gemini
+  - gemini 2.5 pro
+  - llama
+  - deepseek
+  - qwen
+  - mistral
+  - o3
+  - o1
+  # Editors and platforms without an AI-assistant claim in scope
+  - vs code
+  - visual studio code
+  - visual studio
+  - intellij
+  - pycharm
+  - neovim
+  - vim
+  - emacs
+  - github
+  - gitlab
+  # Companies rather than products
+  - openai
+  - anthropic
+  - google
+  - microsoft
+  - amazon
+  - meta
+  # Adjacent tooling
+  - stack overflow
+  - chatgpt
+  - perplexity
+  - notion
+  - linear
