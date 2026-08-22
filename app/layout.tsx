@@ -37,6 +37,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500;600&family=Mona+Sans:ital,wght@0,300..800;1,400&display=swap"
         />
+        <link
+          rel="alternate"
+          type="application/atom+xml"
+          title="Unprompted — weekly chart"
+          href="/feed.xml"
+        />
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
       </head>
       <body>

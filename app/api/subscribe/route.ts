@@ -1,0 +1,75 @@
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Email capture, forwarded straight to a provider.
+ *
+ * The subscriber list is deliberately never stored here. Holding email
+ * addresses would mean a database, a consent record, an unsubscribe flow and a
+ * GDPR surface — real machinery, and all of it already solved by any newsletter
+ * provider. So this route is a thin forwarder and the provider owns the list.
+ *
+ * Buttondown is the default because it can also send this publication's own
+ * feed on a schedule, which means the weekly digest needs no sending code here
+ * at all. Swapping providers is a change to one fetch.
+ *
+ * With no key configured the route says so plainly rather than pretending to
+ * have subscribed anyone. A form that silently drops addresses is worse than no
+ * form.
+ */
+
+const ENDPOINT = "https://api.buttondown.com/v1/subscribers";
+const MAX_EMAIL = 254;
+
+export async function POST(request: Request) {
+  const token = process.env.BUTTONDOWN_API_KEY;
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
+  }
+
+  const email = String((payload as { email?: string })?.email ?? "").trim();
+
+  // Deliberately permissive: the provider does real verification, and rejecting
+  // unusual-but-valid addresses is a worse failure than passing one through.
+  if (!email || email.length > MAX_EMAIL || !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: "That does not look like an email address." }, { status: 400 });
+  }
+
+  if (!token) {
+    return NextResponse.json(
+      { error: "The email digest is not configured yet. The RSS feed works today." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email_address: email, tags: ["unprompted.report"] }),
+    });
+
+    // Already subscribed is a success from the visitor's point of view. Telling
+    // them it failed would be both confusing and a small privacy leak about who
+    // is on the list.
+    if (res.ok || res.status === 409) {
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json(
+      { error: "The provider rejected that. Try again in a moment." },
+      { status: 502 },
+    );
+  } catch {
+    return NextResponse.json({ error: "Could not reach the email provider." }, { status: 502 });
+  }
+}

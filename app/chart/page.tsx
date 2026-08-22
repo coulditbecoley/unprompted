@@ -10,6 +10,7 @@ import {
   theSnub,
 } from "@/lib/data";
 import { Freshness, ShareRow } from "@/components/freshness";
+import { Subscribe } from "@/components/subscribe";
 import {
   AwaitingFirstRun,
   SequencerHead,
@@ -130,6 +131,7 @@ export default function ChartPage() {
           </div>
         </>
       )}
+    <Subscribe />
     </section>
   );
 }

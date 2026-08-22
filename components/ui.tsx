@@ -164,7 +164,8 @@ export function SiteFooter() {
       <div className="shell">
         <p className="mono">
           Unprompted · what AI recommends when nobody&rsquo;s paying ·{" "}
-          <a href="https://github.com/coulditbecoley/unprompted">source and data</a>
+          <a href="https://github.com/coulditbecoley/unprompted">source and data</a> ·{" "}
+          <a href="/feed.xml">RSS</a>
         </p>
         <p className="mono foot-dim">{DISCLOSURE}</p>
       </div>

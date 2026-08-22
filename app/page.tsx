@@ -14,6 +14,7 @@ import {
   theSnub,
 } from "@/lib/data";
 import { Freshness, ShareRow } from "@/components/freshness";
+import { Subscribe } from "@/components/subscribe";
 import {
   AwaitingFirstRun,
   SequencerHead,
@@ -169,6 +170,10 @@ export default function Home() {
         <p className="mono" style={{ fontSize: 12.5 }}>
           <Link href="/methodology">Read the full method →</Link>
         </p>
+      </section>
+
+      <section className="shell">
+        <Subscribe />
       </section>
     </>
   );
