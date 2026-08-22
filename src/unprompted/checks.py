@@ -42,14 +42,28 @@ def run_checks(
     """Return pass/fail plus every human-readable reason it failed."""
     reasons: list[str] = []
 
-    # 1. Quarantine is not empty. An unrecognised name means either a new brand
-    #    worth adding to the alias map, or a hallucination. Both need a human.
+    # 1. A *material* unrecognised name. These engines name long-tail shops and
+    #    services constantly, so holding on any single unknown would hold every
+    #    week forever and the chart would never publish itself. A name appearing
+    #    once in 225 runs cannot move the standings: it is logged for review and
+    #    the week still ships. Only a name appearing often enough to matter is
+    #    worth stopping for.
     quarantined = run.get("quarantined", [])
     if quarantined:
-        shown = ", ".join(sorted(set(quarantined))[:8])
-        reasons.append(
-            f"{len(set(quarantined))} unrecognised brand name(s) quarantined: {shown}"
+        total = this_week[0].total_runs if this_week else 0
+        counts: dict[str, int] = {}
+        for name in quarantined:
+            counts[name] = counts.get(name, 0) + 1
+        material = sorted(
+            (n for n, c in counts.items() if total and c / total >= MIN_ROTATION_TO_COUNT),
+            key=lambda n: -counts[n],
         )
+        if material:
+            shown = ", ".join(material[:8])
+            reasons.append(
+                f"{len(material)} unrecognised brand name(s) appeared in at least "
+                f"{MIN_ROTATION_TO_COUNT:.0%} of runs and need a decision: {shown}"
+            )
 
     # 2. Implausible week-over-week swing.
     prev = {b.brand: b for b in last_week}

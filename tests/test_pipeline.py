@@ -322,3 +322,32 @@ def test_too_many_substantial_brands_still_holds():
     many = [_week(f"Brand{i}", 0.5) for i in range(20)]
     result = run_checks(_run([ex(brands=["PSA"])]), many, [])
     assert result.held and "above the" in " ".join(result.reasons)
+
+
+def test_dash_separated_forms_resolve():
+    """Answers write "AGS - Automated Grading Systems" with any kind of dash."""
+    aliases = AliasMap({"AGS": ["ags", "automated grading systems"]})
+    cleaned, quarantined = normalize(
+        [ex(brands=["AGS – Automated Grading Systems"]), ex(brands=["AGS - Automated Grading Systems"])],
+        aliases,
+    )
+    assert [e.brands[0].name for e in cleaned] == ["AGS", "AGS"]
+    assert quarantined == []
+
+
+def test_a_single_stray_unknown_name_does_not_hold_the_week():
+    """Otherwise the chart never publishes itself, which is the whole point.
+
+    Sized like a real week: one mention against 100 answered runs is 1%, under
+    the 2% floor. In production the ratio is 1 in 225.
+    """
+    run = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(100)])
+    run["quarantined"] = ["Some Random Hobby Shop"]
+    assert run_checks(run, brand_week(run), []).passed
+
+
+def test_a_repeated_unknown_name_still_holds_the_week():
+    run = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run["quarantined"] = ["New Grader Co"] * 20
+    result = run_checks(run, brand_week(run), [])
+    assert result.held and "New Grader Co" in " ".join(result.reasons)

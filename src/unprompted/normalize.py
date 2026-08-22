@@ -19,6 +19,9 @@ _PUNCT = re.compile(r"[^a-z0-9]+")
 # Authenticator)". Both halves are usually already known, so try the name with
 # the parenthetical removed before giving up and quarantining it.
 _PAREN = re.compile(r"\s*\([^)]*\)")
+# Same habit with a dash: "AGS - Automated Grading Systems". Hyphen, en dash and
+# em dash all appear in real answers.
+_DASH = re.compile(r"\s+[-–—]\s+")
 # Trailing corporate noise that never distinguishes one brand from another.
 _SUFFIXES = (
     "llc", "inc", "incorporated", "ltd", "limited", "corp", "corporation", "co",
@@ -81,6 +84,13 @@ class AliasMap:
                 return found
             inside = re.findall(r"\(([^)]*)\)", name)
             for part in inside:
+                found = self._lookup.get(_key(part))
+                if found is not None:
+                    return found
+
+        # "AGS - Automated Grading Systems" -> try each side.
+        for part in _DASH.split(name):
+            if part.strip() and part != name:
                 found = self._lookup.get(_key(part))
                 if found is not None:
                     return found
