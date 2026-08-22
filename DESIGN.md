@@ -155,3 +155,43 @@ citations come from the top of a page and this publication exists to be quoted.
 - Amber used for anything other than "about to change".
 - A sample or placeholder chart. The site shows an honest empty state instead;
   fabricated data would cost more than an empty page ever could.
+
+---
+
+## The mark
+
+The logo is the product's signature object reduced: a **velocity step row**, the
+same shape that carries every brand on the board. Four steps, uneven heights,
+exactly one amber.
+
+Two decisions carry the meaning, and both should survive any future redraw:
+
+**The rhythm is deliberately irregular.** An ascending bar chart is the generic
+data-product mark. This refuses that shape, because what Unprompted measures is
+a pattern, not a trend.
+
+**The amber step is not the tallest.** This encodes the finding the publication
+exists to surface: being mentioned most and being recommended first are
+different things. In the first real week TAG was named in a third of answers yet
+named first more often than Beckett, which appeared in 84%. The mark says that
+before a word is read.
+
+Drawn as bare geometry: no frame, no rounding, no gradient, no outline. The
+world it lives in has hard 1px rules and flat surfaces, and the mark obeys them.
+
+| Asset | File | Notes |
+|---|---|---|
+| Lockup | `components/logo.tsx` | Mark plus wordmark in Mona Sans 800 |
+| Favicon | `app/icon.svg` | Graphite ground so it holds on any browser chrome |
+| Apple icon | `app/apple-icon.svg` | Same geometry at 180px |
+| Social card | `app/opengraph-image.tsx` | Carries the live result, never a slogan |
+
+The mark inherits `currentColor` for its bone steps, so it inverts correctly with
+the theme while the amber step stays fixed. The favicon does not invert: it
+carries its own graphite ground, because a browser tab is not our surface to
+theme.
+
+**The social card is a primary brand surface, not an afterthought.** This
+publication's growth engine is somebody screenshotting a number into an
+argument, so the card renders the live standings rather than a static tagline.
+It must never show a mocked-up number.
