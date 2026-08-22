@@ -84,3 +84,24 @@ Open an issue.
 
 Code is MIT. The data in `data/` is published under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — use it, cite it.
+
+---
+
+## Adding a category
+
+Categories are grouped into sectors so a visitor sees the shape of the
+publication before they see a list of slugs. Adding one is a data change, not a
+code change:
+
+1. Add an entry to `CATEGORIES` in [`lib/categories.ts`](lib/categories.ts),
+   with `status: "planned"`.
+2. Write `questions/<slug>.yml` — the buyer questions, a `method_version` and a
+   `runs_per_question`.
+3. Write `aliases/<slug>.yml` — `canonical` for the brands you will chart, and
+   `exclude` for the things that are real but are not in this category.
+4. Run it: `python -m unprompted.run --category <slug> --dry-run`
+5. Once it has published a real week, flip `status` to `"live"`.
+
+The board, the per-brand pages, the feed and the social card all come from the
+registry, so no UI work is involved. A category listed as `planned` never claims
+to have a chart it does not have.

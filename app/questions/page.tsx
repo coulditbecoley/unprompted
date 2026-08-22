@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
-import { CATEGORY, CATEGORY_LABEL, REPO_ROOT, latestRun } from "@/lib/data";
+import { CATEGORY, categoryLabel, REPO_ROOT, latestRun } from "@/lib/data";
 import { AwaitingFirstRun, TrimTop } from "@/components/ui";
 
 export const metadata: Metadata = {
@@ -43,7 +43,7 @@ export default function QuestionsPage() {
 
   return (
     <section className="shell section">
-      <p className="label">{CATEGORY_LABEL} · week of {run.run_date}</p>
+      <p className="label">{categoryLabel(CATEGORY)} · week of {run.run_date}</p>
       <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
         Every question, and what each assistant answered.
       </h1>

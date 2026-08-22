@@ -1,6 +1,6 @@
 import {
   CATEGORY,
-  CATEGORY_LABEL,
+  categoryLabel,
   loadHistory,
   movement,
   standings,
@@ -54,7 +54,7 @@ export function GET() {
         .join("");
 
       const body = [
-        `<p>${CATEGORY_LABEL}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${run.engines.join(", ")}), method v${run.method_version}.</p>`,
+        `<p>${categoryLabel(CATEGORY)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${run.engines.join(", ")}), method v${run.method_version}.</p>`,
         `<ol>${rows}</ol>`,
         snub
           ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? "named last week, not named once this week" : `down ${Math.abs(snub.rotationDelta)} points`}.</p>`

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { CATEGORY, CATEGORY_LABEL, latestRun, standings } from "@/lib/data";
+import { CATEGORY, categoryLabel, latestRun, standings } from "@/lib/data";
 
 export const alt = "Unprompted — what AI recommends when nobody's paying";
 export const size = { width: 1200, height: 630 };
@@ -109,7 +109,7 @@ export default function OpenGraphImage() {
           }}
         >
           <div style={{ display: "flex" }}>
-            {run ? `${CATEGORY_LABEL} · week of ${run.run_date}` : CATEGORY_LABEL}
+            {run ? `${categoryLabel(CATEGORY)} · week of ${run.run_date}` : categoryLabel(CATEGORY)}
           </div>
           <div style={{ display: "flex" }}>unprompted.report</div>
         </div>

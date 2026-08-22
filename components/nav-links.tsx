@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
  * state makes every page feel like the same page.
  */
 const LINKS = [
-  { href: "/chart", label: "Chart" },
+  { href: "/categories", label: "Categories" },
   { href: "/compare", label: "Compare" },
   { href: "/questions", label: "Questions" },
   { href: "/methodology", label: "Method" },
@@ -20,7 +20,11 @@ export function NavLinks() {
   return (
     <nav className="site-nav" aria-label="Sections">
       {LINKS.map((link) => {
-        const active = pathname === link.href;
+        // A category board is "inside" Categories, so the section stays lit
+        // while you are reading one.
+        const active =
+          pathname === link.href ||
+          (link.href === "/categories" && pathname.startsWith("/chart"));
         return (
           <Link
             key={link.href}

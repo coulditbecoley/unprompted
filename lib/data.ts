@@ -9,6 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { getCategory as getCategoryFromRegistry } from "./categories";
+
 export const REPO_ROOT = process.cwd();
 const RUNS_DIR = path.join(REPO_ROOT, "data", "runs");
 
@@ -258,8 +260,16 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-export const CATEGORY = "pokemon-grading";
-export const CATEGORY_LABEL = "Pokémon Card Grading";
+/**
+ * Re-exported for the pages that still speak in terms of "the" category.
+ * The registry in lib/categories.ts is the single source of truth; these exist
+ * so a page rendering the flagship board does not have to know that.
+ */
+export { DEFAULT_CATEGORY as CATEGORY } from "./categories";
+
+export function categoryLabel(slug: string): string {
+  return getCategoryFromRegistry(slug)?.label ?? slug;
+}
 
 export const DISCLOSURE =
   "Operated by Coley Grantham, a customer of card grading companies, not a competitor. No placement is for sale.";

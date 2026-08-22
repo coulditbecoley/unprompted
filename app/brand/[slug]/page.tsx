@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import {
   CATEGORY,
-  CATEGORY_LABEL,
+  categoryLabel,
   allBrands,
   brandHistory,
   latestRun,
@@ -44,7 +44,7 @@ export async function generateMetadata({
   return {
     title: `${brand} in AI answers`,
     description: row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${CATEGORY_LABEL.toLowerCase()} in the week of ${run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(CATEGORY).toLowerCase()} in the week of ${run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
       : `Tracking how often AI assistants name ${brand}.`,
   };
 }
@@ -65,7 +65,7 @@ export default async function BrandPage({
 
   return (
     <section className="shell section">
-      <p className="label">{CATEGORY_LABEL}</p>
+      <p className="label">{categoryLabel(CATEGORY)}</p>
       <h1 style={{ fontSize: "clamp(30px,5.5vw,52px)", fontWeight: 800, margin: "6px 0 14px" }}>
         {brand}
       </h1>
@@ -76,7 +76,7 @@ export default async function BrandPage({
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {CATEGORY_LABEL.toLowerCase()} in the week
+            {row.totalRuns} answers about {categoryLabel(CATEGORY).toLowerCase()} in the week
             of {run!.run_date}, and named it first in{" "}
             {Math.round(row.firstShare * 100)}% of runs.
           </>

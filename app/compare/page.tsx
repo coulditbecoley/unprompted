@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import {
   CATEGORY,
-  CATEGORY_LABEL,
+  categoryLabel,
   allBrands,
   brandHistory,
   latestRun,
@@ -64,7 +64,7 @@ export default async function ComparePage({
 
   return (
     <section className="shell section">
-      <p className="label">{CATEGORY_LABEL} · head to head</p>
+      <p className="label">{categoryLabel(CATEGORY)} · head to head</p>
       <h1 style={{ fontSize: "clamp(28px,5vw,46px)", fontWeight: 800, margin: "6px 0 12px" }}>
         {L.brand} vs {R.brand}
       </h1>

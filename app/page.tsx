@@ -5,7 +5,7 @@ import { load as loadYaml } from "js-yaml";
 
 import {
   CATEGORY,
-  CATEGORY_LABEL,
+  categoryLabel,
   REPO_ROOT,
   latestRun,
   loadHistory,
@@ -53,7 +53,7 @@ export default function Home() {
         <div className="hero-grid">
           <div>
             <p className="label" style={{ marginBottom: 18 }}>
-              {CATEGORY_LABEL} · {run ? run.run_date : "not yet measured"}
+              {categoryLabel(CATEGORY)} · {run ? run.run_date : "not yet measured"}
             </p>
 
             {/* Answer-first: the verdict is the first thing on the page, before
@@ -78,7 +78,7 @@ export default function Home() {
             </p>
 
             <p className="mono" style={{ fontSize: 12.5 }}>
-              <Link href="/chart">See the full board →</Link>
+              <Link href={`/chart/${CATEGORY}`}>See the full board →</Link>
             </p>
           </div>
 
