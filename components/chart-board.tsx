@@ -13,8 +13,10 @@ import {
 import type { Category, Sector } from "@/lib/categories";
 import {
   latestRun,
+  loadAffiliations,
   loadHistory,
   movement,
+  selfPreference,
   sourceCounts,
   standings,
   theSnub,
@@ -59,6 +61,7 @@ export function ChartBoard({
   const snub = theSnub(moves);
   const sources = sourceCounts(run).slice(0, 10);
   const leader = board[0];
+  const preference = selfPreference(run, loadAffiliations(category.slug));
 
   return (
     <section className="shell section">
@@ -130,6 +133,54 @@ export function ChartBoard({
               : `Down ${Math.abs(snub.rotationDelta)} points week over week.`}
           </p>
         </div>
+      )}
+
+      {preference.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>
+            Does an engine favour its own tool?
+          </h2>
+          <p className="section-lead">
+            Some of the products above are made by the same companies whose
+            assistants we ask. This compares how often an engine named its own
+            product against how often every other engine named it. A gap is a
+            measurement, not an accusation, and a small gap on this sample size
+            is noise.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {preference.map((p) => (
+              <div className="sp-row" key={p.brand}>
+                <span className="sp-brand">
+                  {p.brand}
+                  <small>made by {p.engine}</small>
+                </span>
+                <span className="sp-num">
+                  <small>ITS OWN</small>
+                  {Math.round(p.ownRate * 100)}%
+                  <small style={{ marginTop: 3 }}>
+                    {p.ownNamed}/{p.ownRuns}
+                  </small>
+                </span>
+                <span className="sp-num sp-rival">
+                  <small>RIVALS</small>
+                  {Math.round(p.rivalRate * 100)}%
+                  <small style={{ marginTop: 3 }}>
+                    {p.rivalNamed}/{p.rivalRuns}
+                  </small>
+                </span>
+                <span
+                  className="sp-gap"
+                  data-sign={p.gap > 0 ? "up" : p.gap < 0 ? "down" : "flat"}
+                  title="Percentage points by which the owner out-names everyone else"
+                >
+                  {p.gap > 0 ? "+" : ""}
+                  {p.gap}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {sources.length > 0 && (

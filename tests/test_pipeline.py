@@ -351,3 +351,40 @@ def test_a_repeated_unknown_name_still_holds_the_week():
     run["quarantined"] = ["New Grader Co"] * 20
     result = run_checks(run, brand_week(run), [])
     assert result.held and "New Grader Co" in " ".join(result.reasons)
+
+
+# --- self-preference --------------------------------------------------------
+
+def test_self_preference_measures_owner_against_rivals():
+    """The reason the AI-tools category exists."""
+    from unprompted.aggregate import self_preference
+
+    run = _run([
+        ex(engine="claude", run=0, brands=["Claude Code"]),
+        ex(engine="claude", run=1, brands=["Claude Code"]),
+        ex(engine="chatgpt", run=0, brands=["Cursor"]),
+        ex(engine="chatgpt", run=1, brands=["Cursor"]),
+    ])
+    result = {s.brand: s for s in self_preference(run, {"Claude Code": "claude"})}
+    cc = result["Claude Code"]
+    assert cc.own_rate == 1.0 and cc.own_runs == 2
+    assert cc.rival_rate == 0.0 and cc.rival_runs == 2
+    assert cc.gap == 100.0
+
+
+def test_no_self_preference_when_everyone_names_it_equally():
+    from unprompted.aggregate import self_preference
+
+    run = _run([
+        ex(engine="claude", run=0, brands=["Claude Code"]),
+        ex(engine="chatgpt", run=0, brands=["Claude Code"]),
+    ])
+    assert self_preference(run, {"Claude Code": "claude"})[0].gap == 0.0
+
+
+def test_self_preference_skips_a_brand_with_no_rival_data():
+    """One engine alone cannot evidence favouritism, so report nothing."""
+    from unprompted.aggregate import self_preference
+
+    run = _run([ex(engine="claude", run=0, brands=["Claude Code"])])
+    assert self_preference(run, {"Claude Code": "claude"}) == []

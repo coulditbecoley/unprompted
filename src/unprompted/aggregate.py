@@ -196,3 +196,77 @@ def load_history(runs_dir: str | Path, category: str) -> list[dict]:
         return []
     files = sorted(root.glob(f"*/{category}.json"))
     return [json.loads(f.read_text(encoding="utf-8")) for f in files]
+
+
+@dataclass
+class SelfPreference:
+    """How often an engine names its own product, versus how often rivals do.
+
+    The whole reason the AI-tools category exists. `own_rate` is the share of
+    that engine's answered runs naming the product; `rival_rate` is the same
+    across every other engine. A gap means the engine favours its own house.
+
+    Reported as a measurement with its sample size attached, never as an
+    accusation: a small gap on a small sample is noise, and saying so is the
+    difference between a finding and a headline we cannot defend.
+    """
+
+    brand: str
+    engine: str            # the engine that owns this product
+    own_named: int
+    own_runs: int
+    own_rate: float
+    rival_named: int
+    rival_runs: int
+    rival_rate: float
+
+    @property
+    def gap(self) -> float:
+        """Percentage points by which the owner out-names everyone else."""
+        return round((self.own_rate - self.rival_rate) * 100, 1)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**asdict(self), "gap": self.gap}
+
+
+def self_preference(run: dict, affiliations: dict[str, str]) -> list[SelfPreference]:
+    """For each product with a known owner, compare owner naming to rival naming."""
+    answers = _answered(run)
+    out: list[SelfPreference] = []
+
+    for brand, owner in sorted(affiliations.items()):
+        own = [e for e in answers if e.get("engine") == owner]
+        rival = [e for e in answers if e.get("engine") != owner]
+        if not own or not rival:
+            continue
+
+        def named_in(rows: list[dict]) -> int:
+            return sum(
+                1 for e in rows if any(b["name"] == brand for b in e.get("brands", []))
+            )
+
+        own_named = named_in(own)
+        rival_named = named_in(rival)
+        out.append(
+            SelfPreference(
+                brand=brand,
+                engine=owner,
+                own_named=own_named,
+                own_runs=len(own),
+                own_rate=round(own_named / len(own), 4),
+                rival_named=rival_named,
+                rival_runs=len(rival),
+                rival_rate=round(rival_named / len(rival), 4),
+            )
+        )
+
+    out.sort(key=lambda s: -s.gap)
+    return out
+
+
+def load_affiliations(path: str | Path) -> dict[str, str]:
+    """Read the brand -> owning-engine map from a category's alias file."""
+    import yaml
+
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return data.get("affiliations", {}) or {}

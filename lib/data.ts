@@ -273,3 +273,78 @@ export function categoryLabel(slug: string): string {
 
 export const DISCLOSURE =
   "Operated by Coley Grantham, a customer of card grading companies, not a competitor. No placement is for sale.";
+
+
+/**
+ * How often an engine names its own product versus how often rivals name it.
+ *
+ * The reason the AI-tools category exists. Reported with its sample size
+ * attached and never as an accusation: a small gap on a small sample is noise,
+ * and saying so is the difference between a finding and a headline we cannot
+ * defend.
+ */
+export type SelfPreference = {
+  brand: string;
+  engine: string;
+  ownNamed: number;
+  ownRuns: number;
+  ownRate: number;
+  rivalNamed: number;
+  rivalRuns: number;
+  rivalRate: number;
+  gap: number;
+};
+
+export function loadAffiliations(category: string): Record<string, string> {
+  const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
+  if (!fs.existsSync(file)) return {};
+  // Deliberately a tiny reader rather than a YAML dependency: the block is a
+  // flat "Brand: engine" map and nothing more.
+  const text = fs.readFileSync(file, "utf-8");
+  // Matched with a multiline regex rather than split on newlines, so the
+  // reader is indifferent to CRLF and never carries a literal newline.
+  const block = /^affiliations:[ \t]*$([\s\S]*?)(?=^\S)/m.exec(text);
+  if (!block) return {};
+  const out: Record<string, string> = {};
+  for (const m of block[1].matchAll(/^[ \t]+(.+?):[ \t]*(\S+)[ \t]*$/gm)) {
+    out[m[1].trim()] = m[2].trim();
+  }
+  return out;
+}
+
+export function selfPreference(
+  run: RunRecord,
+  affiliations: Record<string, string>,
+): SelfPreference[] {
+  const answers = run.extractions.filter((e) => !e.error && !e.refused);
+  const out: SelfPreference[] = [];
+
+  for (const [brand, owner] of Object.entries(affiliations)) {
+    const own = answers.filter((e) => e.engine === owner);
+    const rival = answers.filter((e) => e.engine !== owner);
+    if (!own.length || !rival.length) continue;
+
+    const namedIn = (rows: Extraction[]) =>
+      rows.filter((e) => e.brands.some((b) => b.name === brand)).length;
+
+    const ownNamed = namedIn(own);
+    const rivalNamed = namedIn(rival);
+    const ownRate = ownNamed / own.length;
+    const rivalRate = rivalNamed / rival.length;
+
+    out.push({
+      brand,
+      engine: owner,
+      ownNamed,
+      ownRuns: own.length,
+      ownRate,
+      rivalNamed,
+      rivalRuns: rival.length,
+      rivalRate,
+      gap: Math.round((ownRate - rivalRate) * 1000) / 10,
+    });
+  }
+
+  out.sort((a, b) => b.gap - a.gap);
+  return out;
+}

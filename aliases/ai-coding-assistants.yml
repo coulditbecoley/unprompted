@@ -76,6 +76,19 @@ canonical:
     - codiumai
     - codium ai
 
+# Which engine's own house each product belongs to.
+#
+# This is why the category exists. We query ChatGPT, Claude and Perplexity, and
+# two of the products below are made by two of those companies. With this map we
+# can ask whether an engine names its own tool more often than rivals name it —
+# a question no competing tool can answer, because none of them query multiple
+# engines and compare.
+#
+# The engine names match the pipeline's own (chatgpt, claude, perplexity).
+affiliations:
+  Claude Code: claude
+  Codex: chatgpt
+
 # Known, and deliberately not charted. Real things the engines name while
 # answering, but not coding assistants, so charting them would be wrong.
 exclude:

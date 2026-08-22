@@ -528,3 +528,22 @@ a:focus-visible, button:focus-visible {
 @media (max-width: 560px) {
   .cat-card-body { padding: 18px 16px 16px; }
 }
+
+/* --- self preference ----------------------------------------------------- */
+.sp-row {
+  display: grid; grid-template-columns: minmax(120px, 1fr) auto auto auto;
+  gap: 14px; align-items: baseline;
+  padding: 14px 16px; border-bottom: var(--rule-w) solid var(--rule);
+}
+.sp-row:last-child { border-bottom: none; }
+.sp-brand { font-weight: 650; font-size: 16px; }
+.sp-brand small { display: block; font-weight: 400; font-size: 11.5px; color: var(--fg-3); font-family: var(--font-mono); margin-top: 3px; }
+.sp-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; text-align: right; }
+.sp-num small { display: block; font-size: 10px; color: var(--fg-3); letter-spacing: 0.08em; margin-bottom: 3px; }
+.sp-gap { font-family: var(--font-mono); font-size: 14px; font-weight: 600; text-align: right; }
+.sp-gap[data-sign="up"] { color: var(--fall); }
+.sp-gap[data-sign="down"] { color: var(--rise); }
+@media (max-width: 560px) {
+  .sp-row { grid-template-columns: 1fr auto auto; gap: 10px; padding: 12px; }
+  .sp-row .sp-rival { display: none; }
+}
