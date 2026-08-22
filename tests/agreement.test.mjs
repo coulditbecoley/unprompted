@@ -36,6 +36,13 @@ function standings(record) {
   const names = new Set();
   for (const ex of answers) for (const b of ex.brands) names.add(b.name);
 
+  const questionOrder = [];
+  for (const ex of answers) {
+    if (ex.question_id && !questionOrder.includes(ex.question_id)) {
+      questionOrder.push(ex.question_id);
+    }
+  }
+
   const out = [];
   for (const name of names) {
     const cells = [];
@@ -46,6 +53,12 @@ function standings(record) {
       if (hit && hit.position === 1) firstNamed += 1;
     }
     const named = cells.filter(Boolean).length;
+    const steps = questionOrder.map((qid) => {
+      const forQ = answers.filter((e) => e.question_id === qid);
+      if (!forQ.length) return 0;
+      const hits = forQ.filter((e) => e.brands.some((b) => b.name === name)).length;
+      return Math.round((hits / forQ.length) * 10000) / 10000;
+    });
     out.push({
       brand: name,
       named,
@@ -54,6 +67,7 @@ function standings(record) {
       firstNamed,
       firstShare: firstNamed / total,
       cells,
+      steps,
     });
   }
 
@@ -105,6 +119,13 @@ test("TypeScript side matches the shared expectation", () => {
       `${want.brand} firstShare ${actual.firstShare} != ${want.firstShare}`,
     );
     assert.deepEqual(actual.cells, want.cells, `${want.brand} cells`);
+    assert.equal(actual.steps.length, want.steps.length, `${want.brand} step count`);
+    actual.steps.forEach((s, k) => {
+      assert.ok(
+        Math.abs(s - want.steps[k]) < 1e-4,
+        `${want.brand} step ${k}: ${s} != ${want.steps[k]}`,
+      );
+    });
   });
 
   assert.equal(got[0].totalRuns, expected.totalRuns);

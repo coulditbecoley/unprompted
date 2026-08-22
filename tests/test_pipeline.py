@@ -274,6 +274,9 @@ def test_python_matches_the_shared_expectation():
         assert actual.first_named == want["firstNamed"]
         assert actual.first_share == pytest.approx(want["firstShare"], abs=1e-4)
         assert actual.cells == want["cells"]
+        for got_step, want_step in zip(actual.steps, want["steps"]):
+            assert got_step == pytest.approx(want_step, abs=1e-4)
+        assert len(actual.steps) == len(want["steps"])
 
     assert source_counts(run)[0] == tuple(expected["topSource"])
 

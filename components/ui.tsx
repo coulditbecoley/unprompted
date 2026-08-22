@@ -42,20 +42,30 @@ export function SequencerRow({
 
   return (
     <div className="seq-row">
-      <span className="mono seq-rank">{String(rank).padStart(2, "0")}</span>
+      <span className="mono seq-rank" data-lead={rank === 1}>
+        {String(rank).padStart(2, "0")}
+      </span>
       <span className="seq-brand">{name}</span>
 
+      {/*
+        One step per question, not one cell per run. At 225 runs a per-run row
+        overflowed the page and pushed every number off screen. Intensity is the
+        step sequencer's own idea, and it carries more: you can see which
+        questions a brand actually wins.
+      */}
       <span
         className="seq-cells"
         role="img"
-        aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs`}
+        aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs, across ${standing.steps.length} questions`}
       >
-        {standing.cells.map((on, i) => (
+        {standing.steps.map((v, i) => (
           <i
             key={i}
             className="seq-cell"
-            data-on={on}
-            style={{ animationDelay: `${i * 26}ms` }}
+            data-level={
+              v >= 0.999 ? "4" : v >= 0.6 ? "3" : v >= 0.3 ? "2" : v > 0 ? "1" : "0"
+            }
+            style={{ animationDelay: `${i * 30}ms` }}
           />
         ))}
       </span>
@@ -63,7 +73,9 @@ export function SequencerRow({
       <span className="mono seq-rot">
         {standing.named}/{standing.totalRuns}
       </span>
-      <span className="mono seq-first">{Math.round(standing.firstShare * 100)}%</span>
+      <span className="mono seq-first" data-lead={rank === 1}>
+        {Math.round(standing.firstShare * 100)}%
+      </span>
       <Delta move={move} />
     </div>
   );
@@ -93,7 +105,7 @@ export function SequencerHead() {
     <div className="seq-row seq-head" aria-hidden="true">
       <span className="label seq-rank">#</span>
       <span className="label seq-brand">Brand</span>
-      <span className="label seq-cells">Runs</span>
+      <span className="label seq-cells">By question</span>
       <span className="label seq-rot">Named</span>
       <span className="label seq-first">First</span>
       <span className="label seq-delta">Δ</span>

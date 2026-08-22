@@ -43,6 +43,13 @@ export type BrandStanding = {
   firstShare: number;
   medianPosition: number | null;
   cells: boolean[];
+  /**
+   * One step per question, 0..1 by how often this brand was named for it.
+   * A step sequencer already has this idea: it is velocity. One cell per run
+   * put 225 cells in a row and overflowed the page; 15 steps with intensity
+   * reads at a glance and shows *which* questions a brand wins.
+   */
+  steps: number[];
 };
 
 export type Movement = {
@@ -95,6 +102,15 @@ export function standings(run: RunRecord): BrandStanding[] {
   const names = new Set<string>();
   for (const ex of answers) for (const b of ex.brands) names.add(b.name);
 
+  // Question order follows first appearance, so steps line up with the
+  // published question bank rather than sorting alphabetically.
+  const questionOrder: string[] = [];
+  for (const ex of answers) {
+    if (ex.question_id && !questionOrder.includes(ex.question_id)) {
+      questionOrder.push(ex.question_id);
+    }
+  }
+
   const out: BrandStanding[] = [];
   for (const name of names) {
     const cells: boolean[] = [];
@@ -119,6 +135,13 @@ export function standings(run: RunRecord): BrandStanding[] {
         : (positions[mid - 1] + positions[mid]) / 2
       : null;
 
+    const steps = questionOrder.map((qid) => {
+      const forQ = answers.filter((e) => e.question_id === qid);
+      if (!forQ.length) return 0;
+      const hits = forQ.filter((e) => e.brands.some((b) => b.name === name)).length;
+      return Math.round((hits / forQ.length) * 10000) / 10000;
+    });
+
     out.push({
       brand: name,
       named,
@@ -128,6 +151,7 @@ export function standings(run: RunRecord): BrandStanding[] {
       firstShare: firstNamed / total,
       medianPosition,
       cells,
+      steps,
     });
   }
 

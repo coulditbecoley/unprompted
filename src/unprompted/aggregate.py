@@ -25,6 +25,12 @@ class BrandWeek:
     first_share: float         # first_named / total_runs
     median_position: float | None
     cells: list[bool] = field(default_factory=list)   # one per run, in run order
+    # One step per question, valued 0..1 by how often this brand was named for
+    # that question. A step sequencer already has this idea: it is velocity.
+    # Rendering one cell per run put 225 cells in a row, which overflowed the
+    # page; 15 steps with intensity is both readable and more informative,
+    # because it shows *which* questions a brand wins.
+    steps: list[float] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -67,6 +73,14 @@ def brand_week(run: dict) -> list[BrandWeek]:
         for b in ex.get("brands", []):
             names.add(b["name"])
 
+    # Question order is taken from first appearance so the steps line up with
+    # the published question bank rather than sorting alphabetically.
+    question_order: list[str] = []
+    for ex in answers:
+        qid = ex.get("question_id", "")
+        if qid and qid not in question_order:
+            question_order.append(qid)
+
     out: list[BrandWeek] = []
     for name in names:
         cells: list[bool] = []
@@ -80,6 +94,18 @@ def brand_week(run: dict) -> list[BrandWeek]:
                 if hit["position"] == 1:
                     first += 1
         named = sum(cells)
+
+        steps: list[float] = []
+        for qid in question_order:
+            for_q = [e for e in answers if e.get("question_id") == qid]
+            if not for_q:
+                steps.append(0.0)
+                continue
+            hits = sum(
+                1 for e in for_q if any(b["name"] == name for b in e.get("brands", []))
+            )
+            steps.append(round(hits / len(for_q), 4))
+
         out.append(
             BrandWeek(
                 brand=name,
@@ -90,6 +116,7 @@ def brand_week(run: dict) -> list[BrandWeek]:
                 first_share=round(first / total, 4),
                 median_position=round(median(positions), 2) if positions else None,
                 cells=cells,
+                steps=steps,
             )
         )
 
