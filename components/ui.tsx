@@ -8,6 +8,7 @@
 import Link from "next/link";
 
 import { Logo } from "@/components/logo";
+import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
 import { DISCLOSURE, slugify } from "@/lib/data";
 
@@ -149,12 +150,7 @@ export function SiteHeader() {
         <Link href="/" className="wordmark" aria-label="Unprompted, home">
           <Logo size={22} />
         </Link>
-        <nav className="site-nav">
-          <Link href="/chart">Chart</Link>
-          <Link href="/compare">Compare</Link>
-          <Link href="/questions">Questions</Link>
-          <Link href="/methodology">Method</Link>
-        </nav>
+        <NavLinks />
       </div>
       {/* Disclosure sits in the header on every page, not a footer link. */}
       <p className="disclosure">{DISCLOSURE}</p>

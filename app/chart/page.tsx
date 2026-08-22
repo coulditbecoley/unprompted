@@ -9,6 +9,7 @@ import {
   standings,
   theSnub,
 } from "@/lib/data";
+import { Freshness, ShareRow } from "@/components/freshness";
 import {
   AwaitingFirstRun,
   SequencerHead,
@@ -52,9 +53,15 @@ export default function ChartPage() {
           ? `${leader.brand} leads, named first in ${Math.round(leader.firstShare * 100)}% of runs.`
           : "No brand was named this week."}
       </h1>
+      {/* This sentence has to match what the board actually draws. It described
+          per-run cells after the board moved to per-question steps, which is
+          the site explaining itself incorrectly: the worst kind of defect for a
+          publication whose whole claim is that you can check its work. */}
       <p className="section-lead">
-        Week of {run.run_date}. Each cell is one run. A filled cell means the brand
-        was named in that run.
+        Week of {run.run_date}. One step per question, {run.runs_per_question} runs
+        each across {run.engines.length} engine
+        {run.engines.length === 1 ? "" : "s"}. A taller step means the brand was
+        named more often for that question.
       </p>
 
       <StatusBar
@@ -63,6 +70,7 @@ export default function ChartPage() {
         methodVersion={run.method_version}
         runsPerQuestion={run.runs_per_question}
       />
+      <Freshness runDate={run.run_date} />
 
       <div className="seq-board" style={{ marginTop: 14 }}>
         <TrimTop />
@@ -77,6 +85,14 @@ export default function ChartPage() {
           />
         ))}
       </div>
+
+      <ShareRow
+        headline={
+          leader
+            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about Pokémon card grading.`
+            : "What AI recommends when nobody's paying."
+        }
+      />
 
       {snub && (
         <div className="snub">

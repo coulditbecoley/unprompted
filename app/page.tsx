@@ -13,6 +13,7 @@ import {
   standings,
   theSnub,
 } from "@/lib/data";
+import { Freshness, ShareRow } from "@/components/freshness";
 import {
   AwaitingFirstRun,
   SequencerHead,
@@ -113,6 +114,7 @@ export default function Home() {
               methodVersion={run.method_version}
               runsPerQuestion={run.runs_per_question}
             />
+            <Freshness runDate={run.run_date} />
             <div className="seq-board" style={{ marginTop: 14 }}>
               <TrimTop />
               <SequencerHead />
@@ -126,6 +128,14 @@ export default function Home() {
                 />
               ))}
             </div>
+
+            <ShareRow
+              headline={
+                leader
+                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about Pokémon card grading.`
+                  : "What AI recommends when nobody's paying."
+              }
+            />
 
             {snub && (
               <div className="snub">
@@ -152,8 +162,9 @@ export default function Home() {
           These systems do not give the same answer twice. Ask the same question on
           Monday and Wednesday and you can get different brands. Asking once and
           publishing the result would be publishing a coin flip, so we ask
-          repeatedly and report how <em>often</em> a brand was named. Each cell on
-          the board above is one run.
+          repeatedly and report how <em>often</em> a brand was named. Each step on
+          the board above is one question, and its height is how often that brand
+          was named for it.
         </p>
         <p className="mono" style={{ fontSize: 12.5 }}>
           <Link href="/methodology">Read the full method →</Link>
