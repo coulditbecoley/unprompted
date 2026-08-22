@@ -6,6 +6,8 @@
  */
 
 import Link from "next/link";
+
+import { Logo } from "@/components/logo";
 import type { BrandStanding, Movement } from "@/lib/data";
 import { DISCLOSURE, slugify } from "@/lib/data";
 
@@ -144,9 +146,8 @@ export function SiteHeader() {
   return (
     <header className="site-head">
       <div className="shell site-head-inner">
-        <Link href="/" className="wordmark">
-          <span className="wordmark-text">Unprompted</span>
-          <span className="carbon wordmark-chip" aria-hidden="true" />
+        <Link href="/" className="wordmark" aria-label="Unprompted, home">
+          <Logo size={22} />
         </Link>
         <nav className="site-nav">
           <Link href="/chart">Chart</Link>

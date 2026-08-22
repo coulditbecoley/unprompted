@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Unprompted favicon. Graphite ground so the mark holds on any browser
+       chrome, light or dark. Bone steps, one amber: the step that counts is
+       deliberately not the tallest. -->
+  <rect width="32" height="32" fill="#121417"/>
+  <g transform="translate(4 4)">
+    <rect x="0"    y="0"     width="4.5" height="24"   fill="#F5F4F0"/>
+    <rect x="6.5"  y="10.8"  width="4.5" height="13.2" fill="#F5F4F0"/>
+    <rect x="13"   y="5.3"   width="4.5" height="18.7" fill="#E8913C"/>
+    <rect x="19.5" y="16.3"  width="4.5" height="7.7"  fill="#F5F4F0"/>
+  </g>
+</svg>

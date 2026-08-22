@@ -374,3 +374,13 @@ a:focus-visible, button:focus-visible {
 .q-eng .label { padding-top: 3px; }
 .q-names { color: var(--fg-2); }
 .q-names em { color: var(--fg-3); font-style: normal; }
+
+/* --- logo ---------------------------------------------------------------- */
+.logo-lockup { display: inline-flex; align-items: center; gap: 10px; }
+.logo-word {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
