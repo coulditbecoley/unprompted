@@ -126,7 +126,12 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
     history = load_history(ROOT / "data" / "runs", category)
     this_week = brand_week(record.to_dict())
     last_week = brand_week(history[-1]) if history else []
-    result = run_checks(record.to_dict(), this_week, last_week)
+    result = run_checks(
+        record.to_dict(),
+        this_week,
+        last_week,
+        max_brands=int(spec.get("max_brands", 15)),
+    )
 
     if not dry_run:
         out_dir = ROOT / "data" / "runs" / run_date

@@ -80,8 +80,16 @@ def main() -> int:
     history = [h for h in load_history(ROOT / "data" / "runs", args.category)
                if h["run_date"] != args.date]
     this_week = brand_week(fresh.to_dict())
+    import yaml as _yaml
+
+    spec = _yaml.safe_load(
+        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
+    )
     result = run_checks(
-        fresh.to_dict(), this_week, brand_week(history[-1]) if history else []
+        fresh.to_dict(),
+        this_week,
+        brand_week(history[-1]) if history else [],
+        max_brands=int(spec.get("max_brands", 15)),
     )
 
     path.write_text(

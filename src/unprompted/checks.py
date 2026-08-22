@@ -21,6 +21,9 @@ MAX_ERROR_RATE = 0.20        # share of engine calls allowed to fail
 # measurement definition: no published number changes, only whether we publish.
 MIN_ROTATION_TO_COUNT = 0.02  # named in at least ~2% of runs
 MIN_BRANDS = 2
+# How wide a field is plausible is a property of the category, not a global
+# truth. Grading has five or six real companies; AI coding tools genuinely has
+# eighteen. A category may raise this via max_brands in its questions file.
 MAX_BRANDS = 15
 
 
@@ -38,6 +41,7 @@ def run_checks(
     run: dict,
     this_week: list[BrandWeek],
     last_week: list[BrandWeek],
+    max_brands: int = MAX_BRANDS,
 ) -> CheckResult:
     """Return pass/fail plus every human-readable reason it failed."""
     reasons: list[str] = []
@@ -94,10 +98,10 @@ def run_checks(
 
     # 4. Brand count outside the expected band, ignoring the one-mention tail.
     count = sum(1 for b in this_week if b.rotation >= MIN_ROTATION_TO_COUNT)
-    if count and not (MIN_BRANDS <= count <= MAX_BRANDS):
+    if count and not (MIN_BRANDS <= count <= max_brands):
         reasons.append(
             f"{count} brands above the {MIN_ROTATION_TO_COUNT:.0%} floor, outside "
-            f"the expected {MIN_BRANDS}-{MAX_BRANDS} range "
+            f"the expected {MIN_BRANDS}-{max_brands} range "
             f"({len(this_week)} distinct names in total)"
         )
 

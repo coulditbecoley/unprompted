@@ -107,6 +107,35 @@ repository. Anyone can re-run the method and check the result.
 
 ---
 
+## A conflict we have to declare
+
+In the AI tools categories, some of the products we chart are made by the same
+companies whose assistants we query. We report the gap between how often an
+engine names its own product and how often rivals name it.
+
+That measurement has a problem we did not choose and cannot fully remove:
+**the extraction step also runs on Claude.** After each engine answers, a Claude
+model reads that prose and decides which companies were named. So when the
+result says Claude named Claude Code more often than rivals did, a Claude model
+was the one counting.
+
+We think the effect is small, because extraction is a mechanical reading task
+and the raw answers are published alongside the counts, so anyone can check a
+row by hand. But "we think it is small" is not evidence, and the honest position
+is that this figure carries a conflict until it has been checked with a
+different model doing the extraction.
+
+Until that check is run, treat any self-preference number involving Claude as
+provisional. The raw answers behind every count are in `data/runs/`, which is
+exactly why they are published.
+
+Two things that are *not* affected by this: the standings themselves, which do
+not depend on whose product is whose, and the ChatGPT figure, where a Claude
+extractor finding that ChatGPT under-names its own product runs against the
+direction any bias would push.
+
+---
+
 ## Corrections
 
 If a result here is wrong, the raw data that produced it is in `data/runs/` and

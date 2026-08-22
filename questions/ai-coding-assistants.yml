@@ -14,6 +14,10 @@ category: ai-coding-assistants
 label: AI Coding Assistants
 method_version: 1
 runs_per_question: 5
+# This field is genuinely wider than card grading: the first real run found 18
+# distinct tools, all of them real products. An operational threshold, not a
+# measurement definition, so no published number depends on it.
+max_brands: 25
 questions:
   - id: q01
     text: "What is the best AI coding assistant?"

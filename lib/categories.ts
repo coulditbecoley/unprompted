@@ -95,7 +95,7 @@ export const CATEGORIES: Category[] = [
     label: "AI Coding Assistants",
     sector: "ai-software",
     question: "Which AI should I write code with?",
-    status: "planned",
+    status: "live",
     keywords: [
       "claude code", "copilot", "cursor", "codex", "windsurf", "cline", "aider",
       "coding", "developer", "ide", "agent", "programming",

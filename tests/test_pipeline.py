@@ -388,3 +388,11 @@ def test_self_preference_skips_a_brand_with_no_rival_data():
 
     run = _run([ex(engine="claude", run=0, brands=["Claude Code"])])
     assert self_preference(run, {"Claude Code": "claude"}) == []
+
+
+def test_max_brands_is_per_category():
+    """Grading has five real companies; AI coding tools genuinely has eighteen."""
+    wide = [_week(f"Tool{i}", 0.3) for i in range(18)]
+    run = _run([ex(brands=["PSA"])])
+    assert run_checks(run, wide, []).held          # default bound of 15
+    assert run_checks(run, wide, [], max_brands=25).passed
