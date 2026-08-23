@@ -71,7 +71,9 @@ export const KNOWN_CLIS: Array<{
     id: "codex-cli",
     label: "Codex",
     command: "codex",
-    args: ["exec", "-"],
+    // --skip-git-repo-check because the pipeline runs it from wherever the job
+    // starts, and codex otherwise refuses outside a trusted repository.
+    args: ["exec", "--skip-git-repo-check", "-"],
     versionArgs: ["--version"],
   },
   {
