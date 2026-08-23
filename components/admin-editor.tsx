@@ -52,7 +52,7 @@ export function AdminEditor({
 
   return (
     <div className="panel" style={{ padding: "20px 22px 20px 30px", marginBottom: 16 }}>
-      <span className="carbon trim-left" aria-hidden="true" />
+      
       <h3 style={{ marginBottom: 4 }}>{label}</h3>
       <p style={{ fontSize: 13.5, color: "var(--fg-3)", margin: "0 0 12px" }}>{note}</p>
 

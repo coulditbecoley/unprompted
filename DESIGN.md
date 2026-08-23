@@ -1,197 +1,197 @@
-# Design
+# Unprompted design system
 
-Written from the built site, not ahead of it. Direction locked by seed
-`06ec8236`, chosen over the assigned roll, palette overridden by brief.
+**Direction:** The Terminal, played straight. Seed `5e1f2e83`.
+**Craft bar:** Linear, Vercel. Set by the operator, matched detail for detail.
 
----
-
-## The world
-
-**Algorave source floor.** A live-coding performance: the source that drives the
-output is projected, visible, and edited in front of the room. Applied here, the
-query is visible and the output is live — Unprompted shows the questions that
-produced the chart, running in public.
-
-What it refuses: the dashboard-of-cards arrangement every AI-visibility tool
-ships. No rounded card grid, no gradient hero, no line-chart-as-decoration.
-
-**Palette overridden by brief** from the world's native phosphor-on-black, which
-is both the most predictable rendition of a live-code world and the near-black-
-plus-neon cliché. Carbon fibre and Apple off-white replace it.
+This document describes the world as built. It was written after the build, from
+the build, so it reports rather than prescribes. It replaces the previous
+Algorave source floor world (seed `06ec8236`) entirely.
 
 ---
 
-## Materials
+## The one idea
 
-Two flat surfaces carry everything. Carbon fibre is **trim**, never ground.
+A market-data board for machine recommendations. **The numbers are the design.**
+Anything on a page that is not a number earns its place by making a number
+easier to read, or it goes.
 
-| Token | Value | Role |
-|---|---|---|
-| `--graphite` | `#121417` | Dark ground. Flat, never textured. |
-| `--graphite-raise` | `#1a1d21` | Raised surface, dark |
-| `--bone` | `#f5f4f0` | Light ground, and dark-mode ink |
-| `--bone-shade` | `#e6e4dc` | Secondary surface, light |
-| `--carbon-base` | `#15171a` | Trim material only |
-| `--amber` | `#e8913c` | The one signal |
-| `--rise` / `--fall` | `#3e7f6b` / `#a8523c` | Movement reinforcement only |
+This is the category standard executed at full fidelity, chosen deliberately
+over four more expressive worlds. It carries no irony and no smuggled quirk: a
+visitor who reads market data all day should find everything where they expect
+it, and the only thing that surprises them should be what the data says.
 
-### Carbon fibre rules
+What it refuses: the decorated hero, the gradient card grid, the accent colour
+sprayed across a dashboard, and the ornamented world an AI-visibility tool
+reaches for when it wants to look serious.
 
-Real 2×2 twill at a **4px tile**, matte, built from two crossed
-`repeating-linear-gradient`s. Defined once, in the `.carbon` class, so the trim
-budget for the whole site is auditable from one place.
+---
 
-- **Trim only.** Inlay rails (`--trim-w`, 6px), top strips (5px), the 18px
-  wordmark chip. Never a background.
-- **Never below ~5px of width.** An 8px weave inside a 6px rail shows roughly one
-  crossing and reads as noise or a plain dark line. Hence the 4px tile. There is
-  no 1px variant, because a 1px carbon border is just a dark line pretending.
-- **Never behind text.** Data sits on flat bone or flat graphite, always.
-- **No gloss, no specular.** High-contrast glossy carbon is the tackiest texture
-  on the web and would sink the credibility this publication runs on.
-- **Constant across themes.** Carbon does not invert when the theme flips. That
-  is what makes it read as a material rather than a colour.
+## Colour
+
+Dark is the default. The physical scene decides it: this is a data board read at
+a desk, usually beside other dark tools, often late.
+
+Colour is **rationed to meaning**. There is no decorative hue anywhere in the
+system, which is what keeps green and red legible as signals rather than
+styling.
+
+| Role | Meaning | Dark | Light |
+|---|---|---|---|
+| `--bg` | page ground | `#08090a` | `#ffffff` |
+| `--surface` | any raised panel | `#0e0f11` | `#fafafa` |
+| `--surface-2` | table heads, inputs | `#141518` | `#f2f2f2` |
+| `--fg` | primary text | `#f7f8f8` | `#0a0a0a` |
+| `--fg-2` | secondary text | `#9ba1a9` | `#545454` |
+| `--fg-3` | labels, metadata | `#6a6f77` | `#8a8a8a` |
+| `--rule` | hairline separators | `#1e2024` | `#e6e6e6` |
+| `--accent` | interactive only | `#4d8dff` | `#0060df` |
+| `--up` | movement up | `#4cc38a` | `#10714b` |
+| `--down` | movement down | `#f2555a` | `#bc3229` |
+| `--warn` | needs a human | `#e5a03c` | `#9a6200` |
+
+The board's step ramp (`--cell-0` through `--cell-4`) is a five-stop blue scale.
+It reads as intensity, not as category, which is the point: a step is *how
+often*, never *which kind*.
+
+**Rules that hold everywhere.** Green and red mean movement and nothing else.
+Blue means "you can interact with this" and nothing else. A brand never gets its
+own colour. The leader is marked by weight, never by hue.
 
 ### Themes
 
-Dark and light swap the two flat surfaces: graphite ground with bone ink, or
-bone ground with graphite ink. Neither is a tinted version of the other.
-
-Light is the CSS default because the primary scene is a screenshot dropped into
-a thread, and light survives that trip better. The system preference still
-decides for a visitor who has not chosen, via
-`@media (prefers-color-scheme: dark)` guarded as `:root:not([data-theme="light"])`,
-with `:root[data-theme="dark"]` so an explicit toggle wins in both directions. A
-pre-paint inline script applies the stored choice so a dark-mode visitor never
-sees a white flash.
+Three states, not two. Bare `:root` carries the complete light palette. The
+`prefers-color-scheme: dark` block is guarded `:root:not([data-theme="light"])`
+so an explicit light choice beats a dark OS. `:root[data-theme="dark"]` repeats
+the dark values so the toggle wins in both directions. Every colour is defined
+on `:root` first; nothing gets its only definition inside a media block.
 
 ---
 
-## Typography
+## Type
 
-- **Martian Mono** — data, labels, figures, the query buffer, the status bar.
-  Mono is a requirement rather than a style choice: tabular figures are most of
-  the page. `font-variant-numeric: tabular-nums` on every numeric column.
-- **Mona Sans** — display headlines and long-form reading.
+**Geist** for everything read as language. **Geist Mono** for everything read as
+data: figures, labels, timestamps, hostnames, engine names, question text.
 
-Both are free, and neither is one of the faces every generated interface reaches
-for. The `.label` class (10px, `0.14em` tracking, uppercase, mono) is the single
-recurring small-label treatment.
+That split is the system's main typographic idea. If a thing is a measurement or
+an identifier, it is monospaced; if it is a sentence, it is not. A reader can
+tell what kind of thing they are looking at before reading it.
 
----
+`font-variant-numeric: tabular-nums` is set on `body`, not per component,
+because every figure on this site is read against another figure and a column
+that shifts by digit width is a defect.
 
-## Components
-
-**`.seq-row` — the signature object.** One row per brand, one `.seq-cell` per
-run, filled when that run named the brand. This exists because a live-coding
-interface writes rhythm as filled and empty steps (`x . o . x . o x`) and
-Unprompted asks each question five times and reports how often a brand was
-named. They are the same object. It turns rotation from an abstract percentage
-into something readable at a glance and screenshottable.
-
-On screens under 640px the cells and first-share column drop out and the row
-falls back to rank, brand, named and delta. The number survives; the ornament
-does not.
-
-**`.buffer` — the query buffer.** The real questions, monospaced and numbered,
-with a blinking `.caret`. Not a decorative code block: it renders the actual
-contents of `questions/*.yml`.
-
-**`.statusbar`** — carbon-backed strip carrying run date, method version, runs
-per question and active engines. Borrowed directly from the source world's
-`RUNNING · BPM · CPU` bar.
-
-**`.snub`** — amber-bordered callout for the week's biggest faller. Absent
-entirely on a quiet week, because inventing drama from flat data is how a chart
-loses trust.
+| Role | Size | Weight | Notes |
+|---|---|---|---|
+| `.display` | `clamp(30px, 5vw, 46px)` | 640 | The week's verdict, one per page |
+| `h2` | 19-22px | inherit | Section heads |
+| body | 15px | 400 | `-0.005em` tracking |
+| `.label` | 10.5px mono | 500 | `0.09em`, uppercase |
+| board figures | 12-12.5px mono | 400-500 | tabular |
 
 ---
 
-## Movement and state
+## Material and structure
 
-Rise and fall are carried by **glyph and position first** (`▲`/`▼`, rank order,
-weight), with colour as reinforcement only. The board reads correctly in
-greyscale and for anyone who cannot separate the two hues. This is a hard
-requirement, not a preference: numeric data must never depend on colour alone.
+There is **one radius** (`--r: 6px`, with `--r-sm: 4px` for controls). There are
+no shadows. Elevation is expressed by a hairline border against a slightly
+lifted surface, which is what a dense interface can afford without the page
+turning soft.
 
-**Amber is the only imported colour** and keeps exactly the job it has in the
-source world — *something is about to change*. Pending runs, a held week, a
-method version bump. Nothing else may use it.
+Panels are the same object everywhere: `--surface` ground, 1px `--rule` border,
+6px radius, `overflow: hidden` so rows clip cleanly to the corner.
+
+`TrimTop` renders the single hairline that separates a panel's head from its
+body. It is the surviving structural role of the previous world's carbon-fibre
+trim; the material is gone, the separation it provided is not.
+
+---
+
+## The board
+
+The signature object, and the only place the system spends real invention.
+
+Each row carries five things, in this order of visual weight:
+
+1. **Brand name**, with a rotation bar beneath it. The bar exists so ranking is
+   readable without reading a number.
+2. **Per-question steps.** One step per question, four intensity levels. The
+   steps flex to fill their column because they are the argument, not a
+   decoration beside it.
+3. **Named**, as a raw fraction. The denominator stays visible so the sample
+   size is never hidden behind a percentage.
+4. **First**, the share of runs where the brand was named first.
+5. **Movement**, carried by the glyph and the sign. Colour reinforces; it never
+   carries the meaning alone, so the board is correct in greyscale.
+
+**Why steps and not a line.** A line shows *when*. Steps show *which questions a
+brand wins*, which is a dimension no competitor publishes and no line chart can
+carry. Trend lines arrive as history accrues; they join the board rather than
+replacing it.
+
+### Responsive
+
+The board is the primary scene, so it is never hidden. At 720px the rank and the
+raw fraction drop and the steps stay. At 430px movement drops too. What survives
+to the smallest screen is brand, steps, and first-named share, because that is
+the smallest set that still answers the question the visitor arrived with.
+
+The header is two rows below 620px: four nav links plus the wordmark do not fit
+one phone row, and the page must never scroll sideways.
 
 ---
 
 ## Motion
 
-Three motions, each carrying information rather than decorating:
+Fast and few. `--fast: 120ms` for state, 380-560ms for entrance, all on
+`cubic-bezier(0.16, 1, 0.3, 1)`.
 
-1. **Cells fill in run order** (`cell-in`, 220ms, staggered 26ms). You are
-   watching the measurement replay.
-2. **The caret blinks** (`steps(1)`), because the buffer is live.
-3. **Pending warms to amber** (`pending`, 2.2s), as the source world flashes a
-   pattern before it sounds.
+Three animations exist in the whole system: board steps fade up on load, the
+rotation bar grows from its left edge, and the caret in the question buffer
+blinks. Everything else is a colour or border transition on hover.
 
-`prefers-reduced-motion: reduce` collapses every animation to its final state.
-Nothing is carried by motion alone, so nothing is lost.
-
----
-
-## Layout
-
-`.shell` is 1180px max with 20px gutters. Hard 1px rules (`--rule`), zero border
-radius anywhere, grid-locked columns. The hero is a two-column grid collapsing
-at 900px: verdict left, query buffer right.
-
-Answer-first is structural, not stylistic. Every page states its complete answer
-in the first sentence before any preamble, because citation research shows most
-citations come from the top of a page and this publication exists to be quoted.
+`prefers-reduced-motion: reduce` collapses every animation and transition to
+0.01ms globally, and the smooth scroll with it.
 
 ---
 
-## What would break this design
+## Accessibility
 
-- Carbon fibre used as a background, or at a size where the weave stops reading.
-- A rounded corner, a drop shadow on a card, or a gradient.
-- Colour used as the only carrier of rise and fall.
-- Amber used for anything other than "about to change".
-- A sample or placeholder chart. The site shows an honest empty state instead;
-  fabricated data would cost more than an empty page ever could.
+- Focus is a 2px `--accent` ring at 2px offset, defined once on `:focus-visible`.
+- Movement, self-preference gaps, and category status all pair colour with a
+  glyph, a sign, or a word.
+- The step row carries an `aria-label` stating the counts in prose, because a
+  row of coloured divs is meaningless to a screen reader.
+- Body text sits at or above 4.5:1 on both themes; `--fg-3` is reserved for
+  labels and metadata that repeat information available elsewhere.
 
 ---
 
-## The mark
+## Brand surfaces
 
-The logo is the product's signature object reduced: a **velocity step row**, the
-same shape that carries every brand on the board. Four steps, uneven heights,
-exactly one amber.
+The mark is four steps of unequal height. The third is coloured with the board's
+full-intensity blue and is **not** the tallest. That encodes the finding the
+whole publication exists to report: the brand named most often is frequently not
+the brand recommended first. The logo is an argument, not a shape.
 
-Two decisions carry the meaning, and both should survive any future redraw:
-
-**The rhythm is deliberately irregular.** An ascending bar chart is the generic
-data-product mark. This refuses that shape, because what Unprompted measures is
-a pattern, not a trend.
-
-**The amber step is not the tallest.** This encodes the finding the publication
-exists to surface: being mentioned most and being recommended first are
-different things. In the first real week TAG was named in a third of answers yet
-named first more often than Beckett, which appeared in 84%. The mark says that
-before a word is read.
-
-Drawn as bare geometry: no frame, no rounding, no gradient, no outline. The
-world it lives in has hard 1px rules and flat surfaces, and the mark obeys them.
-
-| Asset | File | Notes |
-|---|---|---|
-| Lockup | `components/logo.tsx` | Mark plus wordmark in Mona Sans 800 |
-| Favicon | `app/icon.svg` | Graphite ground so it holds on any browser chrome |
-| Apple icon | `app/apple-icon.svg` | Same geometry at 180px |
-| Social card | `app/opengraph-image.tsx` | Carries the live result, never a slogan |
-
-The mark inherits `currentColor` for its bone steps, so it inverts correctly with
-the theme while the amber step stays fixed. The favicon does not invert: it
-carries its own graphite ground, because a browser tab is not our surface to
-theme.
+The favicon does not invert. It carries its own near-black ground, because a
+browser tab is not our surface to theme.
 
 **The social card is a primary brand surface, not an afterthought.** This
 publication's growth engine is somebody screenshotting a number into an
 argument, so the card renders the live standings rather than a static tagline.
 It must never show a mocked-up number.
+
+---
+
+## What lives where
+
+| File | Owns |
+|---|---|
+| `app/globals.css` | Every token and every class. There is no second stylesheet. |
+| `app/layout.tsx` | Fonts, the no-flash theme script, the direction contract. |
+| `components/ui.tsx` | Board rows, status bars, chrome, the shared primitives. |
+| `components/logo.tsx` | The mark, and the social card's step rhythm. |
+
+The direction contract is emitted as a real HTML comment in the shipped markup,
+not a JSX comment. A JSX comment is compiler syntax and reaches no output, which
+makes it a contract nobody can audit. Grep the built output for the seed key.

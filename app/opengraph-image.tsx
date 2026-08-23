@@ -14,18 +14,18 @@ export const contentType = "image/png";
  * afterthought, so it carries the live result rather than a static slogan.
  *
  * Built from the same materials as the site: graphite ground, bone type, one
- * amber, and the mark's own step rhythm. No gradients, no rounding.
+ * the board's own step colour, and the mark's step rhythm. No gradients.
  */
 export default function OpenGraphImage() {
   const run = latestRun(CATEGORY);
   const board = run ? standings(run).slice(0, 5) : [];
   const leader = board[0];
 
-  const GRAPHITE = "#121417";
-  const BONE = "#F5F4F0";
-  const AMBER = "#E8913C";
-  const MUTED = "#878D95";
-  const RULE = "#2B2F35";
+  const GRAPHITE = "#08090A";
+  const BONE = "#F7F8F8";
+  const AMBER = "#9DC4E8";
+  const MUTED = "#6A6F77";
+  const RULE = "#1E2024";
 
   return new ImageResponse(
     (

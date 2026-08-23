@@ -48,7 +48,7 @@ export function Subscribe() {
 
   return (
     <section className="subscribe">
-      <span className="carbon trim-top" aria-hidden="true" />
+      <span className="trim-top" aria-hidden="true" />
       <div className="subscribe-body">
         <p className="label">Get it every week</p>
         <h2 className="subscribe-head">

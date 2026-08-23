@@ -140,7 +140,7 @@ export default function Home() {
 
             {snub && (
               <div className="snub">
-                <p className="label" style={{ color: "var(--amber)" }}>
+                <p className="label" style={{ color: "var(--down)" }}>
                   The Snub
                 </p>
                 <h3>{snub.brand}</h3>

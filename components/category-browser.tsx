@@ -84,7 +84,7 @@ export function CategoryBrowser({
 
               const inner = (
                 <>
-                  <span className="carbon trim-top" aria-hidden="true" />
+                  <span className="trim-top" aria-hidden="true" />
                   <div className="cat-card-body">
                     <p className="cat-status" data-live={live}>
                       {live ? "MEASURED WEEKLY" : "NOT YET MEASURED"}

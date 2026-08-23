@@ -3,7 +3,7 @@
  *
  * The mark is the product's own signature object: a velocity step row, the
  * same one that carries every brand on the board. Four steps, uneven heights,
- * and exactly one of them amber.
+ * and exactly one of them carrying the board's full-intensity colour.
  *
  * Two decisions carry the meaning:
  *
@@ -11,7 +11,7 @@
  *    generic "data product" mark; this one refuses that shape, because the
  *    thing being measured is not a trend, it is a pattern.
  *
- * 2. The amber step is NOT the tallest. That encodes the finding the whole
+ * 2. The coloured step is NOT the tallest. That encodes the finding the whole
  *    publication exists to surface: being mentioned most and being recommended
  *    first are different things. TAG is named in a third of answers and named
  *    first more often than Beckett, which is named in 84%. The mark says that.
@@ -59,7 +59,7 @@ export function Mark({
             y={BOX - h}
             width={BAR_W}
             height={h}
-            fill={step.accent ? "var(--amber)" : "currentColor"}
+            fill={step.accent ? "var(--cell-4)" : "currentColor"}
           />
         );
       })}

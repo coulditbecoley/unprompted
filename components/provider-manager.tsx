@@ -143,7 +143,7 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
       </div>
 
       <div className="seq-board">
-        <span className="carbon trim-top" aria-hidden="true" />
+        <span className="trim-top" aria-hidden="true" />
         {providers.map((p) => (
           <div className="seq-row" key={p.id} style={{ gridTemplateColumns: "1fr auto auto" }}>
             <span className="seq-brand" style={{ gap: 3 }}>

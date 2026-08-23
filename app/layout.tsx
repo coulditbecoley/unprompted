@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;500;600&family=Mona+Sans:ital,wght@0,300..800;1,400&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
         />
         <link
           rel="alternate"
@@ -47,21 +47,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {/*
-          THESIS: The query is visible and the output is live. Unprompted shows the
-          exact code that produced the chart, and refuses the dashboard-of-cards
-          arrangement every AI-visibility tool ships.
-          OWN-WORLD: Flat matte graphite and Apple off-white carry every surface.
-          Matte carbon-fibre twill is trim only — inlay rails, edge strips, chips.
-          Monospace-dominant, grid-locked, hard 1px rules, zero rounded cards.
-          STORY: A visitor understands in five seconds who the machines name,
-          believes it because the method is running in front of them, and leaves
-          with a screenshot.
-          FIRST VIEWPORT: Left, the week's verdict at display scale. Right, the live
-          question buffer typing itself. Below, the sequencer board, one cell per run.
-          FORM: Algorave source floor. Seed 06ec8236. Palette overridden by brief.
-          FINISH: unreviewed and undocumented is unfinished; this build ends with
-          the finish review, the verdict, and DESIGN.md
+          The direction contract, emitted as a real HTML comment so it survives
+          the production build. A JSX comment is compiler syntax and reaches no
+          output, which makes it a contract nobody can audit.
         */}
+        <div
+          style={{ display: "none" }}
+          dangerouslySetInnerHTML={{
+            __html: `<!--
+THESIS: A market-data board for machine recommendations. The numbers
+are the design; it refuses the expressive, ornamented arrangement an
+AI-visibility tool reaches for, and the decorated-hero landing page.
+OWN-WORLD: Near-black with a cool bias, one elevated surface, hairline
+rules, a single 6px radius. Geist and Geist Mono, tabular numerals
+everywhere. Colour is reserved: green and red mean movement and
+nothing else, blue means interactive. No accent competes with them.
+STORY: A visitor sees who the machines name in five seconds, believes
+it because the method is one click away, and leaves with a screenshot.
+FIRST VIEWPORT: The week's verdict at display scale on the left, the
+live question buffer typing itself on the right, the ranked board
+directly beneath with rotation bars, per-question steps and movement.
+FORM: The category standard, taken as the standing exit by the user.
+Seed 5e1f2e83. Craft bar set by the user: Linear, Vercel.
+FINISH: unreviewed and undocumented is unfinished; this build ends with
+the finish review, the verdict, and DESIGN.md
+-->`,
+          }}
+        />
         <ThemeToggle />
         <SiteHeader />
         <main>{children}</main>

@@ -12,14 +12,14 @@ import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
 import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/data";
 
-/* -- carbon trim ---------------------------------------------------------- */
+/* -- hairline trim -------------------------------------------------------- */
 
 export function TrimTop() {
-  return <span className="carbon trim-top" aria-hidden="true" />;
+  return <span className="trim-top" aria-hidden="true" />;
 }
 
 export function TrimLeft() {
-  return <span className="carbon trim-left" aria-hidden="true" />;
+  return ;
 }
 
 /* -- the sequencer row: one cell per run ---------------------------------- */
@@ -49,7 +49,7 @@ export function SequencerRow({
         {String(rank).padStart(2, "0")}
       </span>
       {/* The rotation bar makes the ordering readable without reading a number.
-          Deliberately neutral: amber is the leader's signal and stays scarce. */}
+          Deliberately neutral: colour on this board means movement. */}
       <span className="seq-brand">
         {name}
         <i
@@ -139,7 +139,7 @@ export function StatusBar({
   runsPerQuestion: number;
 }) {
   return (
-    <div className="statusbar carbon">
+    <div className="statusbar">
       <span className="mono">RUN {runDate}</span>
       <span className="mono">METHOD v{methodVersion}</span>
       <span className="mono">{runsPerQuestion} RUNS/Q</span>
