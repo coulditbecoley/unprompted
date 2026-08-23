@@ -14,7 +14,7 @@ import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
  * open — an unconfigured deploy must never be an unlocked one.
  */
 export async function middleware(request: NextRequest) {
-  const secret = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_PASSWORD?.trim();
 
   if (!secret) {
     return new NextResponse("Admin is not configured on this deployment.", {

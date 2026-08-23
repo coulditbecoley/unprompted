@@ -52,7 +52,7 @@ function toHex(bytes: Uint8Array): string {
  * means a future routing change can never silently expose the write path.
  */
 export async function isAuthorised(request: Request): Promise<boolean> {
-  const secret = process.env.ADMIN_PASSWORD;
+  const secret = process.env.ADMIN_PASSWORD?.trim();
   if (!secret) return false;
   const cookie = request.headers.get("cookie") ?? "";
   const match = new RegExp(`(?:^|;\s*)${ADMIN_COOKIE}=([^;]+)`).exec(cookie);
