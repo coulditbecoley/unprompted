@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
-import { CATEGORY, REPO_ROOT, latestRun, loadHistory, standings } from "@/lib/data";
+import { CATEGORY, REPO_ROOT, latestRun, loadHistory, loadQuarantine, standings } from "@/lib/data";
 import { TrimTop } from "@/components/ui";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
@@ -34,15 +34,7 @@ export default function AdminPage() {
   const run = latestRun(CATEGORY);
   const board = run ? standings(run) : [];
 
-  const quarantineDir = path.join(REPO_ROOT, "data", "quarantine");
-  const quarantine: string[] = fs.existsSync(quarantineDir)
-    ? fs
-        .readdirSync(quarantineDir)
-        .filter((f) => f.endsWith(".json"))
-        .flatMap((f) =>
-          JSON.parse(fs.readFileSync(path.join(quarantineDir, f), "utf-8")) as string[],
-        )
-    : [];
+  const quarantine = loadQuarantine();
 
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
@@ -95,26 +87,41 @@ export default function AdminPage() {
             </p>
           ) : (
             <>
-              <p style={{ fontSize: 14, color: "var(--fg-2)", margin: "0 0 10px" }}>
-                {new Set(quarantine).size} unrecognised name(s). Add real ones to the
-                alias map; leave hallucinations out.
+              <div className="cmp-stat">
+                <span>Unrecognised names</span>
+                <span>{quarantine.length}</span>
+              </div>
+              <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
+                Latest run of each category, most frequent first. A name seen
+                often is a brand the alias map is missing. A name seen once is
+                usually a hallucination and should stay out.
               </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {[...new Set(quarantine)].map((q) => (
-                  <span
-                    key={q}
-                    className="mono"
-                    style={{
-                      fontSize: 11.5,
-                      padding: "4px 8px",
-                      border: "1px solid var(--amber)",
-                      color: "var(--amber)",
-                    }}
-                  >
-                    {q}
+
+              {/* Only the names worth acting on are visible. The tail is real
+                  data but it is noise, so it collapses rather than filling the
+                  page above the editors. */}
+              <div className="q-chips">
+                {quarantine.slice(0, 6).map((q) => (
+                  <span className="q-chip" key={q.name}>
+                    {q.name}
+                    <b>{q.count}</b>
                   </span>
                 ))}
               </div>
+
+              {quarantine.length > 6 && (
+                <details className="q-more">
+                  <summary>{quarantine.length - 6} more</summary>
+                  <div className="q-chips" style={{ marginTop: 10 }}>
+                    {quarantine.slice(6).map((q) => (
+                      <span className="q-chip q-chip-dim" key={q.name}>
+                        {q.name}
+                        <b>{q.count}</b>
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              )}
             </>
           )}
         </div>

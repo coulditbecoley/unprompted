@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { getCategory as getCategoryFromRegistry } from "./categories";
+import { CATEGORIES, getCategory as getCategoryFromRegistry } from "./categories";
 
 export const REPO_ROOT = process.cwd();
 const RUNS_DIR = path.join(REPO_ROOT, "data", "runs");
@@ -351,4 +351,50 @@ export function selfPreference(
 
   out.sort((a, b) => b.gap - a.gap);
   return out;
+}
+
+export type QuarantineEntry = { name: string; count: number };
+
+/**
+ * Unrecognised names from the most recent run of each live category.
+ *
+ * Deliberately not every file ever written. Quarantine is a to-do list, not an
+ * archive: flattening all history produced hundreds of names, most of them
+ * one-off hallucinations from categories that no longer exist, which buried the
+ * handful that were real brands missing from the alias map.
+ *
+ * Sorted by how often each name appeared, because that is the triage signal. A
+ * name seen forty times is a brand we are failing to count; a name seen once is
+ * noise.
+ */
+export function loadQuarantine(): QuarantineEntry[] {
+  const dir = path.join(REPO_ROOT, "data", "quarantine");
+  if (!fs.existsSync(dir)) return [];
+
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+  const counts = new Map<string, number>();
+
+  for (const category of CATEGORIES) {
+    // File names are `<date>-<category>.json`, so the newest sorts last.
+    const latest = files
+      .filter((f) => f.endsWith(`-${category.slug}.json`))
+      .sort()
+      .pop();
+    if (!latest) continue;
+
+    try {
+      const names = JSON.parse(fs.readFileSync(path.join(dir, latest), "utf-8"));
+      if (!Array.isArray(names)) continue;
+      for (const raw of names) {
+        if (typeof raw !== "string" || !raw.trim()) continue;
+        counts.set(raw, (counts.get(raw) ?? 0) + 1);
+      }
+    } catch {
+      // A corrupt file must not take the dashboard down.
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }

@@ -574,3 +574,27 @@ a:focus-visible, button:focus-visible {
   .prov-form { flex-direction: column; align-items: stretch; }
   .prov-in { flex: 1 1 auto; width: 100%; }
 }
+
+/* -- quarantine ------------------------------------------------------------ */
+.q-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.q-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 11px; line-height: 1;
+  padding: 5px 7px; max-width: 100%;
+  border: var(--rule-w) solid var(--amber); color: var(--amber);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.q-chip b { font-weight: 600; opacity: 0.65; }
+/* The tail is not actionable, so it does not get the accent. */
+.q-chip-dim { border-color: var(--rule); color: var(--fg-3); }
+.q-more { margin-top: 12px; }
+.q-more summary {
+  cursor: pointer; font-family: var(--mono); font-size: 11.5px;
+  color: var(--fg-3); list-style: none;
+}
+.q-more summary::-webkit-details-marker { display: none; }
+.q-more summary::before { content: "+ "; }
+.q-more[open] summary::before { content: "- "; }
+.q-more summary:hover { color: var(--fg-2); }
+.q-more summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.q-more > div { max-height: 260px; overflow-y: auto; }
