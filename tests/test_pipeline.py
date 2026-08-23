@@ -463,3 +463,45 @@ def test_every_module_imports():
         "unprompted.engines.perplexity_engine",
     ):
         importlib.import_module(name)
+
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_report_renders_without_em_dashes():
+    """The weekly note is synced into a vault whose house style forbids them.
+
+    Doubles as the cheapest guard that the renderer runs at all: the sample run
+    exercises standings, movement and the source list in one pass.
+    """
+    from unprompted.report import build_report, pretty
+
+    run = _run([
+        ex(brands=["PSA", "CGC"], sources=["https://psacard.com/a"]),
+        ex(run=1, brands=["CGC"]),
+    ])
+    run.update(
+        category="ai-coding-assistants",
+        run_date="2026-08-22",
+        method_version=1,
+        runs_per_question=5,
+        engines=["chatgpt", "claude", "perplexity"],
+    )
+    text = build_report(run, [run], REPO / "aliases" / "ai-coding-assistants.yml")
+
+    assert "—" not in text
+    assert text.startswith("---" + chr(10))
+    assert "## Standings" in text
+    assert "PSA" in text
+    assert pretty("ai-coding-assistants") == "AI Coding Assistants"
+
+
+def test_every_runnable_category_has_its_alias_map():
+    """The runner picks categories up from questions/; a missing alias map there
+    would quarantine every brand and hold the week for no good reason."""
+    from unprompted.run import all_categories
+
+    slugs = all_categories()
+    assert slugs, "no question banks found"
+    for slug in slugs:
+        assert (REPO / "aliases" / f"{slug}.yml").exists(), f"{slug} has no aliases"

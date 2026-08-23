@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       category:
-        description: "Category to run"
+        description: "Category slug, or 'all' for every live category"
         required: false
-        default: "pokemon-grading"
+        default: "all"
       dry_run:
         description: "Run without writing any files"
         type: boolean
@@ -28,7 +28,10 @@ concurrency:
 jobs:
   measure:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Every category is measured in one job so the week lands as a single
+    # commit. Categories run in sequence, roughly 20 minutes each, so the
+    # ceiling has to clear the whole set with room to spare.
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -48,20 +51,23 @@ jobs:
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
         run: |
           python -m unprompted.run \
-            --category "${{ inputs.category || 'pokemon-grading' }}" \
+            --category "${{ inputs.category || 'all' }}" \
             ${{ inputs.dry_run && '--dry-run' || '' }}
         continue-on-error: true
 
-      # Exit code 2 means the sanity checks held the week. That is the design
-      # working, not a broken job, which is why `continue-on-error` is set above
-      # and the outcome is branched on rather than allowed to fail the build.
+      # Exit code 2 means the sanity checks held at least one category. That is
+      # the design working, not a broken job, which is why `continue-on-error`
+      # is set above and the outcome is branched on rather than failing.
 
       - name: Publish
-        if: steps.measure.outcome == 'success' && !inputs.dry_run
+        # Categories that passed have already written their files, so publish
+        # runs even when another category was held. Holding one chart must not
+        # withhold the rest of the week.
+        if: always() && !inputs.dry_run
         run: |
           git config user.name "unprompted-bot"
           git config user.email "bot@unprompted.report"
-          git add data/
+          git add data/ reports/
           if git diff --staged --quiet; then
             echo "No new data to commit."
           else
@@ -75,15 +81,19 @@ jobs:
         with:
           script: |
             const date = new Date().toISOString().slice(0, 10);
+            const reasons = `${{ steps.measure.outputs.reasons }}`.trim();
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `Week of ${date} held for review`,
               body: [
-                'The weekly run did not pass its sanity checks, so nothing was published.',
+                'At least one category did not pass its sanity checks, so that',
+                'category was not published. Any category that passed is live.',
                 '',
-                'This is the pipeline working as designed: it fails safe rather than',
-                'publishing something wrong.',
+                reasons ? '```\n' + reasons + '\n```' : '',
+                '',
+                'This is the pipeline working as designed: it fails safe rather',
+                'than publishing something wrong.',
                 '',
                 `[Full log](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
                 '',

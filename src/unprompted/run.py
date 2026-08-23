@@ -18,11 +18,12 @@ import yaml
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
-from .cost import format_report
+from .cost import cost_of_run, format_report
 from .engines import ENGINES
 from .extract import extract_one
 from .models import RunRecord
 from .normalize import AliasMap, normalize
+from .report import write_report
 
 ROOT = Path(__file__).resolve().parents[2]
 HELD_EXIT_CODE = 2
@@ -148,6 +149,11 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         )
         print(f"  wrote {out_path.relative_to(ROOT)}", file=sys.stderr)
 
+        # The readable note lives beside the data so the scheduled cloud run
+        # produces it too, not just a local run.
+        report_path = write_report(record.to_dict(), ROOT)
+        print(f"  wrote {report_path.relative_to(ROOT)}", file=sys.stderr)
+
         if quarantined:
             qdir = ROOT / "data" / "quarantine"
             qdir.mkdir(parents=True, exist_ok=True)
@@ -158,32 +164,65 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
     return record, result.reasons
 
 
+def all_categories() -> list[str]:
+    """Every category the pipeline can run.
+
+    Derived from the question banks rather than a second list, so retiring a
+    category is one move (its YAML leaves `questions/`) and cannot leave behind
+    a stale entry that quietly bills for a category nobody publishes.
+    """
+    return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one week of Unprompted.")
-    parser.add_argument("--category", default="pokemon-grading")
+    parser.add_argument(
+        "--category",
+        default="all",
+        help="category slug, or 'all' for every category in questions/",
+    )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
     args = parser.parse_args()
 
-    print(f"unprompted: {args.category} for {args.date}", file=sys.stderr)
-    record, reasons = run_category(args.category, args.date, dry_run=args.dry_run)
+    categories = all_categories() if args.category == "all" else [args.category]
+    if not categories:
+        print("no categories to run", file=sys.stderr)
+        return 1
 
-    print("\nCOST", file=sys.stderr)
-    print(format_report(record.to_dict()), file=sys.stderr)
+    held: dict[str, list[str]] = {}
+    total = 0.0
 
-    if reasons:
-        print("\nHELD. This week will not publish:", file=sys.stderr)
-        for reason in reasons:
-            print(f"  - {reason}", file=sys.stderr)
-        # Surface reasons to the workflow so it can open an issue.
-        summary = os.environ.get("GITHUB_OUTPUT")
-        if summary:
-            with open(summary, "a", encoding="utf-8") as handle:
+    for category in categories:
+        print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
+        record, reasons = run_category(category, args.date, dry_run=args.dry_run)
+
+        print("\nCOST", file=sys.stderr)
+        print(format_report(record.to_dict()), file=sys.stderr)
+        total += cost_of_run(record.to_dict())[1]
+
+        if reasons:
+            held[category] = reasons
+            print(f"\nHELD: {category} will not publish:", file=sys.stderr)
+            for reason in reasons:
+                print(f"  - {reason}", file=sys.stderr)
+        else:
+            print(f"\n{category}: all checks passed.", file=sys.stderr)
+
+    if len(categories) > 1:
+        print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)
+
+    # One held category must not suppress the others. Everything that passed is
+    # already written; the exit code only decides whether a human is called.
+    if held:
+        out = os.environ.get("GITHUB_OUTPUT")
+        if out:
+            lines = [f"{c}: {r}" for c, rs in held.items() for r in rs]
+            with open(out, "a", encoding="utf-8") as handle:
                 handle.write("held=true\n")
-                handle.write("reasons<<EOF\n" + "\n".join(reasons) + "\nEOF\n")
+                handle.write("reasons<<EOF\n" + "\n".join(lines) + "\nEOF\n")
         return HELD_EXIT_CODE
 
-    print("\nAll checks passed. Clear to publish.", file=sys.stderr)
     return 0
 
 
