@@ -20,6 +20,7 @@ from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .cost import cost_of_run, format_report
 from .engines import ENGINES
+from .cli_provider import cli_extractor
 from .extract import extract_one
 from .models import RunRecord
 from .normalize import AliasMap, normalize
@@ -94,10 +95,15 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         ok = sum(1 for a in got if not a.error)
         print(f"  {name}: {ok}/{len(got)} ok", file=sys.stderr)
 
-    print(f"  extracting {len(answers)} answers", file=sys.stderr, flush=True)
+    # Resolved once: a local CLI extractor, if the operator configured one in
+    # providers.json. Otherwise this stays None and the API path runs.
+    extractor = cli_extractor()
+    via = f" via {extractor.label}" if extractor else ""
+    print(f"  extracting {len(answers)} answers{via}", file=sys.stderr, flush=True)
+
     extractions = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = [pool.submit(extract_one, a) for a in answers]
+        futures = [pool.submit(extract_one, a, None, extractor) for a in answers]
         for done, future in enumerate(as_completed(futures), start=1):
             extractions.append(future.result())
             if done % 25 == 0 or done == len(futures):

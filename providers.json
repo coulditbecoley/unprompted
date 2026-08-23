@@ -1,0 +1,50 @@
+{
+  "_comment": "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary.",
+  "providers": [
+    {
+      "id": "chatgpt",
+      "label": "ChatGPT",
+      "kind": "api",
+      "role": "engine",
+      "enabled": true,
+      "env": "OPENAI_API_KEY"
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "kind": "api",
+      "role": "engine",
+      "enabled": true,
+      "env": "ANTHROPIC_API_KEY"
+    },
+    {
+      "id": "perplexity",
+      "label": "Perplexity",
+      "kind": "api",
+      "role": "engine",
+      "enabled": true,
+      "env": "PERPLEXITY_API_KEY"
+    },
+    {
+      "id": "claude-api-extract",
+      "label": "Claude (API)",
+      "kind": "api",
+      "role": "extractor",
+      "enabled": false,
+      "env": "ANTHROPIC_API_KEY",
+      "note": "Default extractor. Declared conflict: it reads answers about its own products."
+    },
+    {
+      "id": "claude-cli",
+      "label": "Claude Code (local CLI)",
+      "kind": "cli",
+      "role": "extractor",
+      "enabled": true,
+      "command": "claude",
+      "args": [
+        "-p"
+      ],
+      "note": "Runs on this machine's subscription; no API credit, no key."
+    }
+  ]
+}

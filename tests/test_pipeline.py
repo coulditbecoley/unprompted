@@ -532,3 +532,45 @@ def test_recorded_usage_reaches_the_cost_report():
     assert total > 0
     labels = {item.label for item in items}
     assert {"claude", "chatgpt", "extract"} <= labels
+
+
+def test_json_is_recovered_from_a_chatty_cli_reply():
+    """A CLI has no schema enforcement, so its wrapping has to be tolerated.
+
+    Fences and a leading sentence are both normal output; treating either as a
+    parse failure would throw away a perfectly good extraction.
+    """
+    from unprompted.cli_provider import ProviderError, parse_json_reply
+
+    body = '{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}'
+
+    assert parse_json_reply(body)["brands"][0]["name"] == "Midjourney"
+    assert parse_json_reply("Here you go:\n```json\n" + body + "\n```")["refused"] is False
+    assert parse_json_reply("Sure. " + body + " Hope that helps.")["refused"] is False
+
+    with pytest.raises(ProviderError):
+        parse_json_reply("I could not read that answer.")
+
+
+def test_a_cli_provider_refuses_an_unsafe_command():
+    """The registry is a file on disk, so the executing side re-checks it.
+
+    The admin route validates the same shape, but a hand edit never passes
+    through the route at all.
+    """
+    from unprompted.cli_provider import CliProvider, ProviderError
+
+    with pytest.raises(ProviderError):
+        CliProvider("bad", "Bad", "claude; rm -rf /", ()).resolve()
+    with pytest.raises(ProviderError):
+        CliProvider("bad", "Bad", "../../evil", ()).resolve()
+
+
+def test_registry_picks_one_enabled_cli_extractor():
+    """Two enabled extractors would make the week depend on which one ran."""
+    from unprompted.cli_provider import cli_extractor
+
+    chosen = cli_extractor()
+    if chosen is not None:
+        assert chosen.command
+        assert chosen.args

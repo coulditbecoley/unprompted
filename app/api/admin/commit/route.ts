@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { load as loadYaml } from "js-yaml";
 
-import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
+import { isAuthorised } from "@/lib/auth";
 import { CATEGORY } from "@/lib/data";
 
 export const runtime = "nodejs";
@@ -14,6 +14,7 @@ const REPO_NAME = "unprompted";
 const TARGETS = {
   questions: `questions/${CATEGORY}.yml`,
   aliases: `aliases/${CATEGORY}.yml`,
+  providers: "providers.json",
 } as const;
 
 type Target = keyof typeof TARGETS;
@@ -102,20 +103,6 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
 }
 
-/**
- * Defence in depth. Middleware already gates this path; checking again here
- * means a future routing change can never silently expose the write path.
- */
-async function isAuthorised(request: Request): Promise<boolean> {
-  const secret = process.env.ADMIN_PASSWORD;
-  if (!secret) return false;
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = new RegExp(`(?:^|;\s*)${ADMIN_COOKIE}=([^;]+)`).exec(cookie);
-  if (!match) return false;
-  const expected = await deriveSessionToken(secret);
-  return safeEqual(decodeURIComponent(match[1]), expected);
-}
-
 function validate(target: Target, content: string): string | null {
   let parsed: unknown;
   try {
@@ -141,6 +128,44 @@ function validate(target: Target, content: string): string | null {
       }
       if (ids.has(q.id)) return `duplicate question id: ${q.id}`;
       ids.add(q.id);
+    }
+  } else if (target === "providers") {
+    const spec = parsed as Record<string, unknown>;
+    if (!Array.isArray(spec.providers)) return "providers must be a list";
+    const ids = new Set<string>();
+    for (const raw of spec.providers as Array<Record<string, unknown>>) {
+      const { id, label, kind, role, enabled, command, env } = raw ?? {};
+      if (typeof id !== "string" || !id.trim()) return "every provider needs an id";
+      if (ids.has(id)) return `duplicate provider id: ${id}`;
+      ids.add(id);
+      if (typeof label !== "string" || !label.trim()) return `${id} needs a label`;
+      if (kind !== "api" && kind !== "cli") return `${id}: kind must be api or cli`;
+      if (role !== "engine" && role !== "extractor") {
+        return `${id}: role must be engine or extractor`;
+      }
+      if (typeof enabled !== "boolean") return `${id}: enabled must be true or false`;
+
+      if (kind === "api" && (typeof env !== "string" || !env.trim())) {
+        return `${id}: an api provider needs the name of its key variable`;
+      }
+      if (kind === "cli") {
+        // The command is executed later by the local pipeline, so it is
+        // constrained here to a bare executable name. Shell metacharacters and
+        // path separators are rejected at the door rather than trusted to
+        // whatever runs it.
+        if (typeof command !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(command)) {
+          return `${id}: command must be a plain executable name, letters, digits, dot, dash or underscore only`;
+        }
+        if (raw.args !== undefined && !Array.isArray(raw.args)) {
+          return `${id}: args must be a list`;
+        }
+        if (
+          Array.isArray(raw.args) &&
+          raw.args.some((a) => typeof a !== "string" || a.length > 200)
+        ) {
+          return `${id}: every argument must be a short string`;
+        }
+      }
     }
   } else {
     const spec = parsed as Record<string, unknown>;

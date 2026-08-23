@@ -6,6 +6,8 @@ import { load as loadYaml } from "js-yaml";
 import { CATEGORY, REPO_ROOT, latestRun, loadHistory, standings } from "@/lib/data";
 import { TrimTop } from "@/components/ui";
 import { AdminEditor } from "@/components/admin-editor";
+import { ProviderManager } from "@/components/provider-manager";
+import { loadProviders, providerStatus } from "@/lib/providers";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -42,11 +44,10 @@ export default function AdminPage() {
         )
     : [];
 
-  const engines = [
-    { name: "chatgpt", env: "OPENAI_API_KEY" },
-    { name: "claude", env: "ANTHROPIC_API_KEY" },
-    { name: "perplexity", env: "PERPLEXITY_API_KEY" },
-  ].map((e) => ({ ...e, configured: Boolean(process.env[e.env]) }));
+  // The engine panel reads the registry rather than a second hardcoded list,
+  // so adding a provider shows up here without another edit.
+  const providers = loadProviders();
+  const engines = providers.map((p) => ({ p, ...providerStatus(p) }));
 
   return (
     <section className="shell section">
@@ -73,13 +74,11 @@ export default function AdminPage() {
 
         <div className="cmp-pick">
           <TrimTop />
-          <h3 style={{ marginTop: 6 }}>Engines</h3>
-          {engines.map((e) => (
-            <div className="cmp-stat" key={e.name}>
-              <span>{e.name}</span>
-              <span className={e.configured ? "" : "pending"}>
-                {e.configured ? "READY" : "NO KEY"}
-              </span>
+          <h3 style={{ marginTop: 6 }}>Providers</h3>
+          {engines.map(({ p, ready, detail }) => (
+            <div className="cmp-stat" key={p.id}>
+              <span>{p.label}</span>
+              <span className={ready ? "" : "pending"}>{detail}</span>
             </div>
           ))}
           <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
@@ -120,6 +119,8 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      <ProviderManager initial={providers} />
 
       <AdminEditor
         label="Questions"
