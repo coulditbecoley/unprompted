@@ -108,7 +108,7 @@ export function ChartBoard({
             standing={b}
             rank={i + 1}
             move={moveFor.get(b.brand)}
-            href={brandHref(b.brand)}
+            href={brandHref(category.slug, b.brand)}
           />
         ))}
       </div>

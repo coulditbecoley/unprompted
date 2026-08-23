@@ -125,7 +125,7 @@ export default function Home() {
                   standing={b}
                   rank={i + 1}
                   move={moveFor.get(b.brand)}
-                  href={brandHref(b.brand)}
+                  href={brandHref(CATEGORY, b.brand)}
                 />
               ))}
             </div>

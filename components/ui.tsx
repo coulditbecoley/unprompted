@@ -48,7 +48,16 @@ export function SequencerRow({
       <span className="mono seq-rank" data-lead={rank === 1}>
         {String(rank).padStart(2, "0")}
       </span>
-      <span className="seq-brand">{name}</span>
+      {/* The rotation bar makes the ordering readable without reading a number.
+          Deliberately neutral: amber is the leader's signal and stays scarce. */}
+      <span className="seq-brand">
+        {name}
+        <i
+          className="seq-bar"
+          aria-hidden="true"
+          style={{ "--v": standing.rotation } as React.CSSProperties}
+        />
+      </span>
 
       {/*
         One step per question, not one cell per run. At 225 runs a per-run row
@@ -173,8 +182,11 @@ export function SiteFooter() {
   );
 }
 
-export function brandHref(brand: string) {
-  return `/brand/${slugify(brand)}`;
+export function brandHref(category: string, brand: string) {
+  // Category is part of the path because a brand is only meaningful inside the
+  // question it was named for: ChatGPT in writing tools is a different row from
+  // ChatGPT in image generators, with different rivals and a different history.
+  return `/brand/${category}/${slugify(brand)}`;
 }
 
 /* -- empty state ---------------------------------------------------------- */

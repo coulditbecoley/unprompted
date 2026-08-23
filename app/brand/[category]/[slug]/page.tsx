@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { CATEGORIES, getCategory } from "@/lib/categories";
 import {
-  CATEGORY,
   categoryLabel,
   allBrands,
   brandHistory,
@@ -22,29 +22,31 @@ import { StatusBar, TrimTop } from "@/components/ui";
  * top of a page.
  */
 export function generateStaticParams() {
-  return allBrands(CATEGORY).map((brand) => ({ slug: slugify(brand) }));
+  return CATEGORIES.flatMap((c) =>
+    allBrands(c.slug).map((brand) => ({ category: c.slug, slug: slugify(brand) })),
+  );
 }
 
-function resolve(slug: string): string | null {
-  return allBrands(CATEGORY).find((b) => slugify(b) === slug) ?? null;
+function resolve(category: string, slug: string): string | null {
+  return allBrands(category).find((b) => slugify(b) === slug) ?? null;
 }
 
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ category: string; slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
-  const brand = resolve(slug);
+  const { category, slug } = await params;
+  const brand = resolve(category, slug);
   if (!brand) return { title: "Unknown brand" };
 
-  const run = latestRun(CATEGORY);
+  const run = latestRun(category);
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
 
   return {
     title: `${brand} in AI answers`,
     description: row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(CATEGORY).toLowerCase()} in the week of ${run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(category).toLowerCase()} in the week of ${run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
       : `Tracking how often AI assistants name ${brand}.`,
   };
 }
@@ -52,20 +54,21 @@ export async function generateMetadata({
 export default async function BrandPage({
   params,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ category: string; slug: string }>;
 }) {
-  const { slug } = await params;
-  const brand = resolve(slug);
+  const { category, slug } = await params;
+  if (!getCategory(category)) notFound();
+  const brand = resolve(category, slug);
   if (!brand) notFound();
 
-  const run = latestRun(CATEGORY);
-  const history = brandHistory(CATEGORY, brand);
+  const run = latestRun(category);
+  const history = brandHistory(category, brand);
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
-  const runs = loadHistory(CATEGORY);
+  const runs = loadHistory(category);
 
   return (
     <section className="shell section">
-      <p className="label">{categoryLabel(CATEGORY)}</p>
+      <p className="label">{categoryLabel(category)}</p>
       <h1 style={{ fontSize: "clamp(30px,5.5vw,52px)", fontWeight: 800, margin: "6px 0 14px" }}>
         {brand}
       </h1>
@@ -76,7 +79,7 @@ export default async function BrandPage({
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {categoryLabel(CATEGORY).toLowerCase()} in the week
+            {row.totalRuns} answers about {categoryLabel(category).toLowerCase()} in the week
             of {run!.run_date}, and named it first in{" "}
             {Math.round(row.firstShare * 100)}% of runs.
           </>

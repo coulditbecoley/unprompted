@@ -294,7 +294,21 @@ a:focus-visible, button:focus-visible {
 .seq-row:last-child { border-bottom: none; }
 .seq-head { padding-top: 13px; padding-bottom: 9px; background: var(--surface-2); }
 .seq-rank { font-size: 11px; color: var(--fg-3); }
-.seq-brand { font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
+.seq-brand {
+  font-weight: 650; font-size: 16px; letter-spacing: -0.01em;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.seq-bar { height: 3px; border-radius: 2px; background: var(--rule); position: relative; }
+.seq-bar::after {
+  content: ""; position: absolute; inset: 0 auto 0 0;
+  width: calc(var(--v, 0) * 100%); border-radius: 2px; background: var(--fg-3);
+  transform-origin: left center; animation: barGrow 620ms cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .seq-bar::after { animation: none; }
+}
+.seq-head .seq-bar { display: none; }
 .seq-brand a:hover { text-decoration: underline; }
 .seq-cells { display: flex; gap: 3px; }
 .seq-rot { font-size: 13px; text-align: right; font-weight: 500; }
