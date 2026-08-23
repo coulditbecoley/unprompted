@@ -62,6 +62,10 @@ def extract_one(answer: EngineAnswer, api_key: str | None = None) -> Extraction:
         run_index=answer.run_index,
         sources=answer.sources,
         answer=answer.text,
+        # The engine's own usage rides along on the record it produced. Without
+        # this the cost report reads $0.00 for every run, which is worse than no
+        # report at all: it says the publication is free.
+        usage=dict(answer.usage),
     )
 
     # An engine failure upstream stays a failure; do not spend a call on it.
@@ -89,6 +93,13 @@ def extract_one(answer: EngineAnswer, api_key: str | None = None) -> Extraction:
             output_format=_Extraction,
         )
         parsed = result.parsed_output
+
+        # The extraction pass is billed too. Kept under its own key so a change
+        # in extractor cost never hides inside an engine's line item.
+        u = getattr(result, "usage", None)
+        if u is not None:
+            base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
+            base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
     except Exception as exc:  # noqa: BLE001 - recorded, not raised
         base.error = f"extract failed: {type(exc).__name__}: {exc}"
         return base

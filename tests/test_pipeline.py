@@ -505,3 +505,30 @@ def test_every_runnable_category_has_its_alias_map():
     assert slugs, "no question banks found"
     for slug in slugs:
         assert (REPO / "aliases" / f"{slug}.yml").exists(), f"{slug} has no aliases"
+
+
+def test_recorded_usage_reaches_the_cost_report():
+    """A run that used tokens must not report $0.00.
+
+    The cost plumbing was once complete except for one field, so every run
+    reported itself as free. A silent zero is worse than no report at all.
+    """
+    from unprompted.cost import cost_of_run
+
+    run = _run([
+        ex(engine="claude", brands=["PSA"]),
+        ex(engine="chatgpt", run=1, brands=["CGC"]),
+    ])
+    for extraction in run["extractions"]:
+        extraction["usage"] = {
+            "input_tokens": 20_000,
+            "output_tokens": 500,
+            "web_searches": 4,
+            "extract_input_tokens": 1_500,
+            "extract_output_tokens": 120,
+        }
+
+    items, total = cost_of_run(run)
+    assert total > 0
+    labels = {item.label for item in items}
+    assert {"claude", "chatgpt", "extract"} <= labels
