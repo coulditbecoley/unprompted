@@ -80,7 +80,7 @@ export function GET() {
   <link href="${SITE}"/>
   <id>${SITE}/</id>
   <updated>${updated}</updated>
-  <author><name>Coley Grantham</name></author>
+  <author><name>Skald Studio</name><uri>https://skaldstudio.io</uri></author>
 ${entries}
 </feed>
 `;

@@ -271,8 +271,12 @@ export function categoryLabel(slug: string): string {
   return getCategoryFromRegistry(slug)?.label ?? slug;
 }
 
+/** Plain-text form, for places that cannot carry a link (feeds, meta tags). */
 export const DISCLOSURE =
-  "Operated by Coley Grantham, a customer of card grading companies, not a competitor. No placement is for sale.";
+  "Operated by Skald Studio, which sells AI visibility work. No placement on this chart is for sale.";
+
+export const OPERATOR = "Skald Studio";
+export const OPERATOR_URL = "https://skaldstudio.io";
 
 
 /**

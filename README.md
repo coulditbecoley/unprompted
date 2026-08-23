@@ -69,11 +69,14 @@ held, and the reasons are printed.
 
 ## Disclosure
 
-Unprompted is operated by Coley Grantham, who is commercially active in the
-Pokémon hobby through No Bulk Cards. He is a **customer** of card grading
-companies, not a competitor to them. No grading company has any input into the
-questions, the method, or the results, and no placement on this chart is or ever
-will be for sale.
+Unprompted is operated by [Skald Studio](https://skaldstudio.io), which sells
+AI visibility work: helping companies get named by AI assistants. That is a real
+conflict with a chart measuring exactly that, so it is stated on every page of
+the site rather than buried here.
+
+No company on any chart has input into the questions, the method, or the
+results, no placement is or ever will be for sale, and no charted company is a
+Skald Studio client.
 
 If a result here is wrong, the data that produced it is in this repository.
 Open an issue.

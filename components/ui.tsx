@@ -10,7 +10,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
-import { DISCLOSURE, slugify } from "@/lib/data";
+import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/data";
 
 /* -- carbon trim ---------------------------------------------------------- */
 
@@ -162,8 +162,29 @@ export function SiteHeader() {
         <NavLinks />
       </div>
       {/* Disclosure sits in the header on every page, not a footer link. */}
-      <p className="disclosure">{DISCLOSURE}</p>
+      <p className="disclosure">
+        <Disclosure />
+      </p>
     </header>
+  );
+}
+
+/**
+ * Who runs this and what they sell.
+ *
+ * The operator sells the thing this chart measures, which is the conflict that
+ * matters here. Naming it on every page, linked so anyone can go check, is the
+ * only version of this that is worth printing.
+ */
+export function Disclosure() {
+  return (
+    <>
+      Operated by{" "}
+      <a href={OPERATOR_URL} target="_blank" rel="noopener">
+        {OPERATOR}
+      </a>
+      , which sells AI visibility work. No placement on this chart is for sale.
+    </>
   );
 }
 
@@ -176,7 +197,9 @@ export function SiteFooter() {
           <a href="https://github.com/coulditbecoley/unprompted">source and data</a> ·{" "}
           <a href="/feed.xml">RSS</a>
         </p>
-        <p className="mono foot-dim">{DISCLOSURE}</p>
+        <p className="mono foot-dim">
+          <Disclosure />
+        </p>
       </div>
     </footer>
   );
