@@ -27,6 +27,10 @@ class EngineAnswer:
     sources: list[str] = field(default_factory=list)
     error: str | None = None
     fetched_at: str = ""
+    # Token counts as reported by the provider, plus any billable server-side
+    # searches. Measured rather than estimated: "what does a category cost" is
+    # a question the data should answer, not one we guess at.
+    usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -59,6 +63,7 @@ class Extraction:
     sources: list[str] = field(default_factory=list)
     refused: bool = False
     error: str | None = None
+    usage: dict[str, int] = field(default_factory=dict)
     # The engine's verbatim answer. Stored because the methodology promises every
     # raw answer is public, and because a failed extraction should cost a cheap
     # re-parse rather than re-querying every engine.
@@ -74,6 +79,7 @@ class Extraction:
             "refused": self.refused,
             "error": self.error,
             "answer": self.answer,
+            "usage": self.usage,
         }
 
 

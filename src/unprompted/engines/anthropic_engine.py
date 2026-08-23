@@ -15,7 +15,7 @@ class AnthropicEngine(Engine):
     # CLAUDE_API accepted as an alias: it is a natural name to reach for.
     key_names = ("ANTHROPIC_API_KEY", "CLAUDE_API")
 
-    def _one_call(self, question: str) -> tuple[str, list[str]]:
+    def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         from anthropic import Anthropic
 
         client = Anthropic(api_key=self.api_key)
@@ -29,8 +29,10 @@ class AnthropicEngine(Engine):
 
         # A refusal is a real outcome, not an error. Surface it as empty text so
         # the extractor records it rather than the pipeline retrying blindly.
+        usage = _usage(response)
+
         if getattr(response, "stop_reason", None) == "refusal":
-            return "", []
+            return "", [], usage
 
         text_parts: list[str] = []
         sources: list[str] = []
@@ -49,4 +51,21 @@ class AnthropicEngine(Engine):
                         if url:
                             sources.append(url)
 
-        return "\n".join(text_parts).strip(), sources
+        return "\n".join(text_parts).strip(), sources, usage
+
+
+def _usage(response: object) -> dict[str, int]:
+    """Token counts plus billable server-side searches, read defensively."""
+    u = getattr(response, "usage", None)
+    if u is None:
+        return {}
+    out = {
+        "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
+        "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
+    }
+    # Web search is billed per search, separately from tokens.
+    tool = getattr(u, "server_tool_use", None)
+    searches = getattr(tool, "web_search_requests", None) if tool else None
+    if searches:
+        out["web_searches"] = int(searches)
+    return out

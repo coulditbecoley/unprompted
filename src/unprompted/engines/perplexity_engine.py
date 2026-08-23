@@ -20,7 +20,7 @@ class PerplexityEngine(Engine):
     name = "perplexity"
     key_names = ("PERPLEXITY_API_KEY", "PERPLEXITY_API")
 
-    def _one_call(self, question: str) -> tuple[str, list[str]]:
+    def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         payload = json.dumps(
             {
                 "model": MODEL,
@@ -59,4 +59,11 @@ class PerplexityEngine(Engine):
             elif isinstance(entry, dict) and entry.get("url"):
                 sources.append(entry["url"])
 
-        return text, list(dict.fromkeys(sources))
+        u = body.get("usage") or {}
+        usage = {
+            "input_tokens": int(u.get("prompt_tokens", 0) or 0),
+            "output_tokens": int(u.get("completion_tokens", 0) or 0),
+            # Sonar bills a per-request search fee on top of tokens.
+            "requests": 1,
+        }
+        return text, list(dict.fromkeys(sources)), usage

@@ -18,6 +18,7 @@ import yaml
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
+from .cost import format_report
 from .engines import ENGINES
 from .extract import extract_one
 from .models import RunRecord
@@ -165,7 +166,11 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"unprompted: {args.category} for {args.date}", file=sys.stderr)
-    _, reasons = run_category(args.category, args.date, dry_run=args.dry_run)
+    record, reasons = run_category(args.category, args.date, dry_run=args.dry_run)
+
+    print("
+COST", file=sys.stderr)
+    print(format_report(record.to_dict()), file=sys.stderr)
 
     if reasons:
         print("\nHELD. This week will not publish:", file=sys.stderr)

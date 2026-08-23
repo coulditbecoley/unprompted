@@ -47,8 +47,8 @@ class Engine:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def _one_call(self, question: str) -> tuple[str, list[str]]:
-        """Return (answer_text, source_urls). May raise; the caller handles it."""
+    def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
+        """Return (answer_text, source_urls, usage). May raise; caller handles it."""
         raise NotImplementedError
 
     def ask_one(self, question_id: str, question: str, run_index: int) -> EngineAnswer:
@@ -67,10 +67,10 @@ class Engine:
                 fetched_at=utc_now(),
             )
 
-        text, sources, error = "", [], None
+        text, sources, usage, error = "", [], {}, None
         for attempt in range(MAX_ATTEMPTS):
             try:
-                text, sources = self._one_call(question)
+                text, sources, usage = self._one_call(question)
                 error = None
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
@@ -87,6 +87,7 @@ class Engine:
             sources=sources,
             error=error,
             fetched_at=utc_now(),
+            usage=usage,
         )
 
     def ask(self, question_id: str, question: str, runs: int) -> list[EngineAnswer]:

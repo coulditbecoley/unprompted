@@ -223,12 +223,23 @@ class _FlakyEngine(Engine):
         self.calls += 1
         if self.fail_always:
             raise RuntimeError("engine down")
-        return "PSA is the usual choice.", ["https://example.com"]
+        return (
+            "PSA is the usual choice.",
+            ["https://example.com"],
+            {"input_tokens": 120, "output_tokens": 40, "web_searches": 1},
+        )
 
 
 def test_engine_returns_one_answer_per_run():
     answers = _FlakyEngine().ask("q01", "which grader?", runs=5)
     assert len(answers) == 5 and all(a.ok for a in answers)
+
+
+def test_engine_records_usage_so_cost_is_measured_not_guessed():
+    answer = _FlakyEngine().ask("q01", "which grader?", runs=1)[0]
+    assert answer.usage["input_tokens"] == 120
+    assert answer.usage["output_tokens"] == 40
+    assert answer.usage["web_searches"] == 1
 
 
 def test_engine_failure_is_recorded_not_raised(monkeypatch):
@@ -396,3 +407,37 @@ def test_max_brands_is_per_category():
     run = _run([ex(brands=["PSA"])])
     assert run_checks(run, wide, []).held          # default bound of 15
     assert run_checks(run, wide, [], max_brands=25).passed
+
+
+# --- cost -------------------------------------------------------------------
+
+def test_cost_is_computed_from_reported_usage():
+    from unprompted.cost import cost_of_run
+
+    run = {
+        "extractions": [
+            {
+                "engine": "claude",
+                "usage": {"input_tokens": 1_000_000, "output_tokens": 100_000, "web_searches": 4},
+            },
+            {
+                "engine": "perplexity",
+                "usage": {"input_tokens": 1_000_000, "output_tokens": 1_000_000, "requests": 1},
+            },
+        ]
+    }
+    items, total = cost_of_run(run)
+    by = {i.label: i for i in items}
+    # claude: $5 in + $2.50 out + 4 searches at $0.01
+    assert round(by["claude"].dollars, 3) == 7.540
+    # perplexity: $1 in + $1 out + one request at $0.005
+    assert round(by["perplexity"].dollars, 3) == 2.005
+    assert round(total, 3) == 9.545
+
+
+def test_runs_without_usage_report_zero_rather_than_a_guess():
+    """A missing measurement should look missing."""
+    from unprompted.cost import cost_of_run
+
+    _, total = cost_of_run({"extractions": [{"engine": "claude"}]})
+    assert total == 0.0

@@ -17,7 +17,7 @@ class OpenAIEngine(Engine):
     name = "chatgpt"
     key_names = ("OPENAI_API_KEY", "OPENAI_API")
 
-    def _one_call(self, question: str) -> tuple[str, list[str]]:
+    def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         from openai import OpenAI
 
         client = OpenAI(api_key=self.api_key)
@@ -30,7 +30,20 @@ class OpenAIEngine(Engine):
 
         text = (getattr(response, "output_text", "") or "").strip()
         sources = _collect_citations(response)
-        return text, sources
+
+        u = getattr(response, "usage", None)
+        usage = (
+            {
+                "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
+                "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
+            }
+            if u
+            else {}
+        )
+        # Every call in this category uses the web search tool, and OpenAI bills
+        # it per call rather than reporting it in usage.
+        usage["web_searches"] = 1
+        return text, sources, usage
 
 
 def _collect_citations(response: object) -> list[str]:
