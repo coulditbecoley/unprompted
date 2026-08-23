@@ -1,0 +1,99 @@
+# Brand canonicalisation for AI writing tools.
+#
+# Unlike the coding category, the general assistants ARE products here: you can
+# write with ChatGPT, so it belongs on the board rather than in exclude.
+
+canonical:
+  ChatGPT:
+    - chatgpt
+    - chat gpt
+    - openai chatgpt
+    - gpt-5
+    - gpt-4
+    - gpt-4o
+  Claude:
+    - claude
+    - anthropic claude
+    - claude opus
+    - claude sonnet
+  Gemini:
+    - gemini
+    - google gemini
+    - bard
+  Jasper:
+    - jasper
+    - jasper ai
+    - jarvis ai
+  Copy.ai:
+    - copy ai
+    - copy.ai
+    - copyai
+  Writesonic:
+    - writesonic
+    - chatsonic
+  Grammarly:
+    - grammarly
+    - grammarly go
+    - grammarlygo
+  Notion AI:
+    - notion ai
+    - notion
+  Sudowrite:
+    - sudowrite
+  Rytr:
+    - rytr
+  QuillBot:
+    - quillbot
+    - quill bot
+  Wordtune:
+    - wordtune
+  Lex:
+    - lex
+    - lex page
+  Anyword:
+    - anyword
+  Hemingway Editor:
+    - hemingway
+    - hemingway editor
+    - hemingway app
+  ProWritingAid:
+    - prowritingaid
+    - pro writing aid
+  Perplexity:
+    - perplexity
+    - perplexity ai
+  Copilot:
+    - microsoft copilot
+    - copilot
+    - bing chat
+
+# Which engine's own house each product belongs to. Perplexity is listed as a
+# brand above because engines do name it, but it is not treated as its own
+# house here: it is barely a writing tool, which is precisely why it serves as
+# the neutral baseline.
+affiliations:
+  ChatGPT: chatgpt
+  Claude: claude
+
+exclude:
+  # Companies rather than products
+  - openai
+  - anthropic
+  - google
+  - microsoft
+  # Adjacent tooling that is not a writing tool
+  - google docs
+  - microsoft word
+  - word
+  - docs
+  - canva
+  - surfer seo
+  - surfer
+  - clearscope
+  - frase
+  - semrush
+  - ahrefs
+  - midjourney
+  - dall-e
+  - github copilot
+  - cursor

@@ -168,8 +168,7 @@ def main() -> int:
     print(f"unprompted: {args.category} for {args.date}", file=sys.stderr)
     record, reasons = run_category(args.category, args.date, dry_run=args.dry_run)
 
-    print("
-COST", file=sys.stderr)
+    print("\nCOST", file=sys.stderr)
     print(format_report(record.to_dict()), file=sys.stderr)
 
     if reasons:

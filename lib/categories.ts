@@ -26,6 +26,19 @@
  * and enough mid-size players that the field can actually shift.
  *
  * ---------------------------------------------------------------------------
+ * WHY EVERY CATEGORY HERE IS AN AI CATEGORY
+ *
+ * These are the only fields where the engines we query also sell the products
+ * being ranked, which is the one measurement no competing tool can produce.
+ *
+ * The design needs at least one engine with no stake, or the rival baseline the
+ * self-preference gap is measured against is itself contaminated. That is why
+ * AI search tools are deliberately absent: all three of our engines compete
+ * there, so there would be no clean comparison left. Image generation is the
+ * strongest case in the set — only OpenAI competes, leaving two neutral
+ * engines.
+ *
+ * ---------------------------------------------------------------------------
  * THE COST OF A CATEGORY
  *
  * Every live category is ~225 engine calls a week, plus alias curation and
@@ -60,36 +73,11 @@ export const SECTORS: Sector[] = [
     slug: "ai-software",
     label: "AI & Software",
     blurb:
-      "The tools people ask an AI to recommend, including other AIs. The one place we can ask whether an assistant favours its own side.",
-  },
-  {
-    slug: "money-business",
-    label: "Money & Business",
-    blurb:
-      "The services a small business signs up for once and lives with for years. High stakes, heavy marketing, genuinely contested.",
-  },
-  {
-    slug: "web-infrastructure",
-    label: "Web & Hosting",
-    blurb:
-      "The most affiliate-saturated corner of the internet, where almost every human recommendation is bought.",
-  },
-  {
-    slug: "collectibles",
-    label: "Collectibles",
-    blurb:
-      "Trading cards and the services around them: who grades, who sells, and what protects what you own.",
-  },
-  {
-    slug: "home-office",
-    label: "Home & Office",
-    blurb:
-      "Direct-to-consumer categories where a handful of brands spend heavily to be the default answer.",
+      "The tools people ask an AI to recommend, including other AIs. The only field where the engines we query have a stake in the answer.",
   },
 ];
 
 export const CATEGORIES: Category[] = [
-  // --- AI & Software -------------------------------------------------------
   {
     slug: "ai-coding-assistants",
     label: "AI Coding Assistants",
@@ -107,92 +95,26 @@ export const CATEGORIES: Category[] = [
     sector: "ai-software",
     question: "Which AI should I write with?",
     status: "planned",
-    keywords: ["chatgpt", "claude", "jasper", "copy ai", "writesonic", "grammarly", "writing", "copywriting"],
+    keywords: [
+      "chatgpt", "claude", "gemini", "jasper", "copy ai", "writesonic",
+      "grammarly", "notion ai", "writing", "copywriting", "editing",
+    ],
   },
   {
-    slug: "crm-small-business",
-    label: "Small Business CRM",
+    slug: "ai-image-generators",
+    label: "AI Image Generators",
     sector: "ai-software",
-    question: "Where should I keep my customers and deals?",
+    question: "Which AI should I make images with?",
     status: "planned",
-    keywords: ["hubspot", "salesforce", "pipedrive", "zoho", "attio", "folk", "crm", "sales", "pipeline"],
-  },
-
-  // --- Money & Business ----------------------------------------------------
-  {
-    slug: "business-banking",
-    label: "Business Bank Accounts",
-    sector: "money-business",
-    question: "Where should my business bank?",
-    status: "planned",
-    keywords: ["mercury", "novo", "bluevine", "relay", "chase", "brex", "ramp", "banking", "business account"],
-  },
-  {
-    slug: "payroll-software",
-    label: "Payroll Software",
-    sector: "money-business",
-    question: "Who should run my payroll?",
-    status: "planned",
-    keywords: ["gusto", "adp", "paychex", "rippling", "justworks", "onpay", "payroll", "hr"],
-  },
-
-  // --- Web & Hosting -------------------------------------------------------
-  {
-    slug: "web-hosting",
-    label: "Web Hosting",
-    sector: "web-infrastructure",
-    question: "Where should I host my site?",
-    status: "planned",
-    keywords: ["vercel", "netlify", "bluehost", "siteground", "hostinger", "cloudflare", "wp engine", "hosting"],
-  },
-  {
-    slug: "vpn-services",
-    label: "VPN Services",
-    sector: "web-infrastructure",
-    question: "Which VPN should I actually trust?",
-    status: "planned",
-    keywords: ["nordvpn", "expressvpn", "surfshark", "mullvad", "proton", "privacy", "vpn"],
-  },
-
-  // --- Collectibles --------------------------------------------------------
-  {
-    slug: "pokemon-grading",
-    label: "Pokémon Card Grading",
-    sector: "collectibles",
-    question: "Which company should I send my cards to?",
-    status: "live",
-    keywords: ["psa", "cgc", "beckett", "bgs", "tag", "sgc", "slab", "grade", "grading", "pokemon", "tcg"],
-  },
-  {
-    slug: "sports-card-grading",
-    label: "Sports Card Grading",
-    sector: "collectibles",
-    question: "Which company should I send my sports cards to?",
-    status: "planned",
-    keywords: ["psa", "sgc", "beckett", "bgs", "cgc", "sports", "baseball", "basketball", "grading"],
-  },
-  {
-    slug: "card-supplies",
-    label: "Card Supplies",
-    sector: "collectibles",
-    question: "What should I store and protect my cards in?",
-    status: "planned",
-    keywords: ["sleeves", "binder", "toploader", "ultra pro", "dragon shield", "vault x", "gamegenic", "bcw", "storage"],
-  },
-
-  // --- Home & Office -------------------------------------------------------
-  {
-    slug: "standing-desks",
-    label: "Standing Desks",
-    sector: "home-office",
-    question: "Which standing desk is worth the money?",
-    status: "planned",
-    keywords: ["uplift", "fully", "autonomous", "flexispot", "vari", "desk", "ergonomic", "office"],
+    keywords: [
+      "midjourney", "dall-e", "stable diffusion", "flux", "ideogram", "firefly",
+      "imagen", "leonardo", "recraft", "image", "art", "design", "logo",
+    ],
   },
 ];
 
 /** The category the bare /chart route resolves to. */
-export const DEFAULT_CATEGORY = "pokemon-grading";
+export const DEFAULT_CATEGORY = "ai-coding-assistants";
 
 export function getCategory(slug: string): Category | undefined {
   return CATEGORIES.find((c) => c.slug === slug);

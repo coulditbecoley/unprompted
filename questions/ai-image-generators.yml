@@ -1,0 +1,49 @@
+# Unprompted question bank: AI image generators
+#
+# The cleanest self-preference design in the publication. Only one of our three
+# engines competes in this field: OpenAI makes DALL-E. Anthropic makes no image
+# generator at all, and Perplexity makes none either.
+#
+# Two uncontaminated engines measuring one conflicted engine is the strongest
+# version of this experiment we can construct. In the coding and writing
+# categories the rival baseline is drawn from engines that also have a stake;
+# here it is genuinely neutral.
+#
+# Human-owned. Editing this file is a methodology change and MUST bump the
+# version below.
+category: ai-image-generators
+label: AI Image Generators
+method_version: 1
+runs_per_question: 5
+max_brands: 25
+questions:
+  - id: q01
+    text: "What is the best AI image generator?"
+  - id: q02
+    text: "Which AI makes the most realistic images?"
+  - id: q03
+    text: "What is the best AI image generator for beginners?"
+  - id: q04
+    text: "Which AI image tool is best for commercial use?"
+  - id: q05
+    text: "What is the best free AI image generator?"
+  - id: q06
+    text: "Which AI is best at generating text inside images?"
+  - id: q07
+    text: "What AI image generator do professional designers use?"
+  - id: q08
+    text: "Which AI image generator gives the best value for money?"
+  - id: q09
+    text: "What is the best AI for generating logos?"
+  - id: q10
+    text: "Which AI image generator has the best style control?"
+  - id: q11
+    text: "What is the best AI image generator for marketing images?"
+  - id: q12
+    text: "Which AI image tool is best for editing existing photos?"
+  - id: q13
+    text: "What is the best open source AI image generator?"
+  - id: q14
+    text: "Which AI image generator is safest for licensing and copyright?"
+  - id: q15
+    text: "What AI image generator should a small business use?"

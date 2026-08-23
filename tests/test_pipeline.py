@@ -441,3 +441,25 @@ def test_runs_without_usage_report_zero_rather_than_a_guess():
 
     _, total = cost_of_run({"extractions": [{"engine": "claude"}]})
     assert total == 0.0
+
+
+def test_every_module_imports():
+    """A syntax error in an entry point is invisible to unit tests that never
+    import it, and would only surface on the scheduled run. This catches it."""
+    import importlib
+
+    for name in (
+        "unprompted.aggregate",
+        "unprompted.checks",
+        "unprompted.cost",
+        "unprompted.extract",
+        "unprompted.models",
+        "unprompted.normalize",
+        "unprompted.reextract",
+        "unprompted.run",
+        "unprompted.engines",
+        "unprompted.engines.anthropic_engine",
+        "unprompted.engines.openai_engine",
+        "unprompted.engines.perplexity_engine",
+    ):
+        importlib.import_module(name)

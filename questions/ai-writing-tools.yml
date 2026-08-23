@@ -1,0 +1,49 @@
+# Unprompted question bank: AI writing tools
+#
+# The second field where the engines have a stake. Note the difference from AI
+# coding assistants: there, the engine's *sibling product* competes (Claude the
+# model vs Claude Code the tool). Here the engine itself IS the product — you
+# can write with ChatGPT, so ChatGPT is a valid entry on this board.
+#
+# Perplexity is not really a writing tool, which is what makes this category
+# work: it stays the neutral engine and provides the rival baseline the
+# self-preference gap is measured against.
+#
+# Human-owned. Editing this file is a methodology change and MUST bump the
+# version below.
+category: ai-writing-tools
+label: AI Writing Tools
+method_version: 1
+runs_per_question: 5
+max_brands: 25
+questions:
+  - id: q01
+    text: "What is the best AI writing tool?"
+  - id: q02
+    text: "Which AI is best for writing blog posts?"
+  - id: q03
+    text: "What is the best AI for writing marketing copy?"
+  - id: q04
+    text: "Which AI writing assistant should a beginner use?"
+  - id: q05
+    text: "What is the best AI for long form writing?"
+  - id: q06
+    text: "Which AI writes the most natural sounding text?"
+  - id: q07
+    text: "What is the best free AI writing tool?"
+  - id: q08
+    text: "Which AI is best for editing and proofreading?"
+  - id: q09
+    text: "What AI writing tool do professional writers prefer?"
+  - id: q10
+    text: "Which AI is best for writing fiction?"
+  - id: q11
+    text: "What is the best AI for writing emails?"
+  - id: q12
+    text: "Which AI writing tool gives the best value for money?"
+  - id: q13
+    text: "What is the best AI for rewriting and paraphrasing?"
+  - id: q14
+    text: "Which AI is best for technical writing and documentation?"
+  - id: q15
+    text: "What AI writing tool is best for a small business?"
