@@ -45,11 +45,11 @@
  * quarantine review. It is not free and it does not amortise. Add them as they
  * earn their place, not to fill the page.
  *
- * `status` is honest, not aspirational. A category is `live` only once it has
- * measured data. Nothing here advertises a chart that does not exist.
+ * There is deliberately no `status` field. Whether a category is live is a fact
+ * already on disk: it has run data or it does not. A hand-maintained flag beside
+ * that fact can only ever be right by accident, and when it is wrong it either
+ * advertises a chart that does not exist or hides one that does.
  */
-
-export type CategoryStatus = "live" | "planned";
 
 export type Sector = {
   slug: string;
@@ -63,7 +63,6 @@ export type Category = {
   sector: string;
   /** What a buyer is actually trying to decide. */
   question: string;
-  status: CategoryStatus;
   /** Search terms beyond the label, so a visitor's word finds the category. */
   keywords: string[];
 };
@@ -83,7 +82,6 @@ export const CATEGORIES: Category[] = [
     label: "AI Coding Assistants",
     sector: "ai-software",
     question: "Which AI should I write code with?",
-    status: "live",
     keywords: [
       "claude code", "copilot", "cursor", "codex", "windsurf", "cline", "aider",
       "coding", "developer", "ide", "agent", "programming",
@@ -94,7 +92,6 @@ export const CATEGORIES: Category[] = [
     label: "AI Writing Tools",
     sector: "ai-software",
     question: "Which AI should I write with?",
-    status: "planned",
     keywords: [
       "chatgpt", "claude", "gemini", "jasper", "copy ai", "writesonic",
       "grammarly", "notion ai", "writing", "copywriting", "editing",
@@ -105,7 +102,6 @@ export const CATEGORIES: Category[] = [
     label: "AI Image Generators",
     sector: "ai-software",
     question: "Which AI should I make images with?",
-    status: "planned",
     keywords: [
       "midjourney", "dall-e", "stable diffusion", "flux", "ideogram", "firefly",
       "imagen", "leonardo", "recraft", "image", "art", "design", "logo",
@@ -118,10 +114,6 @@ export const DEFAULT_CATEGORY = "ai-coding-assistants";
 
 export function getCategory(slug: string): Category | undefined {
   return CATEGORIES.find((c) => c.slug === slug);
-}
-
-export function liveCategories(): Category[] {
-  return CATEGORIES.filter((c) => c.status === "live");
 }
 
 export function getSector(slug: string): Sector | undefined {

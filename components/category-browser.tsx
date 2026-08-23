@@ -78,7 +78,9 @@ export function CategoryBrowser({
           <div className="cat-grid">
             {categories.map((category) => {
               const stat = counts[category.slug];
-              const live = category.status === "live";
+              // Live means measured. The presence of a run is the only
+              // evidence for that, so it is the only thing consulted.
+              const live = Boolean(stat);
 
               const inner = (
                 <>
@@ -89,7 +91,7 @@ export function CategoryBrowser({
                     </p>
                     <h3>{category.label}</h3>
                     <p className="cat-question">{category.question}</p>
-                    {live && stat ? (
+                    {stat ? (
                       <p className="cat-stat mono">
                         {stat.brands} brands tracked · {stat.weeks} week
                         {stat.weeks === 1 ? "" : "s"} recorded
