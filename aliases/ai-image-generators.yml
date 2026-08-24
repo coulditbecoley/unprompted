@@ -12,6 +12,11 @@ canonical:
     - openai dall-e
     - gpt image
     - gpt-image-1
+    - chatgpt images
+    - chatgpt image
+    - chatgpt image generation
+    - openai image tools
+    - openai image generation
   Stable Diffusion:
     - stable diffusion
     - stability ai
@@ -32,6 +37,9 @@ canonical:
     - google imagen
     - gemini image
     - nano banana
+    - nano banana pro
+    - google gemini
+    - gemini image generation
   Leonardo AI:
     - leonardo
     - leonardo ai
@@ -45,6 +53,8 @@ canonical:
   Canva:
     - canva
     - canva magic media
+    - canva ai
+    - canva magic studio
   Playground AI:
     - playground
     - playground ai
@@ -54,6 +64,24 @@ canonical:
     - bing image creator
     - microsoft designer
     - image creator
+  Seedream:
+    - seedream
+    - bytedance seedream
+    - dreamina
+  Qwen-Image:
+    - qwen-image
+    - qwen image
+    - alibaba qwen
+  Z-Image:
+    - z-image
+    - z image
+    - z-image turbo
+  Sana:
+    - sana
+    - nvidia sana
+  getimg.ai:
+    - getimg
+    - getimg ai
 
 # Only OpenAI competes here. Anthropic makes no image generator and neither
 # does Perplexity, so both act as genuinely neutral baselines — which is what
@@ -63,7 +91,9 @@ canonical:
 # a brand but carries no affiliation: with no owning engine present there is
 # nothing to compare against.
 affiliations:
-  DALL-E: chatgpt
+  # Every engine whose vendor makes it, so a second OpenAI engine does not get
+  # counted as a neutral rival of the first. See aggregate.load_affiliations.
+  DALL-E: [chatgpt, codex]
 
 exclude:
   # Companies rather than products
@@ -76,6 +106,10 @@ exclude:
   - comfyui
   - automatic1111
   - a1111
+  - controlnet
+  - ip-adapter
+  - ipadapter
+  - lora
   - invoke ai
   - draw things
   - hugging face
@@ -88,3 +122,40 @@ exclude:
   - claude
   - gemini
   - perplexity
+  # Stock libraries. Named constantly as somewhere to get an image, which is a
+  # real answer to the shopper's question and still not a generator.
+  - getty images
+  - getty images generative ai
+  - shutterstock
+  - shutterstock ai
+  - envato
+  - adobe stock
+  - istock
+  # Editors and retouchers. They increasingly bolt on generation, but the thing
+  # being chosen is an editor, and charting them would make the field meaningless.
+  - adobe photoshop
+  - illustrator
+  - adobe illustrator
+  - adobe express
+  - luminar neo
+  - pixlr
+  - adobe lightroom
+  - lightroom
+  - google photos magic editor
+  - google photos
+  # Logo and brand-kit builders: a template business with generation attached.
+  - looka
+  - brandmark
+  - tailor brands
+  - logoai
+  - design.com
+  - wix logo maker
+  - wix
+  # Inference platforms, same category as replicate and hugging face above.
+  - fal.ai
+  - fal
+  # Assistants and subscription tiers rather than products.
+  - microsoft copilot
+  - copilot
+  - google ai pro
+  - google one ai premium

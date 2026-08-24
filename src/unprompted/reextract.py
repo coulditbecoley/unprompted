@@ -26,7 +26,7 @@ from .cli_provider import cli_extractor
 from .extract import extract_one
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
-from .run import MAX_WORKERS, ROOT, persist
+from .run import MAX_WORKERS, ROOT, load_local_env, persist
 
 
 def main() -> int:
@@ -44,6 +44,8 @@ def main() -> int:
         "Only for a run that was never published.",
     )
     args = parser.parse_args()
+
+    load_local_env()
 
     path = ROOT / "data" / "runs" / args.date / f"{args.category}.json"
     if not path.exists():

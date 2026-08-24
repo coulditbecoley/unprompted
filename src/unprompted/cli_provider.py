@@ -90,7 +90,18 @@ def _child_env() -> dict[str, str]:
 
 
 class ProviderError(RuntimeError):
-    pass
+    """A CLI call that did not succeed.
+
+    Carries whatever the process printed, because a harness can fail *after*
+    doing the work: the operator's own SessionEnd hooks run on every invocation,
+    and one of them failing makes claude exit 1 with a perfectly good answer
+    already on stdout. Throwing that away turned finished extractions into
+    errors and pushed a week over its error-rate limit.
+    """
+
+    def __init__(self, message: str, stdout: str = "") -> None:
+        super().__init__(message)
+        self.stdout = stdout
 
 
 @dataclass(frozen=True)
@@ -139,7 +150,14 @@ class CliProvider:
         wider filesystem by absolute path. They remove the easy paths, and the
         per-CLI flags in ALLOWED_CLIS remove more.
         """
-        with tempfile.TemporaryDirectory(prefix="unprompted-extract-") as jail:
+        # ignore_cleanup_errors because on Windows the harness can still hold a
+        # handle inside the directory when the call returns, and the resulting
+        # PermissionError was raised *after* a successful read, throwing away a
+        # good answer and recording it as a failed extraction. The directory is
+        # empty and lives under %TEMP%, so failing to remove it costs nothing.
+        with tempfile.TemporaryDirectory(
+            prefix="unprompted-extract-", ignore_cleanup_errors=True
+        ) as jail:
             return self._run(prompt, jail)
 
     def _run(self, prompt: str, cwd: str) -> str:
@@ -160,7 +178,10 @@ class CliProvider:
 
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()[:300]
-            raise ProviderError(f"{self.id}: exit {result.returncode}: {detail}")
+            raise ProviderError(
+                f"{self.id}: exit {result.returncode}: {detail}",
+                stdout=result.stdout or "",
+            )
         return result.stdout.strip()
 
 

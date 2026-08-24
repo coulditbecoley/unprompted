@@ -34,7 +34,7 @@ export function Subscribe() {
 
       if (res.ok && data.ok) {
         setState("done");
-        setMessage("Done. You will get the chart every Tuesday.");
+        setMessage("Done. You will get the chart every Monday.");
         setEmail("");
         return;
       }
@@ -52,7 +52,7 @@ export function Subscribe() {
       <div className="subscribe-body">
         <p className="label">Get it every week</p>
         <h2 className="subscribe-head">
-          The chart updates every Tuesday. Have it come to you.
+          The chart updates every Monday. Have it come to you.
         </h2>
         <p className="subscribe-lead">
           No account, no paywall, and nothing here is gated. Everything on this

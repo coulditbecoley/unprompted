@@ -148,8 +148,15 @@ def _extract_via_cli(
         reply = provider.ask(EXTRACT_PROMPT.format(answer=answer.text) + JSON_SUFFIX)
         parsed = parse_json_reply(reply)
     except ProviderError as exc:
-        base.error = f"extract failed: {exc}"
-        return base
+        # A harness can fail after doing the job: a failing SessionEnd hook
+        # exits non-zero with the answer already printed. Only a complete JSON
+        # object is accepted, so a genuinely broken call still fails; a finished
+        # one is not thrown away over its exit code.
+        try:
+            parsed = parse_json_reply(exc.stdout)
+        except ProviderError:
+            base.error = f"extract failed: {exc}"
+            return base
     except Exception as exc:  # noqa: BLE001 - recorded, not raised
         base.error = f"extract failed: {type(exc).__name__}: {exc}"
         return base

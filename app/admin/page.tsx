@@ -196,7 +196,7 @@ export default function AdminPage() {
               Runs on
               <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
                 {localEngines.length > 0
-                  ? "scripts/weekly-run.cmd, Windows Task Scheduler, Tuesdays 13:00"
+                  ? "scripts/weekly-run.cmd, Windows Task Scheduler, Mondays 13:00"
                   : ".github/workflows/weekly.yml, GitHub Actions"}
               </small>
             </span>

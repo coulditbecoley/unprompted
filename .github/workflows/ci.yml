@@ -2,7 +2,7 @@ name: CI
 
 # The pipeline had a full test suite and nothing ever ran it. Both halves of the
 # project are checked here, on every push and every pull request, so a change
-# that breaks the publish gate or the shared metric fails before a Tuesday run
+# that breaks the publish gate or the shared metric fails before a Monday run
 # reaches the site.
 on:
   push:

@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -970,3 +971,137 @@ def test_an_unchanged_engine_list_is_not_flagged():
     run["method_version"] = 1
 
     assert run_checks(run, brand_week(run), [], previous=previous).passed
+
+
+# --- version and possessive folding -----------------------------------------
+
+def test_a_point_release_is_the_same_brand():
+    """Otherwise the chart grows a new row every time a vendor ships a version.
+
+    This was the largest single source of quarantine churn: FLUX.2, Stable
+    Diffusion 3.5 and Seedream 4.5 all arrived as unrecognised names for brands
+    already on the chart.
+    """
+    aliases = AliasMap({"Flux": ["flux"], "Stable Diffusion": ["stable diffusion"]})
+    cleaned, quarantined = normalize(
+        [ex(brands=["FLUX.2"]), ex(brands=["Stable Diffusion 3.5"])], aliases
+    )
+    assert [e.brands[0].name for e in cleaned] == ["Flux", "Stable Diffusion"]
+    assert quarantined == []
+
+
+def test_a_version_is_never_stripped_down_to_nothing():
+    """`sd3` and `a1111` are whole names, not a name plus a version."""
+    from unprompted.normalize import _key
+
+    assert _key("sd3") == "sd3"
+    assert _key("a1111") == "a1111"
+
+
+def test_a_possessive_folds_to_the_plain_name():
+    aliases = AliasMap({"Imagen": ["google gemini"]})
+    cleaned, quarantined = normalize([ex(brands=["Google\u2019s Gemini"])], aliases)
+    assert cleaned[0].brands[0].name == "Imagen"
+    assert quarantined == []
+
+
+def test_folding_never_merges_two_different_brands():
+    """A guard on the maps themselves, not just the function.
+
+    Folding can only ever merge spellings together, so the risk it introduces is
+    two distinct brands collapsing into one key. That would silently combine two
+    rows on a published chart, so every shipped alias map is checked for it.
+    """
+    import collections
+
+    from unprompted.normalize import _key
+
+    for path in sorted(Path(__file__).resolve().parents[1].joinpath("aliases").glob("*.yml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        owners = collections.defaultdict(set)
+        for canonical, spellings in (data.get("canonical") or {}).items():
+            for spelling in [canonical, *(spellings or [])]:
+                owners[_key(spelling)].add(canonical)
+        excluded = {_key(x) for x in (data.get("exclude") or [])}
+
+        for key, brands in owners.items():
+            assert len(brands) == 1, f"{path.name}: {key} claimed by {brands}"
+            assert key not in excluded, f"{path.name}: {key} is both charted and excluded"
+
+
+def test_a_tier_folds_into_an_excluded_name_rather_than_quarantining():
+    """"ChatGPT Plus" is ChatGPT wearing a price tier, and ChatGPT is excluded."""
+    aliases = AliasMap({"DALL-E": ["dall e"]}, exclude=["chatgpt"])
+    cleaned, quarantined = normalize([ex(brands=["ChatGPT Plus"])], aliases)
+    assert cleaned[0].brands == []
+    assert quarantined == []
+
+
+def test_a_loose_exclusion_never_beats_an_exact_brand():
+    """The regression this ordering exists to prevent.
+
+    "Stability AI" is an alias of Stable Diffusion while "stability" sits in the
+    exclude list. Folding before resolving would delete a charted brand.
+    """
+    aliases = AliasMap(
+        {"Stable Diffusion": ["stability ai"]}, exclude=["stability"]
+    )
+    cleaned, quarantined = normalize([ex(brands=["Stability AI"])], aliases)
+    assert [b.name for b in cleaned[0].brands] == ["Stable Diffusion"]
+    assert quarantined == []
+
+
+def test_a_bracketed_variant_resolves_like_a_parenthetical():
+    aliases = AliasMap({"Flux": ["flux"]})
+    cleaned, quarantined = normalize([ex(brands=["FLUX.1 [schnell]"])], aliases)
+    assert cleaned[0].brands[0].name == "Flux"
+    assert quarantined == []
+
+
+def test_a_tier_and_a_version_both_come_off():
+    aliases = AliasMap({"Recraft": ["recraft"]})
+    cleaned, _ = normalize([ex(brands=["Recraft V4 Pro"])], aliases)
+    assert cleaned[0].brands[0].name == "Recraft"
+
+
+def test_an_answer_survives_a_harness_that_fails_after_producing_it():
+    """The operator's own SessionEnd hooks run on every invocation.
+
+    One of them failing makes claude exit 1 with a finished answer already on
+    stdout. Recording that as an extraction failure cost 14 good reads in one
+    week and helped push it over the error-rate limit.
+    """
+    from unprompted.cli_provider import CliProvider, ProviderError
+    from unprompted.extract import _extract_via_cli
+    from unprompted.models import Extraction
+
+    class Flaky(CliProvider):
+        def ask(self, prompt: str) -> str:
+            raise ProviderError(
+                "claude-cli: exit 1: SessionEnd hook failed",
+                stdout='{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}',
+            )
+
+    base = Extraction(engine="claude", question_id="q01", run_index=0)
+    answer = EngineAnswer(engine="claude", question_id="q01", question="", run_index=0, text="...")
+    result = _extract_via_cli(base, answer, Flaky("x", "X", "claude", ("-p",)))
+
+    assert result.error is None
+    assert [b.name for b in result.brands] == ["Midjourney"]
+
+
+def test_a_genuinely_broken_call_still_fails():
+    """The salvage must not turn every crash into a silent empty reading."""
+    from unprompted.cli_provider import CliProvider, ProviderError
+    from unprompted.extract import _extract_via_cli
+    from unprompted.models import Extraction
+
+    class Broken(CliProvider):
+        def ask(self, prompt: str) -> str:
+            raise ProviderError("claude-cli: exit 1: out of quota", stdout="rate limited\n")
+
+    base = Extraction(engine="claude", question_id="q01", run_index=0)
+    answer = EngineAnswer(engine="claude", question_id="q01", question="", run_index=0, text="...")
+    result = _extract_via_cli(base, answer, Broken("x", "X", "claude", ("-p",)))
+
+    assert result.error and "extract failed" in result.error

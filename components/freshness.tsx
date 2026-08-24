@@ -9,12 +9,13 @@ import { useEffect, useState } from "react";
  * faith, and a visitor with no idea when the chart updates has no reason to
  * come back. Both are cheap to answer and expensive to leave unanswered.
  *
- * The next-run time is computed on the client from the same cron the workflow
- * runs (Tuesday 13:00 UTC) rather than hardcoded, so it cannot drift into a lie
- * as weeks pass.
+ * The next-run time is computed on the client from the same schedule the run
+ * actually keeps (Monday 13:00) rather than hardcoded, so it cannot drift into
+ * a lie as weeks pass. Keep these two in step with the trigger in
+ * scripts/install-weekly-task.ps1, which is what now runs the week.
  */
 
-const RUN_DAY = 2; // Tuesday
+const RUN_DAY = 1; // Monday
 const RUN_HOUR_UTC = 13;
 
 function nextRun(now: Date): Date {
@@ -54,7 +55,7 @@ export function Freshness({ runDate }: { runDate: string }) {
     <div className="freshness">
       <span>MEASURED {runDate}</span>
       <span className="next" suppressHydrationWarning>
-        {when ? `NEXT RUN ${when}` : "UPDATES EVERY TUESDAY"}
+        {when ? `NEXT RUN ${when}` : "UPDATES EVERY MONDAY"}
       </span>
       <span className="spacer" />
       <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">

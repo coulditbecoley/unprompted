@@ -20,13 +20,14 @@ $script   = Join-Path $repo "scripts\weekly-run.cmd"
 
 if (-not (Test-Path $script)) { throw "not found: $script" }
 
-# Tuesday 13:00 local. The cloud job used 13:00 UTC; this one follows the
+# Monday 13:00 local. The cloud job used 13:00 UTC; this one follows the
 # machine's clock because it can only run when the machine is on anyway.
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday -At 1pm
+# components/freshness.tsx counts down to the same slot and must stay in step.
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 1pm
 $action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
 
 # StartWhenAvailable matters more than the exact time: a laptop that was asleep
-# on Tuesday should still produce the week when it next wakes, because a missing
+# on Monday should still produce the week when it next wakes, because a missing
 # week costs more than a late one.
 #
 # ExecutionTimeLimit is generous. Five engines including two local agents is a
@@ -47,7 +48,7 @@ Register-ScheduledTask `
     -Force | Out-Null
 
 Write-Host "Registered '$taskName'."
-Write-Host "  runs:   Tuesdays at 13:00, or next wake-up if asleep"
+Write-Host "  runs:   Mondays at 13:00, or next wake-up if asleep"
 Write-Host "  script: $script"
 Write-Host "  log:    $env:TEMP\unprompted-weekly.log"
 Write-Host ""
