@@ -8,9 +8,35 @@
   "extractions": [
     {
       "answer": "Short answer: For most people today, Midjourney (current V8.2) delivers the best-looking results with the least tweaking. It\u2019s fast, coherent, and great at style control and personalization. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32199405667853-Version))\n\nTop picks by need\n- Best overall image quality/aesthetics: Midjourney V8.2. Latest default model with improved prompt adherence and HD output; strong personalization and fast renders. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32199405667853-Version))\n- Best for text-in-image/graphic design: Ideogram 4.0. New 2026 model with open weights and features like editable text layers and character consistency; still a go\u2011to when you need clean, readable text. ([ideogram.ai](https://ideogram.ai/news/))\n- Best for brand-safe commercial use and tight Photoshop/Creative Cloud workflows: Adobe Firefly (Image Model 5+ in Firefly app). Adobe explicitly markets Firefly outputs as \u201ccommercially safe\u201d (trained on Adobe\u2011licensed data) and now lets you pick from top partner models in one studio. ([news.adobe.com](https://news.adobe.com/news/2025/10/adobe-max-2025-firefly?utm_source=openai))\n- Best chat-first, one-stop prompting/editing experience: ChatGPT Images using OpenAI\u2019s GPT\u2011Image\u20112 (successor to DALL\u00b7E). Strong instruction following and editing; DALL\u00b7E models were retired in 2026 in favor of the new image stack. ([developers.openai.com](https://developers.openai.com/api/docs/models/gpt-image-2))\n- Best free option to try right now: Google Flow (uses Google\u2019s \u201cNano Banana Pro\u201d image model by default). Flow unified Google\u2019s image tools (ImageFX/Whisk) into one workspace and offers free image generation. ([blog.google](https://blog.google/innovation-and-ai/models-and-research/google-labs/flow-updates-february-2026/?utm_source=openai))\n- Best open/local control: Stable Diffusion 3 Medium (open weights; runs on consumer GPUs) and Black Forest Labs FLUX (open\u2011weight variants; strong photorealism and speed options). Great if you need full control or to run privately. ([stability.ai](https://stability.ai/news-updates/stable-diffusion-3-medium))\n\nIf you tell me what you\u2019re making (photoreal product shots, posters with text, logos, characters, etc.), I\u2019ll steer you to the best model and workflow for that use case.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Midjourney",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Flux",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: timed out after 180s",
+      "error": null,
       "question_id": "q01",
       "refused": false,
       "run_index": 0,
@@ -97,23 +123,28 @@
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "Imagen",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Recraft",
+          "name": "Ideogram",
           "position": 4,
           "sentiment": "positive"
         },
         {
-          "name": "Adobe Firefly",
+          "name": "Recraft",
           "position": 5,
           "sentiment": "positive"
         },
         {
-          "name": "Flux",
+          "name": "Adobe Firefly",
           "position": 6,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Flux",
+          "position": 7,
           "sentiment": "positive"
         }
       ],
@@ -214,11 +245,6 @@
           "name": "Flux",
           "position": 5,
           "sentiment": "positive"
-        },
-        {
-          "name": "DALL-E",
-          "position": 6,
-          "sentiment": "positive"
         }
       ],
       "engine": "chatgpt",
@@ -244,34 +270,29 @@
       "answer": "**Short answer: there's no single winner \u2014 but for most people, Google's Nano Banana Pro (in the Gemini app) or OpenAI's GPT Image (in ChatGPT) will be the best default.**\n\nHere's how the current field breaks down:\n\n**Best overall quality:** \nGPT Image 2 leads on quality but can take minutes per image, while Seedream 4.5, Nano Banana Pro, and FLUX.2 finish in seconds.\n If you already pay for ChatGPT, you likely don't need anything else.\n\n**Best all-rounder / fastest:** Google's Nano Banana line. \nNano Banana 2 is a strong pick for speed, delivering \"Pro-level\" results in roughly 4 to 6 seconds\n, and \nNano Banana Pro offers the most complete production toolkit\n. It's also the pick \nif your priority is photorealism, text, and localized editing\n.\n\n**Best for text inside images (posters, logos, ads):** \nNano Banana Pro's multilingual text rendering is currently the benchmark\n. Ideogram is the other long-standing specialist here \u2014 \nit's been the go-to for AI images with flawless text, with design-friendly tools like color palettes and a Canvas editor\n.\n\n**Best for artistic look / concept art:** Midjourney. \nIt produces the most aesthetically pleasing images with minimal prompting effort\n, and remains the pick \nfor marketing creative, concept art, and brand campaigns\n. \nPricing starts at $10/month for ~200 images with commercial usage rights.\n\n\n**Best for legally cautious commercial work:** Adobe Firefly \u2014 \nthe only safe choice if commercial indemnification matters to your lawyers\n, and \nthe model with fully documented content provenance and licensed training data\n.\n\n**Best free / high-volume:** Stable Diffusion or FLUX run locally. \nMaximum customization, huge community, thousands of custom models, free and open source \u2014 but a steep learning curve.\n \nBudget API option: Flux Klein at about $0.01/image.\n\n\n**My recommendation:** Try Gemini's Nano Banana (free tier available) and ChatGPT side by side for a week \u2014 that covers 90% of use cases at $20/month or less. Only add Midjourney if you're doing stylized creative work where the aesthetic is the product.",
       "brands": [
         {
-          "name": "Seedream",
+          "name": "Ideogram",
           "position": 1,
           "sentiment": "positive"
         },
         {
-          "name": "Flux",
+          "name": "Midjourney",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "Adobe Firefly",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Midjourney",
-          "position": 4,
-          "sentiment": "positive"
-        },
-        {
-          "name": "Adobe Firefly",
-          "position": 5,
-          "sentiment": "positive"
-        },
-        {
           "name": "Stable Diffusion",
-          "position": 6,
-          "sentiment": "positive"
+          "position": 4,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Flux",
+          "position": 5,
+          "sentiment": "neutral"
         }
       ],
       "engine": "claude",
@@ -853,12 +874,12 @@
       "answer": "There is no single **best** AI image generator for everyone, but if you want the most broadly recommended all-around option, **OpenAI\u2019s DALL\u00b7E 3 / ChatGPT image generation** is a strong default pick in recent expert roundups.[2][7]\n\nIf you want the short version by use case:\n\n- **Best overall:** **ChatGPT / DALL\u00b7E 3** for ease of use and prompt understanding.[2][7]\n- **Best for artistic, highly stylized images:** **Midjourney**.[9][13]\n- **Best free option:** **Gemini/Nano Banana** is commonly cited as the best free all-purpose choice.[11]\n- **Best for text in images / typography:** **Ideogram** and Google\u2019s newer **Nano Banana** models are frequently praised for text rendering.[6][9]\n- **Best for fine control / realistic detail:** **FLUX**-based tools are often highlighted for realism and control.[4][15]\n\nThe rankings vary because different reviewers optimize for different things: prompt accuracy, realism, typography, speed, price, or ease of use.[3][4][6][9] If you want one recommendation without extra context, I\u2019d choose **ChatGPT image generation** for most people and **Midjourney** if your priority is the most impressive-looking art.[2][7][9]\n\nIf you want, I can also recommend the best one for your exact use case: *photorealism, logos, product mockups, anime, ads, or free use*.",
       "brands": [
         {
-          "name": "Midjourney",
+          "name": "DALL-E",
           "position": 1,
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "Midjourney",
           "position": 2,
           "sentiment": "positive"
         },
@@ -868,8 +889,13 @@
           "sentiment": "positive"
         },
         {
-          "name": "Flux",
+          "name": "Ideogram",
           "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Flux",
+          "position": 5,
           "sentiment": "positive"
         }
       ],
@@ -966,7 +992,7 @@
         {
           "name": "Adobe Firefly",
           "position": 3,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         }
       ],
       "engine": "chatgpt",
@@ -1195,8 +1221,18 @@
           "sentiment": "positive"
         },
         {
-          "name": "Adobe Firefly",
+          "name": "Recraft",
           "position": 5,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Ideogram",
+          "position": 6,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 7,
           "sentiment": "neutral"
         }
       ],
@@ -1327,13 +1363,18 @@
           "sentiment": "positive"
         },
         {
-          "name": "Freepik",
+          "name": "Imagen",
           "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Freepik",
+          "position": 4,
           "sentiment": "neutral"
         },
         {
           "name": "Adobe Firefly",
-          "position": 4,
+          "position": 5,
           "sentiment": "positive"
         }
       ],
@@ -1610,9 +1651,25 @@
     },
     {
       "answer": "There isn\u2019t a single undisputed winner, but **GPT Image 2 (OpenAI)**, **Midjourney**, and **FLUX** are the most commonly cited top contenders for the most realistic images in 2026.[1][3][6][9][13][16]\n\nIf you want the shortest practical answer:\n\n- **Best overall realism:** **GPT Image 2** is ranked #1 in one 2026 comparison and is described as producing the most realistic images in blind human votes.[1]\n- **Best cinematic photorealism:** **Midjourney** is repeatedly described as the \u201crealism king\u201d or top pick for highly photorealistic portraits and cinematic scenes.[3][6][8][12]\n- **Best realism plus control:** **FLUX** is frequently cited as a close rival, especially for prompt accuracy and technical control.[4][6][12]\n\nA few nuances matter:\n\n- Some sources say **no single model** is best across all kinds of realistic images, because different tools lead for faces, product shots, text-in-image, or editing workflows.[7][13][15]\n- For **human faces and natural scenes**, **Imagen 4 / Imagen 4 Ultra** is also highlighted as a photorealism benchmark in one 2026 comparison.[13]\n- For **free or simpler workflows**, some guides favor platforms that package multiple top models rather than one standalone generator.[5][7]\n\nIf you want one recommendation: **choose GPT Image 2 for the most realistic all-around results, or Midjourney if you want the most visually striking cinematic realism**.[1][3][6][9]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "DALL-E",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Flux",
+          "position": 3,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: timed out after 180s",
+      "error": null,
       "question_id": "q02",
       "refused": false,
       "run_index": 4,
@@ -1698,28 +1755,33 @@
       "answer": "Short answer: There isn\u2019t one \u201cbest\u201d for everyone, but these are the easiest, most beginner\u2011friendly picks right now (as of August 23, 2026):\n\n- Easiest free start: Microsoft Designer/Copilot Images. Type what you want and get usable results right in the browser or Office apps; great for social graphics and quick mockups. ([support.microsoft.com](https://support.microsoft.com/en-us/designer/frequently-asked-questions-about-microsoft-designer?utm_source=openai))\n- Best for text inside images (logos, posters, signage): Ideogram. It\u2019s built to render words cleanly in images and has a simple, credit\u2011based free tier. ([docs.ideogram.ai](https://docs.ideogram.ai/faq?utm_source=openai))\n- Highest \u201cwow\u201d quality if you\u2019ll pay: Midjourney. Famous for aesthetics; now has a beginner\u2011friendly web app (so you don\u2019t have to live in Discord). Plans start at $10/month. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/33329300781837-Web-vs-Discord?utm_source=openai))\n\nGood alternatives depending on what you\u2019re making\n- If you already use Adobe or need clear commercial terms: Adobe Firefly (web app and in Photoshop/Express; uses monthly \u201cgenerative credits\u201d). ([helpx.adobe.com](https://helpx.adobe.com/firefly/web/get-started/learn-the-basics/adobe-firefly-overview.html?utm_source=openai))\n- If you want a design tool plus image generation in one place: Canva\u2019s Magic Media (Text\u2011to\u2011Image) is very straightforward for templates, posts, and slides. ([canva.com](https://www.canva.com/help/using-magic-media/?query=magic+media&utm_source=openai))\n- If you need editable vectors, icons, or flat illustrations: Recraft generates true SVG vector art from prompts. ([recraft.ai](https://www.recraft.ai/ai-image-generator?utm_source=openai))\n- If you prefer a chat workflow: ChatGPT \u201cImages\u201d (GPT\u2011Image\u20111.5) lets you generate and iteratively edit by describing changes in plain English. ([openai.com](https://openai.com/index/new-chatgpt-images-is-here/?utm_source=openai))\n\nQuick pick by goal\n- Posters/flyers with specific wording: Ideogram. ([docs.ideogram.ai](https://docs.ideogram.ai/faq?utm_source=openai))\n- Photorealistic art or stylized concept art: Midjourney. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/33329300781837-Web-vs-Discord?utm_source=openai))\n- Social posts, presentations, and \u201cmake\u2011and\u2011publish\u201d in minutes: Canva or Microsoft Designer. ([canva.com](https://www.canva.com/help/using-magic-media/?query=magic+media&utm_source=openai))\n- Logos/icons/illustrations you can edit in vector apps: Recraft. ([recraft.ai](https://www.recraft.ai/ai-image-generator?utm_source=openai))\n\nIf you want, tell me what you\u2019re trying to make (e.g., a poster with exact text, a product photo, a logo, or social posts), your budget (free vs paid), and whether you need commercial use\u2014I\u2019ll steer you to the single best starter and give you a 60\u2011second setup.",
       "brands": [
         {
-          "name": "Ideogram",
+          "name": "Bing Image Creator",
           "position": 1,
           "sentiment": "positive"
         },
         {
-          "name": "Midjourney",
+          "name": "Ideogram",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "Adobe Firefly",
+          "name": "Midjourney",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Canva",
+          "name": "Adobe Firefly",
           "position": 4,
           "sentiment": "positive"
         },
         {
-          "name": "Recraft",
+          "name": "Canva",
           "position": 5,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Recraft",
+          "position": 6,
           "sentiment": "positive"
         }
       ],
@@ -2044,34 +2106,29 @@
       "answer": "For a beginner, the two easiest picks are **Google's Gemini app (Nano Banana)** and **ChatGPT** \u2014 both let you just type a plain-English request in a chat box, no settings or jargon to learn.\n\n**Start here:**\n\n- **Gemini (Google)** \u2014 Best free option. \nIt's free in the Gemini app\n, handles natural conversational prompts well, and is strong at editing images you upload. \nFree-tier users get roughly a few Nano Banana Pro images per day in the Gemini app.\n\n- **ChatGPT** \u2014 Equally simple, and \nit's included in ChatGPT Free or the $20/month Plus plan\n, so it's essentially free if you already subscribe. Good all-rounder that also renders text in images reliably.\n\n**Worth knowing about:**\n\n- **Canva AI** \u2014 The friendliest if your goal is a social post, flyer, or presentation, since generation is built into a full design editor. (Quality is a step below the others, so don't make it your only tool.)\n- **Adobe Firefly** \u2014 Trained on licensed content, so it's the safest bet if you're nervous about commercial use rights.\n- **Ideogram** \u2014 \nThe best at accurate text rendering \u2014 legible labels, headlines, and multi-word phrases\n, so pick it for logos, posters, or memes with words.\n\n**Skip for now:**\n\n- **Midjourney** \u2014 The best-looking artistic output, but \nit's accessed through Discord and its web app\n, and \nthere's no free trial, so you'd spend $10 minimum just to test it\n. Great as a step two once you know what you like.\n- **Stable Diffusion** \u2014 \nFree and fully customizable, but you need a GPU and setup time, and the technical barrier is high.\n\n\n**Bottom line:** Open the Gemini app and start typing. It costs nothing, and once you hit its limits you'll know whether you need Midjourney's artistry or Ideogram's text accuracy.",
       "brands": [
         {
-          "name": "Imagen",
-          "position": 1,
-          "sentiment": "positive"
-        },
-        {
           "name": "Canva",
-          "position": 2,
+          "position": 1,
           "sentiment": "neutral"
         },
         {
           "name": "Adobe Firefly",
-          "position": 3,
+          "position": 2,
           "sentiment": "positive"
         },
         {
           "name": "Ideogram",
-          "position": 4,
+          "position": 3,
           "sentiment": "positive"
         },
         {
           "name": "Midjourney",
-          "position": 5,
+          "position": 4,
           "sentiment": "neutral"
         },
         {
           "name": "Stable Diffusion",
-          "position": 6,
-          "sentiment": "neutral"
+          "position": 5,
+          "sentiment": "negative"
         }
       ],
       "engine": "claude",
@@ -3576,9 +3633,45 @@
     },
     {
       "answer": "**Google's Gemini app (Nano Banana / Nano Banana Pro)** is the best default free pick right now \u2014 it's the strongest all-around quality, handles text in images well, and does conversational editing. The catch is a tight quota: \nGoogle's support docs note free users can generate about two Nano Banana Pro images daily, down from three, with limits changing frequently and resetting daily\n. The standard (non-Pro) Nano Banana model gives you considerably more per day.\n\nOther strong free options depending on your need:\n\n- **ChatGPT (free tier)** \u2013 good prompt understanding and editing, but only a few images per day before it cuts you off.\n- **Microsoft Bing Image Creator / Copilot** \u2013 free with a Microsoft account and one of the most generous monthly allowances for OpenAI-quality images.\n- **Ideogram** \u2013 the best choice if your image needs *readable words* (posters, logos, thumbnails). \nIts text rendering beats Midjourney's, making it the clear choice for logos, posters, or any image with words\n, and the free tier gives you roughly a couple dozen images a day.\n- **Adobe Firefly** \u2013 trained on licensed content, so it's the safest for commercial/client work; free monthly credits.\n- **Leonardo.ai** \u2013 \na free plan with around 150 credits per day\n, plus lots of style/model control. Best for volume and experimentation.\n- **Krea** \u2013 free daily credits with access to multiple models including FLUX.\n- **Stable Diffusion / FLUX run locally** (via ComfyUI or Automatic1111) \u2013 genuinely unlimited and uncensored if you have a decent GPU, but it takes setup effort.\n\n**My pick:** start with Gemini for quality, keep Bing Image Creator or Leonardo as your high-volume backup, and use Ideogram whenever the image needs text.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Imagen",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Krea",
+          "position": 5,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 6,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Flux",
+          "position": 7,
+          "sentiment": "neutral"
+        }
+      ],
       "engine": "claude",
-      "error": "extract failed: claude-cli: timed out after 180s",
+      "error": null,
       "question_id": "q05",
       "refused": false,
       "run_index": 2,
@@ -4011,7 +4104,7 @@
         {
           "name": "Adobe Firefly",
           "position": 4,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         }
       ],
       "engine": "perplexity",
@@ -4141,19 +4234,19 @@
           "sentiment": "positive"
         },
         {
-          "name": "Imagen",
+          "name": "Flux",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "Flux",
+          "name": "Adobe Firefly",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Adobe Firefly",
+          "name": "DALL-E",
           "position": 4,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
           "name": "Midjourney",
@@ -4249,7 +4342,7 @@
         {
           "name": "Adobe Firefly",
           "position": 5,
-          "sentiment": "neutral"
+          "sentiment": "positive"
         }
       ],
       "engine": "chatgpt",
@@ -4509,12 +4602,12 @@
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "DALL-E",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "DALL-E",
+          "name": "Ideogram",
           "position": 3,
           "sentiment": "positive"
         },
@@ -5760,13 +5853,8 @@
           "sentiment": "positive"
         },
         {
-          "name": "Stable Diffusion",
-          "position": 3,
-          "sentiment": "positive"
-        },
-        {
           "name": "Playground AI",
-          "position": 4,
+          "position": 3,
           "sentiment": "positive"
         }
       ],
@@ -5884,9 +5972,35 @@
     },
     {
       "answer": "Short answer: for most people who make a lot of images, Midjourney Standard ($30/mo) is the best value because it gives unlimited image generations in Relax mode and strong quality. If you already pay for Adobe or need the safest commercial terms, Adobe Firefly Standard ($9.99/mo) is the best cheap all\u2011rounder. For posters/typography on a tight budget, Ideogram Plus ($15/mo) is excellent. Power users who want fine\u2011tuning and tools often get the most mileage from Leonardo Premium ($30/mo).\n\nQuick picks by budget and use case\n- Cheapest all\u2011rounder (and you use Adobe apps): Adobe Firefly Standard, $9.99/mo. You get unlimited \u201cstandard\u201d image features across Firefly, Photoshop (web/mobile), Express, etc., plus 2,000 monthly credits for premium features like video and partner models. Great IP posture and integration. ([adobe.com](https://www.adobe.com/products/firefly/plans.html?msockid=1c246063c6d0676f15e67607c71e66eb))\n- Most images per dollar: Midjourney Standard, $30/mo. Unlimited image generations in Relax mode; 15 fast GPU hours if you need speed; extra fast time is $4/hr. If you want totally unlimited Relax plus private \u201cStealth\u201d mode, go Pro ($60). Note: companies >$1M revenue must be on Pro or Mega. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870484040333-Comparing-Midjourney-Plans))\n- Best under $15 for design/typography: Ideogram Plus, $15/mo (or $20 month\u2011to\u2011month). 1,000 priority credits plus unlimited \u201cslow\u201d credits, private generation, and strong text-in-image tools (editable text layers, character consistency). ([ideogram.ai](https://ideogram.ai/pricing/?tab=personal&via=appscribed))\n- Best $30 pro toolkit: Leonardo Premium, $30/mo. 25,000 fast tokens, private generations, fine\u2011tuning (personal AI models), canvas/workflow tools, and unlimited relaxed generation on selected first\u2011party models when fast tokens run out. ([leonardo.ai](https://leonardo.ai/pricing?afsrc=1&im_ref=05f2O5QqPxycRbG3qdwQ-w5EUkpWPBVNhVOEz00&irgwc=1&irpid=29332&sharedid=1517624))\n- Zero\u2011subscription route (DIY): Run Stable Diffusion (SDXL/SD3.5) locally. It\u2019s free to generate once set up; costs are your GPU and time. Stability\u2019s community license allows commercial use under $1M annual revenue. Best value if you\u2019re technical and do high volume. ([arxiv.org](https://arxiv.org/abs/2307.01952?utm_source=openai))\n\nWhat I\u2019d choose by scenario\n- Cranking out hundreds to thousands of images/month with flexible timing: Midjourney Standard. Unlimited Relax saves the most money at volume. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870484040333-Comparing-Midjourney-Plans))\n- You already subscribe to Creative Cloud or need \u201cclean\u201d training data and content credentials: Firefly Standard. It\u2019s the lowest cash outlay with unlimited standard image generations and widely accepted commercial terms. ([adobe.com](https://www.adobe.com/products/firefly/plans.html?msockid=1c246063c6d0676f15e67607c71e66eb))\n- Lots of posters, social ads, or anything where text fidelity matters: Ideogram Plus. Unlimited slow queue keeps costs predictable. ([ideogram.ai](https://ideogram.ai/pricing/?tab=personal&via=appscribed))\n- You want a one\u2011stop pro workstation (fine\u2011tune styles/characters, batch assets, pipelines): Leonardo Premium. The token bank + unlimited relaxed on first\u2011party models stretches $30 far. ([leonardo.ai](https://leonardo.ai/pricing?afsrc=1&im_ref=05f2O5QqPxycRbG3qdwQ-w5EUkpWPBVNhVOEz00&irgwc=1&irpid=29332&sharedid=1517624))\n\nIf you share:\n- Your monthly budget\n- Approx. images/month and whether speed matters\n- Need for commercial indemnity or enterprise policies\n\u2026I can steer you to one plan and tier.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Midjourney",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: timed out after 180s",
+      "error": null,
       "question_id": "q08",
       "refused": false,
       "run_index": 4,
@@ -5919,17 +6033,17 @@
         {
           "name": "Krea",
           "position": 3,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
           "name": "Adobe Firefly",
           "position": 4,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
           "name": "Ideogram",
           "position": 5,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
           "name": "Recraft",
@@ -5937,8 +6051,13 @@
           "sentiment": "positive"
         },
         {
-          "name": "Canva",
+          "name": "Bing Image Creator",
           "position": 7,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Canva",
+          "position": 8,
           "sentiment": "neutral"
         }
       ],
@@ -6014,18 +6133,13 @@
           "sentiment": "positive"
         },
         {
-          "name": "Seedream",
+          "name": "Z-Image",
           "position": 6,
           "sentiment": "positive"
         },
         {
           "name": "Flux",
           "position": 7,
-          "sentiment": "neutral"
-        },
-        {
-          "name": "Z-Image",
-          "position": 8,
           "sentiment": "positive"
         }
       ],
@@ -6141,33 +6255,38 @@
       "answer": "I'll look up current pricing and capabilities for the major options.\n**Short answer: Google's Gemini app (Nano Banana) is the best value right now**, and for a lot of people it's effectively free.\n\n**Best free option \u2014 Google Gemini**\nFree Gemini users get roughly 20 images/day, Google AI Pro gets ~100, and AI Ultra gets 1,000\n, and \nGoogle's terms allow commercial use of images even on the free tier \u2014 the real limits are watermarks and resolution, not licensing\n. \nReviewers consistently rank it top for its blend of speed, quality, and cost\n. If you need more, \nAI Pro at $19.99/month gets you roughly 100 Nano Banana Pro images/day at up to 2K\n.\n\n**Best value paid subscription \u2014 Midjourney Standard ($30/mo)**\nOnly worth it if aesthetic quality is your priority. \nBasic is $10/mo with 3.3 fast GPU hours (~200 images) and no Relax mode \u2014 when fast hours run out, you're done unless you buy more at $4/hour\n. \nStandard at $30/mo gives 15 fast hours plus unlimited Relax mode, which covers most creative workflows\n \u2014 that unlimited Relax tier is what makes it the real value pick.\n\n**Cheapest per image \u2014 API access**\nImage generation APIs start around $0.0002 per 1024\u00d71024 image, with prices varying by model across Replicate and Fal.ai\n. Great for bulk/automated work with FLUX or Stable Diffusion, but you need some technical comfort.\n\n**Quick guidance**\n- **Casual/occasional use:** Gemini free tier. Don't pay anything.\n- **Already pay for ChatGPT Plus ($20)?** You have DALL\u00b7E/GPT Image included \u2014 \nit's the strongest for accurate text rendering inside images\n. No need for a second subscription.\n- **Stylized/artistic work, brand visuals:** Midjourney Standard.\n- **Free daily credits + fine control:** \nLeonardo AI's free tier gives daily credits (~150), making it a good budget option\n, with paid plans around $10\u2013$48.\n- **Commercial safety matters (regulated industries):** \nAdobe Firefly runs $5\u2013$20/month standalone or bundled into Creative Cloud \u2014 pick it when commercial safety and indemnification matter more than peak quality\n.\n\nThe honest take: quality differences between the top tools are now small enough that you should start free on Gemini and only pay when you hit a specific wall \u2014 volume, watermarks, or Midjourney's particular look.",
       "brands": [
         {
-          "name": "Midjourney",
+          "name": "Imagen",
           "position": 1,
           "sentiment": "positive"
         },
         {
-          "name": "Flux",
+          "name": "Midjourney",
           "position": 2,
-          "sentiment": "neutral"
+          "sentiment": "positive"
         },
         {
-          "name": "Stable Diffusion",
+          "name": "Flux",
           "position": 3,
           "sentiment": "neutral"
         },
         {
-          "name": "DALL-E",
+          "name": "Stable Diffusion",
           "position": 4,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
-          "name": "Leonardo AI",
+          "name": "DALL-E",
           "position": 5,
           "sentiment": "positive"
         },
         {
-          "name": "Adobe Firefly",
+          "name": "Leonardo AI",
           "position": 6,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 7,
           "sentiment": "positive"
         }
       ],
@@ -6221,23 +6340,18 @@
       "answer": "**Short answer: Google's Gemini (Nano Banana 2) \u2014 it's the best value because the baseline is free and the paid tiers are cheap.**\n\n**Free / lowest cost**\nGemini's free tier gives roughly 20 image generations per day at 1K resolution, with Google AI Plus (~$7.99/mo) bumping that to about 50 and Google AI Pro ($19.99/mo) to around 100\n. \nUltra unlocks up to 1,000/day, but it's only worth it if you routinely need very high volume.\n The catch: \nfree and AI Pro tier images carry a visible Gemini watermark, while Ultra and AI Studio developer outputs remove it\n \u2014 worth checking if you're doing client work.\n\n**Best value if you generate a lot (hundreds+/month)**\nLeonardo AI. One comparison found that \nat $30/month Leonardo gives ~2,500+ images versus Midjourney's ~900, and at the $10-12 tier it's ~850 images versus ~200 \u2014 roughly 3-4x more generations per dollar, plus unlimited relaxed mode on mid-tier plans\n. It also has a usable free tier.\n\n**Best quality per dollar (if aesthetics matter most)**\nMidjourney, but you pay for it. \nPlans are Basic $10, Standard $30, Pro $60, Mega $120/month, with 20% off annually, and there's no free plan or trial\n. \nMost regular users land on Standard ($30), which includes 15 hours of Fast GPU time plus unlimited Relax mode; Basic runs out faster than it looks\n. Note it sells GPU time, not a fixed image count, which makes budgeting fuzzy.\n\n**Cheapest at scale (API/bulk)**\nSkip subscriptions and use pay-per-image via fal.ai or Replicate. \nSeedream v5.0 Lite is often cited as the best quality-to-cost ratio for production, at around $0.03/image with 2048x2048 output and ~2 second generation\n, while \nZ-Image Turbo is the cheapest at about $0.01/image\n.\n\n**My recommendation:** Start with Gemini's free tier \u2014 for most people it's genuinely enough. If you hit the daily cap, go Leonardo at $10-30/mo for volume, or Midjourney Standard at $30 if you specifically want its look.",
       "brands": [
         {
-          "name": "Imagen",
+          "name": "Leonardo AI",
           "position": 1,
           "sentiment": "positive"
         },
         {
-          "name": "Leonardo AI",
+          "name": "Midjourney",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "Midjourney",
-          "position": 3,
-          "sentiment": "positive"
-        },
-        {
           "name": "Z-Image",
-          "position": 4,
+          "position": 3,
           "sentiment": "positive"
         }
       ],
@@ -6304,8 +6418,13 @@
           "sentiment": "positive"
         },
         {
-          "name": "DALL-E",
+          "name": "Imagen",
           "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 5,
           "sentiment": "neutral"
         }
       ],
@@ -6662,7 +6781,7 @@
         {
           "name": "Ideogram",
           "position": 2,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         }
       ],
       "engine": "chatgpt",
@@ -6768,27 +6887,27 @@
       "answer": "There's no single winner \u2014 it depends on whether you want a finished, usable brand asset or creative exploration.\n\n**Best all-around pick: Looka.** It generates a logo plus a full brand kit (color palette, fonts, business card/social templates) and gives you the vector files you actually need. \nPricing is one-time \u2014 roughly $65 for logo-only use versus about $156/year for Canva Pro \u2014 though Looka draws from curated font and icon libraries rather than inventing entirely new shapes\n.\n\n**Other strong options:**\n\n- **Recraft** \u2014 the standout if you care about output quality. \nIt can output real, scalable SVGs, and modern image models like GPT Image, Ideogram, Nano Banana, and Recraft now render typography accurately and reliably \u2014 handling short marks, full wordmarks, and stylized lettering\n. That's a big deal, since text used to be the fatal flaw of general AI image tools.\n- **Ideogram** \u2014 best if your logo is text-heavy or a wordmark; it's the leader in legible type.\n- **Canva Magic Studio** \u2014 best value if you'll also use it for social posts, decks, and marketing. \nCanva's AI features include commercial rights on Pro plans.\n\n- **Adobe Illustrator + Firefly** \u2014 the right choice for final production-grade vector work.\n- **Brandmark / BrandCrowd / Fiverr Logo Maker** \u2014 solid budget alternatives to Looka in the template-driven category.\n\n**Skip Midjourney for actual logos.** \nIt's excellent for artistic, expressive imagery and many designers use it for moodboarding and aesthetic exploration\n, but \nlogos need simplicity, clarity, and geometric consistency, and Midjourney tends to add ornate detail\n. Use it for inspiration, then rebuild the concept as a clean vector.\n\n**Two practical warnings:** most of these output PNGs unless you pay for vector/SVG \u2014 insist on vector files or your logo won't scale to signage or embroidery. And check commercial rights and trademark eligibility; \nMidjourney grants commercial rights to paid subscribers but was trained on publicly scraped images, creating theoretical IP risk\n. Template-based generators can also produce logos similar to other users', which complicates trademarking.\n\nIf you're launching a business today: start with Looka or Recraft, and if the brand is central to your business, pay a human designer to refine the result.",
       "brands": [
         {
-          "name": "Recraft",
+          "name": "Canva",
           "position": 1,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         },
         {
-          "name": "DALL-E",
+          "name": "Recraft",
           "position": 2,
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "DALL-E",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Imagen",
+          "name": "Ideogram",
           "position": 4,
           "sentiment": "positive"
         },
         {
-          "name": "Canva",
+          "name": "Imagen",
           "position": 5,
           "sentiment": "positive"
         },
@@ -6843,12 +6962,12 @@
         {
           "name": "DALL-E",
           "position": 3,
-          "sentiment": "neutral"
+          "sentiment": "positive"
         },
         {
           "name": "Imagen",
           "position": 4,
-          "sentiment": "neutral"
+          "sentiment": "positive"
         }
       ],
       "engine": "claude",
@@ -6907,13 +7026,8 @@
           "sentiment": "positive"
         },
         {
-          "name": "Imagen",
-          "position": 4,
-          "sentiment": "positive"
-        },
-        {
           "name": "Recraft",
-          "position": 5,
+          "position": 4,
           "sentiment": "positive"
         }
       ],
@@ -6977,7 +7091,7 @@
         {
           "name": "Canva",
           "position": 4,
-          "sentiment": "positive"
+          "sentiment": "neutral"
         }
       ],
       "engine": "claude",
@@ -7570,8 +7684,13 @@
           "sentiment": "positive"
         },
         {
-          "name": "Leonardo AI",
+          "name": "Freepik",
           "position": 4,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 5,
           "sentiment": "positive"
         }
       ],
@@ -8681,12 +8800,12 @@
           "sentiment": "positive"
         },
         {
-          "name": "Canva",
+          "name": "Ideogram",
           "position": 3,
           "sentiment": "positive"
         },
         {
-          "name": "Ideogram",
+          "name": "Canva",
           "position": 4,
           "sentiment": "positive"
         }
@@ -9633,9 +9752,30 @@
     },
     {
       "answer": "There isn\u2019t a single universally agreed **best** open-source AI image generator in 2026, but **FLUX.2** is the most common pick for *overall quality* and prompt accuracy, while **Stable Diffusion 3.5** is often favored for ecosystem depth and fine-tuning flexibility.[2][9][11]\n\nIf you want the shortest practical answer:\n\n- **Best overall quality:** **FLUX.2**.[2][3][9]\n- **Best if you want the biggest community and customization:** **Stable Diffusion 3.5**.[2][9][11]\n- **Best for smaller hardware / speed:** **Sana** or **Z-Image Turbo**, depending on your VRAM and latency needs.[2][5][13]\n\nWhy FLUX.2 is often recommended:\n- It is described as the **quality leader** among open models and the current **benchmark** for consistency and high-resolution output.[2][3][9]\n- Review-style roundups consistently put it at or near the top for photorealism and prompt adherence.[2][9][11]\n\nOne important caveat: some sources use \u201copen source\u201d loosely and actually mean **open-weight** models, so licensing and code availability differ by model.[2][13] If you want, I can also give you the **best open-source image generator for your exact hardware** (for example, 8GB, 12GB, 16GB, or 24GB VRAM).",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Flux",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Sana",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Z-Image",
+          "position": 4,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled",
+      "error": null,
       "question_id": "q13",
       "refused": false,
       "run_index": 2,
@@ -9669,9 +9809,35 @@
     },
     {
       "answer": "If you want a single **best overall open-source AI image generator**, the strongest pick in the results is **FLUX.2** for raw image quality and prompt accuracy.[2][9] If you care more about ecosystem, local tooling, and fine-tuning, **Stable Diffusion 3.5** is still the most practical all-around open model.[2][9]\n\nA useful way to choose is:\n\n- **Best overall quality:** **FLUX.2**[2][9]\n- **Best for customization and community tools:** **Stable Diffusion 3.5**[2][9]\n- **Best for text rendering / complex prompts:** **Qwen-Image** or **HunyuanImage 3.0**[2][3]\n- **Best for speed on smaller hardware:** **Sana** or **Z-Image Turbo**[2][5]\n\nThe main reason there is no universal winner is that \u201cbest\u201d depends on what you optimize for. Multiple 2026 roundups describe **FLUX.2** as the current benchmark for output quality, while also noting that **Stable Diffusion 3.5** leads in ecosystem depth and fine-tuning flexibility.[2][9][11][13]\n\nIf you tell me your hardware and whether you want **photorealism, anime, text rendering, or local self-hosting**, I can recommend the best specific model for your setup.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Flux",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Qwen-Image",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Sana",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Z-Image",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q13",
       "refused": false,
       "run_index": 3,
@@ -9705,9 +9871,35 @@
     },
     {
       "answer": "The **best open-source AI image generator** depends on what you mean by \u201cbest,\u201d but if you want the strongest **overall image quality**, the current consensus in the results points to **FLUX.2** as the leader among open-weight/open-source-style models.[2][3][9] If you want the best **ecosystem and fine-tuning flexibility**, **Stable Diffusion 3.5** is still the safest choice.[2][9]\n\nA practical way to choose:\n\n- **Best overall quality:** **FLUX.2**[2][3][9]\n- **Best for customization and community tools:** **Stable Diffusion 3.5**[2][9][11]\n- **Best for text rendering / complex prompts:** **Qwen-Image** or **HunyuanImage 3.0**[2][3][9]\n- **Best for speed on lighter hardware:** **Sana** or **Z-Image Turbo**[2][5][13]\n\nIf you want one recommendation with no qualifiers, I\u2019d pick **FLUX.2** for most people because multiple 2026 guides call it the current quality benchmark for open models.[2][3][9] If your priority is running locally with the most mature tooling, **Stable Diffusion 3.5** is still the most established option.[1][9][11]\n\nOne caveat: some sources use \u201copen source\u201d loosely and really mean **open-weight** rather than fully open-source, so the exact answer depends on how strict you are about the license.[2][13]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Flux",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Qwen-Image",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Sana",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Z-Image",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q13",
       "refused": false,
       "run_index": 4,
@@ -9741,9 +9933,30 @@
     },
     {
       "answer": "Short answer: If \u201csafest\u201d means the strongest, written commercial license plus the provider taking legal responsibility (indemnification) for third\u2011party IP claims on outputs, these are the top picks.\n\nBest-in-class indemnity and training-data controls\n- Getty Images \u2014 Generative AI by Getty Images: Trained on licensed Getty/iStock content; includes standard Getty RF license and \u201cautomatic, uncapped legal protection,\u201d with some plans stating per\u2011image minimum coverage starting at $50,000. Strong option for regulated/brand\u2011sensitive work. ([globenewswire.com](https://www.globenewswire.com/news-release/2023/09/25/2748654/0/en/Getty-Images-Launches-Commercially-Safe-Generative-AI-Offering.html?utm_source=openai))\n\nStrong, when used under the right plan/features\n- Shutterstock Enterprise (with human content review): AI images that pass Shutterstock\u2019s optional human review are covered under Shutterstock\u2019s representations, warranties, and indemnity; without review, there\u2019s no legal protection for what the image contains. Shutterstock emphasizes training on licensed library content. Good balance of coverage/scale for marketing teams. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n- Canva Enterprise (Canva Shield): Enterprise agreement includes an AI Output Indemnity capped at the greater of $3,000,000 or 3\u00d7 annual fees, subject to typical exclusions (e.g., your inputs, ignoring takedown instructions). Solid if your team already lives in Canva. ([canva.com](https://www.canva.com/policies/indirect-msa/?utm_source=openai))\n\nGood mainstream choice for individuals/teams (lower cap)\n- Adobe Firefly: Trained on Adobe Stock + public\u2011domain/openly licensed content; offers IP indemnification for \u201cIndemnified Firefly Outputs,\u201d currently capped at $10,000 per claim/output under Adobe\u2019s 2026 Generative AI terms. Also embeds Content Credentials (C2PA) for provenance. Great everyday option, but the cap is lower than Getty/Shutterstock/Canva Enterprise. ([adobe.com](https://www.adobe.com/cc-shared/assets/pdf/legal/servicetou/adobe-generative-ai-product-specific-terms-en-us-20260423.pdf?utm_source=openai))\n\nPlatform indemnities tied to broader suites (enterprise/paid tiers)\n- Google Vertex AI (Imagen): Google offers \u201cgenerated output indemnity\u201d for certain products (including Vertex AI) if you follow their responsible\u2011use requirements. Appropriate when you\u2019re already building on Google Cloud. ([cloud.google.com](https://cloud.google.com/blog/products/ai-machine-learning/protecting-customers-with-generative-ai-indemnification?utm_source=openai))\n- Microsoft Copilot/Azure OpenAI: Microsoft\u2019s Copilot Copyright Commitment covers paid commercial Copilots; Azure OpenAI also provides coverage if you implement required mitigations. Coverage depends on plan and configuration. ([blogs.microsoft.com](https://blogs.microsoft.com/on-the-issues/2023/09/07/copilot-copyright-commitment-ai-legal-concerns/?country=us&culture=en-us&utm_source=openai))\n- OpenAI (ChatGPT Enterprise/API): OpenAI\u2019s current Service Terms include output indemnification for business/enterprise/API customers, subject to exceptions (e.g., if you knew output was likely infringing, you used disallowed inputs, or ignored safety features). Consumer tiers are not the target for this protection. ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n\nUse with caution (typically no provider indemnity)\n- Midjourney, Stable Diffusion (open\u2011source or hosted): These tools generally assign output ownership to you but disclaim warranties and provide no output indemnification; terms often require you to indemnify them. Not ideal where IP risk must be shifted to the vendor. ([docs.midjourney.com](https://docs.midjourney.com/docs/terms-of-service?utm_source=openai))\n\nPractical buying advice\n- Need maximum legal safety for broad commercial use (ads, OOH, broadcast, big brands)? Choose Getty Images\u2019 Generative AI. If you\u2019re already a Shutterstock Enterprise customer, require human review for AI outputs to lock in indemnity. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n- For small/medium teams producing everyday marketing assets, Adobe Firefly is a safe default, just note the $10k cap; Canva Enterprise offers much higher caps if you want an all\u2011in\u2011one design suite with indemnity. ([adobe.com](https://www.adobe.com/cc-shared/assets/pdf/legal/servicetou/adobe-generative-ai-product-specific-terms-en-us-20260423.pdf?utm_source=openai))\n\nNo matter which you pick, do these to stay covered\n- Avoid prompts that invoke living people\u2019s names/likenesses, logos, or \u201cin the style of [artist]\u201d; most indemnities exclude claims caused by your inputs. ([istockphoto.com](https://www.istockphoto.com/legal/license-agreement))\n- Keep a record of prompts, timestamps, and the license/plan used; use providers that attach Content Credentials/watermarks for provenance. ([adobe.com](https://www.adobe.com/cc-shared/assets/investor-relations/pdfs/pdf-adobe-express-for-enterprise-press-release-final-1.pdf?utm_source=openai))\n- For higher\u2011risk usage (packaging, merchandising, large paid media), confirm your exact indemnity amount, exclusions, and any review/approval steps in your contract or admin console. Policies and caps vary by plan and can change.\n\nIf you tell me your use case (industry, where the images will run, budget, team size), I can recommend a specific plan and checklist.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "negative"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 4,
+          "sentiment": "negative"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 0,
@@ -9768,9 +9981,15 @@
     },
     {
       "answer": "Short answer: pick a service that (a) trains on licensed stock or public\u2011domain material and (b) contractually indemnifies you for IP claims. Today, the safest choices are:\n\n- Getty Images Generative AI (safest overall for commercial use)\n  - Trained exclusively on Getty/iStock licensed libraries.\n  - Contract includes legal protections and indemnification (published levels start at $50,000 per generated image), with clear carve\u2011outs (e.g., if you upload logos or a person\u2019s likeness without rights). ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n\n- Adobe Firefly for Business/Enterprise\n  - Trained on Adobe Stock, licensed content, and public\u2011domain material.\n  - Adobe offers Firefly IP indemnity for eligible features and surfaces under certain business/enterprise agreements. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n\n- Shutterstock AI (best when you need stock-style licensing)\n  - Outputs can be licensed under Shutterstock\u2019s Standard/Enhanced licenses; indemnity is available in certain plans and when assets pass human review (enterprise plans are typically covered). ([shutterstock.com](https://www.shutterstock.com/help/en/articles/10594949-get-to-know-the-ai-generated-content-tool-on-shutterstock?utm_source=openai))\n\n- Google Vertex AI Imagen (for developers/enterprises)\n  - Google contractually indemnifies covered generative AI services, including the Vertex AI Imagen APIs, for third\u2011party IP claims if you follow their required practices. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n\n- Microsoft Copilot/Azure OpenAI (for businesses)\n  - Microsoft\u2019s Customer Copyright Commitment covers IP claims on output from paid commercial Copilot services and Azure OpenAI (which includes image generation via DALL\u00b7E) if you implement the required mitigations. ([blogs.microsoft.com](https://blogs.microsoft.com/on-the-issues/2023/09/07/copilot-copyright-commitment-ai-legal-concerns/?country=us&culture=en-us&utm_source=openai))\n\nWhat about OpenAI directly?\n- OpenAI\u2019s Service/Business Terms provide indemnification to API and business customers for IP claims on outputs, subject to important exclusions (e.g., trademark/likeness issues, ignoring safety features). Consumer terms give you rights to use the output but don\u2019t offer broad indemnity. ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n\nOptions to avoid if \u201clowest legal risk\u201d is your top priority\n- Midjourney and most \u201copen\u201d Stable Diffusion services allow commercial use but do not indemnify you; their terms largely place IP risk on the user. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32083055291277-Terms-of-Service?utm_source=openai))\n\nPractical tips regardless of platform\n- Avoid prompts naming living artists, brands, logos, or identifiable people unless you have rights/releases; these are common exclusions in indemnities. ([gettyimages.co.uk](https://www.gettyimages.co.uk/eula?utm_source=openai))\n- Keep prompts, negatives, and version logs; save files with provenance/watermarking when available (e.g., Content Credentials/SynthID). ([openai.com](https://openai.com/index/advancing-content-provenance/?utm_source=openai))\n\nIf you tell me your use case (e.g., ads, packaging, app UI) and whether you need enterprise terms, I can recommend the single safest plan and checklist for your situation.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 1,
@@ -9793,9 +10012,15 @@
     },
     {
       "answer": "Short answer: If \u201csafest\u201d means the clearest training-data provenance plus written IP indemnity for commercial use, pick a tool that (a) was trained on licensed/permissioned content, (b) gives output indemnification in writing, and (c) offers human or automated rights checks and provenance tags. As of August 23, 2026, these are the strongest options:\n\nBest for brand\u2011sensitive, ad\u2011grade work\n- Getty Images \u201cGenerative AI by Getty Images\u201d (NVIDIA Edify): Trained on Getty\u2019s licensed library; commercial licenses are backed by Getty\u2019s legal indemnification. Limitation: you work within Getty\u2019s ecosystem. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation/faqs?utm_source=openai))\n\n- Shutterstock AI (Enterprise plans with human review): When your generated image passes Shutterstock\u2019s human content review, it\u2019s cleared for commercial use and covered by their indemnity under your license limits. Good fit for agencies and marketing teams. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n\nBest if you already use Adobe\n- Adobe Firefly (Adobe Stock AI Studio/Enterprise workflows): Firefly is trained on Adobe Stock + public\u2011domain content and Adobe offers IP indemnity for specific, eligible Firefly features/surfaces noted in its product\u2011specific terms. Look for \u201cCommercially safe\u201d badges in Stock; indemnity applies only to listed workflows in your contract. ([adobe.com](https://www.adobe.com/ai/overview/firefly/gen-ai-approach.html?utm_source=openai))\n\nBest for developers embedding image gen in products\n- Google Cloud Vertex AI Imagen: Google explicitly lists the Imagen APIs among its \u201cGenerative AI Indemnified Services.\u201d Good when you need an enterprise cloud contract and SLAs. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- Microsoft Azure OpenAI (Designer/Image Creator models via Azure): Covered by Microsoft\u2019s Customer Copyright Commitment (defense and costs) if you meet the required mitigations. Solid choice if you\u2019re already on Azure/Microsoft 365. ([learn.microsoft.com](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/customer-copyright-commitment?utm_source=openai))\n- OpenAI (API and ChatGPT Enterprise): OpenAI\u2019s current Service Terms include output IP indemnity for API and Enterprise customers, subject to conditions. Useful if you want DALL\u00b7E via API with enterprise terms. ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n\nWhat to be cautious about if \u201csafest\u201d is your priority\n- Midjourney and open\u2011source pipelines (e.g., Stable Diffusion variants) generally do not provide output indemnity; some are still tied up in training\u2011data litigation, which can raise perceived risk for high\u2011visibility commercial campaigns. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32083055291277-Terms-of-Service?utm_source=openai))\n\nPractical tips to stay \u201cclear\u201d\n- Even with indemnity, you\u2019re still responsible for how you use images: avoid prompts that reference living artists, brands/logos, or public figures; obtain model/property releases when likenesses or identifiable properties appear; and keep usage within the license scope.\n- Prefer providers that embed Content Credentials/C2PA or similar provenance tags (Adobe, Microsoft/OpenAI, Shutterstock participate), and keep your download/review logs with asset IDs. ([helpx.adobe.com](https://helpx.adobe.com/ca/firefly/web/get-started/learn-the-basics/content-credentials-overview.html?utm_source=openai))\n\nBottom line\n- Safest for most brands: Getty or Shutterstock Enterprise (with review) for turnkey licensing + indemnity.\n- Safest inside creative stacks: Adobe Firefly with eligible, indemnified workflows.\n- Safest for builders: Vertex AI Imagen or Azure OpenAI under their indemnity programs; OpenAI API/Enterprise also offers output indemnity.\n\nIf you tell me your use case (advertising vs. web graphics vs. product UI; team size; budget; whether you need an API), I\u2019ll recommend a specific plan and the exact contract language to ask for.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 2,
@@ -9817,9 +10042,25 @@
     },
     {
       "answer": "Short answer: Pick a service that both (a) trains on licensed data and (b) gives you written IP indemnification for the outputs you use. A few stand out today.\n\nSafest choices (commercial use)\n- Getty Images \u201cGenerative AI by Getty Images\u201d\n  - Trained on Getty\u2019s licensed library; your license includes legal indemnification (starts around $50,000 per generated image; higher tiers available). Read the carve\u2011outs (e.g., if you upload/reference IP you don\u2019t own). ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n- iStock \u201cGenerative AI by iStock\u201d (budget version of Getty\u2019s)\n  - Includes standard indemnification up to $10,000 per generated image; trained on licensed creative content. Good for smaller budgets. ([istockphoto.com](https://www.istockphoto.com/ai/generation/create?utm_source=openai))\n- Adobe Firefly (in Adobe Express/Creative Cloud for enterprise)\n  - Adobe offers IP indemnification for approved Firefly features/surfaces when you\u2019re on an enterprise plan; models are trained on Adobe Stock, public\u2011domain, and CC0 content. Content Credentials (C2PA) added on export to aid provenance. Check that your workflow is in the \u201cEligible Firefly Features/Surfaces.\u201d ([helpx.adobe.com](https://helpx.adobe.com/legal/product-descriptions/adobe-firefly.html?utm_source=openai))\n- Shutterstock Generate (enterprise)\n  - Indemnification available if you use plans that include human content review and the image is approved; Shutterstock trains on licensed assets and runs a contributor\u2011compensation program. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n- Google Vertex AI Imagen (developers/teams)\n  - Google contractually indemnifies output from covered Vertex AI services, including the Imagen APIs\u2014useful if you\u2019re generating images inside apps or workflows. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- OpenAI (DALL\u00b7E via API or ChatGPT Enterprise/Business)\n  - OpenAI\u2019s \u201cCopyright Shield\u201d/Service Terms provide indemnity for business and API customers for IP claims over output (subject to conditions). For consumer tiers, you get broad usage rights but not the same indemnity. ([openai.com](https://openai.com/index/new-models-and-developer-products-announced-at-devday/?trk=public_post_comment-text&utm_source=openai))\n\nWhat to avoid or double\u2011check\n- Free/consumer plans and most open\u2011source/model\u2011hosted tools generally do not include contractual indemnification; if you need true risk transfer, use an enterprise or stock\u2011library\u2011backed plan that spells it out in writing.\n\nImportant limitations you\u2019ll see in all indemnities\n- They typically don\u2019t cover: your use of others\u2019 trademarks/logos, look\u2011alike celebrities or private individuals\u2019 likeness, or reference images you don\u2019t own rights to; ignoring safety tools or modifying outputs in risky ways can void coverage. Always read the carve\u2011outs in the provider\u2019s terms. ([gettyimages.co.uk](https://www.gettyimages.co.uk/eula?utm_source=openai))\n\nQuick pick by use case\n- Marketing/brand work where risk must be minimal: Getty Images Generative AI (or iStock for smaller budgets) or Adobe Firefly Enterprise. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n- Agencies/builders embedding generation into products: Google Vertex AI Imagen or OpenAI API with business terms. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- Stock\u2011style workflow with review: Shutterstock Generate with human\u2011review indemnity. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n\nRisk\u2011reduction checklist (whatever you choose)\n- Use an indemnified plan and keep a copy of the agreement and any human\u2011review approvals.\n- Avoid prompts that call for specific living artists\u2019 styles, brand logos, real people, or protected characters.\n- Prefer providers that add provenance tags (e.g., Content Credentials/SynthID) and keep your prompt/output logs. ([helpx.adobe.com](https://helpx.adobe.com/legal/product-descriptions/adobe-firefly.html?utm_source=openai))\n\nIf you share your budget, team size, and how/where the images will be used (ads, packaging, apps, etc.), I can recommend the exact plan and any add\u2011ons you\u2019ll want.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Imagen",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 3,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 3,
@@ -9840,9 +10081,15 @@
     },
     {
       "answer": "Short answer: If you want the lowest licensing/copyright risk, choose a generator that\u2019s trained on licensed/permissioned data and that contractually indemnifies you for IP claims. The standouts today are:\n- Getty Images\u2019 Generative AI (and iStock\u2019s version): Trained exclusively on Getty/iStock\u2019s licensed creative library; includes legal indemnification (Getty markets coverage starting at $50,000 per generated image; iStock\u2019s standard legal guarantee is up to $10,000 per image). ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation?utm_source=openai))\n- Adobe Firefly (especially Enterprise): Models are trained on Adobe Stock + public\u2011domain content; Adobe offers IP indemnification for eligible Firefly workflows for enterprise customers and attaches Content Credentials. ([adobe.com](https://www.adobe.com/ai/overview/firefly/gen-ai-approach.html?utm_source=openai))\n- Shutterstock Generate: Trained on Shutterstock\u2019s licensed assets; AI images can be licensed under Shutterstock\u2019s standard/enhanced licenses; enterprise plans and human\u2011reviewed AI assets carry indemnification (with stated caps for standard/enhanced licenses). ([shutterstock.com](https://www.shutterstock.com/help/en/articles/10594949-get-to-know-the-ai-generated-content-tool-on-shutterstock?utm_source=openai))\n- Google Vertex AI (Imagen on Vertex): Google offers a \u201cgenerated output\u201d indemnity on listed paid Vertex/Workspace generative AI services, covering certain third\u2011party IP claims if you follow their safeguards. Best fit for enterprise app/workflow building rather than stock\u2011style licensing. ([cloud.google.com](https://cloud.google.com/legal/archive/terms/service-terms/index-20251222?utm_source=openai))\n- Microsoft Copilot/Designer (DALL\u00b7E via paid commercial Copilots) and OpenAI Enterprise/API: Both provide contractual copyright indemnification for business/enterprise tiers (not consumer/free use). ([blogs.microsoft.com](https://blogs.microsoft.com/on-the-issues/2023/09/07/copilot-copyright-commitment-ai-legal-concerns/?country=us&culture=en-us&utm_source=openai))\n\nWhat that means for you\n- Safest for ad\u2011grade, highly public commercial uses: Getty Images Generative AI, Adobe Firefly (Enterprise), or Shutterstock Enterprise with reviewed/approved outputs. These pair permissioned training data with written indemnities. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation?utm_source=openai))\n- For teams building products/workflows: Google Vertex AI (Imagen) or Microsoft\u2019s paid Copilot offerings provide output indemnity at the platform level. ([cloud.google.com](https://cloud.google.com/legal/archive/terms/service-terms/index-20251222?utm_source=openai))\n- For solo users needing simple, low\u2011risk licensing: iStock\u2019s AI generator includes standard indemnification up to $10,000 per image; Shutterstock\u2019s licensed AI assets come with their normal license protections. Check caps and use cases. ([istockphoto.com](https://www.istockphoto.com/ai/generation?utm_source=openai))\n\nUse with caution (higher risk)\n- Midjourney, Stable Diffusion/DreamStudio, and most open\u2011weights/local models: powerful, but training data includes web\u2011scraped/copyrighted material and providers generally do not indemnify you; terms are \u201cas\u2011is/no warranties.\u201d Good for ideation; risky for high\u2011stakes commercial deployment without your own legal review. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/42829949256205-AB2013-Documentation?utm_source=openai))\n\nPractical safety checklist regardless of tool\n- Don\u2019t use outputs as a logo/trademark and avoid implying endorsement; most licenses forbid this. ([shutterstock.com](https://www.shutterstock.com/license))\n- Avoid prompts likely to reproduce celebrities, branded products, or distinctive IP; even indemnified services carve out trademark/publicity\u2011rights issues and require you to follow their guardrails. ([shutterstock.com](https://www.shutterstock.com/license))\n- Keep a paper trail: prompts, versions, and any human edits; export with Content Credentials when available (Adobe). ([helpx.adobe.com](https://helpx.adobe.com/legal/product-descriptions/adobe-firefly.html?utm_source=openai))\n- For people in images, use synthetic/non\u2011identifiable subjects; if you truly need a released person or property, license a traditional stock image with model/property releases from the same provider. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation/faqs?utm_source=openai))\n\nBottom line\n- Safest \u201cstock\u2011style\u201d picks: Getty Images Generative AI (and iStock), Adobe Firefly Enterprise, Shutterstock Enterprise. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation?utm_source=openai))\n- Safest \u201cplatform\u201d picks for enterprises: Google Vertex AI (Imagen), Microsoft Copilot (paid), OpenAI Enterprise/API. ([cloud.google.com](https://cloud.google.com/legal/archive/terms/service-terms/index-20251222?utm_source=openai))\n\nIf you tell me your use case (ads, packaging, app UI, merch, etc.) and team size, I can recommend the exact plan/tier and any add\u2011on reviews you\u2019ll want.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 4,
@@ -9921,9 +10168,15 @@
     },
     {
       "answer": "For **licensing and copyright safety**, **Adobe Firefly** is the safest mainstream AI image generator in the results you provided, because it combines **explicit commercial-use rights**, **licensed/public-domain training data**, and **IP indemnification on paid plans**.[1][2][7][9][20]\n\nA few important caveats:\n\n- **No AI image is automatically copyrightable just because you generated it**; the U.S. Copyright Office says purely AI-generated images lack human authorship and are generally not registrable as copyrightable works.[2][3][4][6][14]\n- **\u201cSafest\u201d usually means lowest legal risk, not zero risk**; several sources note there is no fully risk-free option for commercial use.[4][8][15]\n- Other tools may allow commercial use, but they typically **do not match Firefly\u2019s combination of licensed training provenance plus indemnification** in the sources here.[2][7][9][18]\n\nIf you want the shortest practical answer:  \n- **Best low-risk choice:** **Adobe Firefly**[1][2][7][9]  \n- **Best if you need the strongest contractual protection:** choose a platform that explicitly offers **indemnification** and keep the terms on file; the sources most consistently point to Firefly for this.[1][2][7][9]  \n\nIf you want, I can also rank **Adobe Firefly vs Midjourney vs DALL\u00b7E vs Stable Diffusion vs Getty/iStock AI** specifically for commercial licensing risk.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 0,
@@ -9957,9 +10210,15 @@
     },
     {
       "answer": "For **licensing and copyright safety**, **Adobe Firefly** is generally the safest mainstream AI image generator to choose, because it is widely described as being trained on **licensed Adobe Stock and public-domain content** and offers **commercial-use support** with **IP indemnification** on paid/enterprise plans.[4][5][18]\n\nA few important caveats:\n\n- There is **no 100% risk-free** AI image generator for copyright purposes.[13]\n- The U.S. Copyright Office has made clear that **purely AI-generated images lack human authorship** and therefore generally **cannot be copyrighted** as such.[2][4][8][14][20]\n- The safest choice depends on your use case, but for **commercial work**, platforms that explicitly allow commercial use and provide **indemnification** are the strongest options.[5][13][18]\n\nIf you want the shortest practical answer:\n- **Best overall for legal safety:** **Adobe Firefly**.[4][5][18]\n- **Also worth considering for stock-style workflows:** **Getty Images AI** and **Shutterstock\u2019s AI tools**, since they emphasize licensed-source training and commercial licensing models.[4][8]\n\nIf you want, I can also compare **Adobe Firefly vs Midjourney vs DALL\u00b7E vs Getty/Shutterstock** specifically for **commercial use, ownership, and indemnification**.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 1,
@@ -9993,9 +10252,30 @@
     },
     {
       "answer": "If you want the **safest AI image generator for licensing and copyright risk**, **Adobe Firefly** is usually the best default choice because it is designed around commercially licensed training data and is widely positioned for commercial use with stronger legal assurances than most consumer generators.[5][13]\n\nThe main reason is not that AI images are automatically copyrightable\u2014they generally are **not** when created solely by AI in the U.S.\u2014but that some platforms reduce infringement risk by using licensed or public-domain training sources and by offering clearer commercial terms.[2][5][9][16]\n\n**Best options by risk profile:**\n- **Adobe Firefly** \u2014 strongest mainstream choice for commercial licensing comfort, because it is described as trained on Adobe Stock and public-domain content, with commercial use positioning and better provenance clarity.[5][13]\n- **Getty Images AI / iStock AI Generator** \u2014 also geared toward commercial use and, according to the provided sources, based on licensed content, which can be attractive if your priority is legal certainty.[3][5]\n- **Enterprise-tier DALL\u00b7E / OpenAI commercial plans** \u2014 can be acceptable for commercial use, but the safest reading of the sources is that your actual protection depends heavily on the specific contract/plan terms rather than the model alone.[10][12]\n- **Midjourney / Stable Diffusion** \u2014 usable, but generally less \u201csafe\u201d from a licensing standpoint unless you carefully review the license, training provenance, and your own prompt/output risks.[7][13][15]\n\n**Important caveat:** no AI image generator is completely \u201ccopyright-safe\u201d in the sense of eliminating all risk, because outputs can still resemble protected works, and prompts that reference copyrighted characters, artists, or specific styles increase risk.[1][2][8][13]\n\nIf your priority is **commercial work with the least copyright headache**, I would choose:\n1. **Adobe Firefly**\n2. **Getty Images AI / iStock AI**\n3. **Enterprise DALL\u00b7E**, if your contract explicitly covers commercial use and indemnity.[5][10][13]\n\nIf you want, I can also give you a **simple buyer\u2019s checklist** for picking the safest generator for **client work, ads, or print-on-demand**.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 2,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 4,
+          "sentiment": "neutral"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 2,
@@ -10029,9 +10309,15 @@
     },
     {
       "answer": "If your priority is **licensing/copyright safety**, **Adobe Firefly** is the safest mainstream choice because it combines **explicit commercial-use rights**, **licensed/public-domain training data**, and **IP indemnification on paid plans**.[1][7][9][20]\n\nA few important caveats:\n\n- **No AI image generator makes the output automatically copyrightable**; U.S. Copyright Office guidance says purely AI-generated images generally lack the human authorship needed for copyright registration.[2][3][6][14]\n- The biggest practical difference is **legal protection**, not just commercial permission. Firefly stands out because it offers **indemnification**, whereas many other popular tools may allow commercial use but do **not** provide the same level of contractual protection.[1][2][7][9]\n- If you need the **lowest-risk option for business use**, Firefly is the most consistently recommended in the sources you provided.[1][7][9]\n\nIf you want, I can also rank the main tools side by side for **commercial use, indemnity, and copyright risk**.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 3,
@@ -10065,9 +10351,30 @@
     },
     {
       "answer": "For **licensing and copyright safety**, **Adobe Firefly** is the safest mainstream AI image generator, especially on a paid plan, because it offers **explicit commercial-use rights** and **IP indemnification**, and its training data is described as licensed/public-domain rather than web-scraped.[1][7][9]\n\nA few important caveats:\n\n- **No AI image generator makes the output copyrightable by default.** The U.S. Copyright Office says purely AI-generated images lack human authorship and are generally not registrable as copyright.[2][3][6]\n- If your goal is **lowest legal risk for business use**, Firefly is the strongest common choice because it combines commercial rights with indemnity, which most competitors do not offer.[1][2][7][9]\n- **Getty Images AI** and **iStock AI** are also positioned as safer commercial options because they use licensed content and emphasize legal protection, but Firefly is the most consistently cited mainstream choice for broad use.[3]\n- Tools like **Midjourney**, **Stable Diffusion**, and consumer **DALL\u00b7E** options may allow commercial use on certain plans, but the search results do not show the same level of indemnification or licensing clarity as Firefly.[2][4]\n\nIf you want, I can also give you a **safe-use shortlist by use case**: marketing, print-on-demand, app UI, or client work.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 2,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 3,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "DALL-E",
+          "position": 4,
+          "sentiment": "neutral"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q14",
       "refused": false,
       "run_index": 4,
@@ -10101,9 +10408,20 @@
     },
     {
       "answer": "Short answer: pick based on your legal risk tolerance, workflow, and where you\u2019ll create/edit assets. Here are the best small\u2011business options, by need.\n\nSafest legal cover (ads, websites, packaging)\n- Getty Images Generative AI: Outputs come with Getty\u2019s standard commercial license plus Getty\u2019s legal indemnification; prompts that include third\u2011party IP (logos, people, etc.) aren\u2019t covered. ([gettyimages.com.au](https://www.gettyimages.com.au/ai/generation/faqs?utm_source=openai))\n- Shutterstock AI: Commercial use is allowed; indemnification is available when you\u2019re on plans that include human content review and approval (common on enterprise tiers). Check your plan\u2019s terms. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n\nBest if you already use Adobe (all\u2011in creative workflow)\n- Adobe Firefly for Teams: Designed for commercial use, trained on licensed data, embeds Content Credentials by default, and qualifying business plans include IP indemnification for specific Firefly features/workflows. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n\nBest for API automation (generate at scale or inside your app)\n- OpenAI Images (gpt\u2011image\u20111 via API): Modern model with provenance signals; OpenAI\u2019s current service terms include IP indemnification for API and Enterprise customers (subject to conditions). ([developers.openai.com](https://developers.openai.com/api/docs/models/gpt-image-1?utm_source=openai))\n- Google Cloud Vertex AI Imagen: Covered under Google\u2019s \u201cGenerative AI Indemnified Services\u201d for output indemnity when used through Vertex/GenAI services. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- AWS Bedrock Titan Image Generator: Offers uncapped IP indemnity for outputs of generally available Titan models. ([docs.aws.amazon.com](https://docs.aws.amazon.com/ai/responsible-ai/titan-image-generator/overview.html?utm_source=openai))\n\nBest low\u2011cost, creative exploration (lighter legal cover)\n- Midjourney: Great aesthetics; paid plans grant commercial rights, but there\u2019s no provider indemnification and larger companies (> $1M revenue) need higher\u2011tier plans. Use with care for brand work. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially?utm_source=openai))\n- Canva Magic Media: Excellent for social/templated design; commercial use allowed, but Canva\u2019s strongest indemnification (\u201cShield\u201d) is marketed for large enterprise accounts (typically 100+ seats), not most small teams. ([canva.com](https://www.canva.com/policies/ai-product-terms/?msockid=238cdcc3ad6b613100b6ca1bac076080&utm_source=openai))\n\nQuick picks\n- Want \u201cleast legal headache\u201d without standing up cloud services? Start with Adobe Firefly for Teams, or use Getty/Shutterstock when you need stock\u2011like legal assurances. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Building this into your website/app? Choose OpenAI Images, Vertex Imagen, or AWS Titan based on the cloud you already use. ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n- Pure creativity for social posts and concepts on a budget? Midjourney (just avoid logos/celebrities and do a human review before publishing). ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially?utm_source=openai))\n\nWhat I\u2019d recommend for a typical small business in the U.S. (August 2026)\n- If you\u2019re already in Adobe: Firefly for Teams for day\u2011to\u2011day creation; use Getty/Shutterstock when a campaign requires extra peace of mind. ([business.adobe.com](https://business.adobe.com/products/creativecloud-business/pricing.html?utm_source=openai))\n- If you need an API: stick to OpenAI Images or your cloud\u2019s indemnified service (Google Vertex Imagen or AWS Titan). ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n\nPractical tips regardless of tool\n- Avoid prompts that include real people, brand names, logos, or copyrighted characters unless you have rights; indemnities typically exclude those. ([gettyimages.ae](https://www.gettyimages.ae/eula?utm_source=openai))\n- Keep the embedded Content Credentials/C2PA metadata on final assets for provenance. ([helpx.adobe.com](https://helpx.adobe.com/ca/firefly/web/get-started/learn-the-basics/content-credentials-overview.html?utm_source=openai))\n\nIf you share a bit about your use case (ads vs. social, need for API, monthly volume, budget), I can narrow this to a single \u201cbest fit\u201d and a starter plan.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Midjourney",
+          "position": 1,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Canva",
+          "position": 2,
+          "sentiment": "neutral"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 0,
@@ -10129,9 +10447,40 @@
     },
     {
       "answer": "Short answer: pick based on risk tolerance, where you\u2019ll use the images, and whether you need legal backstops.\n\nBest picks by scenario\n- Easiest \u201call\u2011in\u2011one\u201d for social and marketing: Canva with Magic Media. It\u2019s built into Canva\u2019s editor, lets you generate and edit images fast, and is fine for commercial use under Canva\u2019s Content License and AI Product Terms. Note: AI\u2011output indemnification is only offered to eligible Enterprise accounts via Canva Shield, not typical Pro/Teams plans. ([canva.com](https://www.canva.com/policies/content-license-agreement/?msockid=37d159e820876ec208174eec21aa6fad&utm_source=openai))\n\n- Lowest legal risk/brand\u2011safe workflows: Adobe Firefly inside Photoshop/Express/Illustrator. Adobe trains Firefly on licensed content (e.g., Adobe Stock, public\u2011domain), markets it as \u201csafe for commercial use,\u201d and offers IP indemnification for certain Creative Cloud for teams/enterprise plans (e.g., Pro Plus) and eligible Firefly features. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html))\n\n- Stock\u2011style images with explicit indemnification: Getty Images\u2019 Generative AI and Shutterstock\u2019s AI generator. Getty backs generated images with legal protections/indemnification and limits edits to your Getty\u2011generated images or assets from its creative library; Shutterstock offers indemnity depending on plan and whether content passed human review. Great for ads, websites, and collateral when legal cover matters. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai))\n\n- Best photorealism and creative range (accept some policy trade\u2011offs): Midjourney. Excellent quality and styles, but business accounts over $1M revenue must be on Pro or Mega to use assets commercially, and its ToS grants Midjourney a broad license to your inputs/outputs\u2014so avoid putting sensitive data in prompts. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially))\n\n- Strong text\u2011in\u2011image (posters, packaging, typography): Ideogram. Allows commercial use of outputs; also offers a self\u2011hosted commercial license if you want to run models privately. ([ideogram.ai](https://ideogram.ai/licensing/))\n\n- Private/control over data (no vendor logs), lowest cost at scale: Run Stable Diffusion locally (SDXL/SD3.5). SDXL uses the OpenRAIL++ license (permits commercial use); newer SD3.x models use Stability\u2019s Community License\u2014commercial use is free for small businesses up to a revenue threshold, above which an enterprise license is required. No indemnification, so you own the risk. ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n\n- Already using ChatGPT? Use DALL\u00b7E via ChatGPT Business/Enterprise or the OpenAI API. You own the image outputs under OpenAI\u2019s Terms; OpenAI now provides output IP indemnity for API customers and for ChatGPT Business/Enterprise (with conditions). ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000))\n\nQuick chooser\n- Need the safest legal footing for ads or larger campaigns: Adobe Firefly or Getty/Shutterstock. ([wwwimages2.adobe.com](https://wwwimages2.adobe.com/content/dam/cc/en/legal/servicetou/adobe-generative-ai-product-specific-terms-en-us-20250617.pdf))\n- Fastest way to get decent social graphics without leaving your design tool: Canva. ([canva.com](https://www.canva.com/policies/content-license-agreement/?msockid=37d159e820876ec208174eec21aa6fad&utm_source=openai))\n- Highest visual quality and artistic variety: Midjourney. Check its commercial terms first. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially))\n- Tight budget, privacy, or offline needs: Stable Diffusion locally. ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n- Crisp lettering/logos on signage and ads: Ideogram. ([ideogram.ai](https://ideogram.ai/licensing/))\n- If your team already uses ChatGPT or the API and wants a single vendor with some legal cover: OpenAI (DALL\u00b7E). ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000))\n\nWhat to watch before you decide\n- Commercial rights and indemnification: Not all tools indemnify small\u2011business plans. Adobe\u2019s Firefly indemnity applies only to eligible plans/features; Canva indemnifies only Enterprise; OpenAI offers output indemnity for API and Business/Enterprise; Getty/Shutterstock spell out when they indemnify AI outputs. ([wwwimages2.adobe.com](https://wwwimages2.adobe.com/content/dam/cc/en/legal/servicetou/adobe-generative-ai-product-specific-terms-en-us-20250617.pdf))\n- Data/privacy: Some services may use your prompts/outputs to improve models unless you opt out; OpenAI allows opt\u2011out in its Terms. If confidentiality matters, prefer tools with opt\u2011out or local generation. ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000))\n- Policy constraints: Getty restricts AI modifications to Getty\u2011generated images or its licensed library; Midjourney\u2019s business revenue rule; Stability\u2019s revenue thresholds on SD3.x. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai/generation/faqs))\n\nIf you tell me:\n- what you\u2019ll create (social posts, ads, product shots, packaging, blog art),\n- where it will run (paid ads, print, web),\n- whether you need indemnification,\nI can recommend one stack and setup steps tailored to your business.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 5,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "DALL-E",
+          "position": 6,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 1,
@@ -10154,9 +10503,25 @@
     },
     {
       "answer": "Short answer\n- Want the safest \u201cbrand\u2011safe\u201d option with legal cover? Use Adobe Firefly for Business (in Express/Photoshop) or Getty Images\u2019 Generative AI/iStock Generative AI. Both are trained on licensed data and include contractual IP indemnification on qualifying plans. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Want the easiest all\u2011in\u2011one marketing tool with templates? Canva Pro with Magic Media. It\u2019s great for social graphics and quick edits, but you don\u2019t get exclusivity or indemnification. ([canva.com](https://www.canva.com/policies/ai-product-terms-2023-10-04/?utm_source=openai))\n- Want the most striking, creative images and you\u2019re comfortable managing IP risk yourself? Midjourney (paid plan). Commercial use is allowed, but companies over $1M annual revenue must be on Pro or Mega; there\u2019s no indemnity. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially?utm_source=openai))\n\nHow I\u2019d choose for a small business\n- If you run ads, packaging, or anything public\u2011facing where legal risk matters:\n  - Adobe Firefly for Business (via Adobe Express/Photoshop). Firefly models are trained on Adobe Stock and other permitted sources; qualifying business/enterprise plans offer IP indemnification for generated content. Good image quality plus robust editing. ([adobe.com](https://www.adobe.com/ai/overview/firefly/gen-ai-approach.html?utm_source=openai))\n  - Getty Images Generative AI (and Generative AI by iStock). Trained exclusively on licensed Getty/iStock content with indemnification (Getty advertises starting at $50,000 per generated image). Strong for brand\u2011safe marketing imagery. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n  - Shutterstock AI. Offers indemnification on certain enterprise plans or when images pass human review. Solid if you already license stock from Shutterstock. ([shutterstock.com](https://www.shutterstock.com/cs/press/20505?utm_source=openai))\n\n- If speed and do\u2011it\u2011yourself design matters more than legal bells and whistles:\n  - Canva Pro + Magic Media. Fast creation, tons of templates, background/retouch tools, and text\u2011to\u2011image inside the same editor your team probably knows. Note: Canva allows commercial use under its AI terms, but outputs aren\u2019t exclusive and Canva doesn\u2019t guarantee clearance if an output resembles an existing work. ([canva.com](https://www.canva.com/policies/ai-product-terms-2023-10-04/?utm_source=openai))\n\n- If you want the highest \u201cwow\u201d factor images for socials, moodboards, posters:\n  - Midjourney. Industry\u2011leading visual quality and stylization; straightforward subscriptions. Ensure you\u2019re on the correct tier for your company size; there\u2019s no IP indemnity. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially?utm_source=openai))\n\n- If you already use Google Cloud and have dev help:\n  - Vertex AI Imagen 3. Strong photorealism and editing with Google\u2019s \u201ctraining\u2011data\u201d indemnification on listed services (including Imagen APIs). Best when you\u2019ll integrate generation into apps or automated workflows. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n\nAlso worth a look (specific needs)\n- Ideogram: unusually good at accurate text on images (posters, signage, logos). Commercial licensing is available for self\u2011serve or enterprise. ([ideogram.ai](https://ideogram.ai/licensing/?utm_source=openai))\n- OpenAI (ChatGPT/DALL\u00b7E in ChatGPT or the API): you own the output under current terms, but OpenAI does not promise indemnity; good for quick concepting if you already pay for ChatGPT. ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000&utm_source=openai))\n\nWhat to watch before you decide\n- Indemnification and training data: If your business is risk\u2011averse, prioritize tools that (a) disclose licensed training data and (b) contractually indemnify you (Adobe Firefly Business/Enterprise, Getty/iStock, Google Vertex AI services on the indemnified list, some Shutterstock plans). ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Usage rights and visibility: Midjourney and some creator platforms may license or display your public generations unless you use private modes; read the terms if confidentiality matters. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32083055291277-Terms-of-Service?utm_source=openai))\n- \u201cPersonal use only\u201d flags: Microsoft Designer\u2019s consumer app is generally for personal, non\u2011commercial use; don\u2019t rely on it for business assets. ([support.microsoft.com](https://support.microsoft.com/en-us/Designer/frequently-asked-questions-about-microsoft-designer?utm_source=openai))\n\nA simple recommendation\n- Most small businesses will be happiest starting with Adobe Express (Firefly inside) or Canva Pro:\n  - Pick Adobe Express if you want maximum brand safety and may grow into enterprise indemnification later. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n  - Pick Canva Pro if you want the fastest path from idea to finished social/print assets with minimal learning curve. ([canva.com](https://www.canva.com/en_gb/help/using-canva-to-create-products-for-sale/?query=edit&utm_source=openai))\n- Add Midjourney for hero images when you need extra visual punch. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870375276557-Using-Images-Videos-Commercially?utm_source=openai))\n- If your work is highly regulated or widely distributed, consider Getty/iStock\u2019s Generative AI for the extra indemnity. ([gettyimages.co.uk](https://www.gettyimages.co.uk/ai?utm_source=openai))\n\nIf you share a bit about what you\u2019re creating (ads vs. product photos vs. social), where the images will appear, and your monthly budget, I can give you a one\u2011line pick and setup checklist.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 3,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 2,
@@ -10182,9 +10547,30 @@
     },
     {
       "answer": "Short answer: pick the tool that matches your risk tolerance, workflow, and what you\u2019re creating most often. Here\u2019s a trustworthy, small\u2011business\u2011friendly short list.\n\nIf you want maximum legal safety\n- Getty Images \u2013 Generative AI by Getty Images: Trained only on licensed content, comes with a standard Getty license and legal indemnification for outputs (some plans note coverage up to about $50,000 per image). Best when brand/legal risk is a concern. ([gettyimages.com.au](https://www.gettyimages.com.au/ai/generation/faqs?utm_source=openai))\n- Shutterstock AI Generator: Offers enterprise plans where AI images that pass human review are indemnified and licensed like regular stock; it now runs on DALL\u00b7E tech. Good for campaigns and paid media with approvals. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/11962590-are-my-images-indemnified?utm_source=openai))\n- Adobe Firefly (via Creative Cloud/Express for Teams): Firefly is trained on Adobe Stock + public\u2011domain/licensed content and is designed for commercial use; qualifying business plans include IP indemnification for specified Firefly workflows. Great if you already use Photoshop/Illustrator/Express. ([adobe.com](https://www.adobe.com/ai/overview/firefly/gen-ai-approach.html?utm_source=openai))\n\nIf you need fast social posts and simple design\n- Canva Magic Media: Easy, template\u2011driven editor; AI outputs can be used commercially under Canva\u2019s AI Product Terms (non\u2011exclusive, subject to license rules). Ideal for social graphics and quick ads; not meant for logos/trademarks. ([canva.com](https://www.canva.com/policies/ai-product-terms/?msockid=238cdcc3ad6b613100b6ca1bac076080&utm_source=openai))\n- Note: Microsoft Designer\u2019s consumer web/app is generally licensed for personal, non\u2011commercial use; don\u2019t rely on it for business unless you\u2019re in a Microsoft 365/Copilot context that explicitly permits commercial use. ([support.microsoft.com](https://support.microsoft.com/en-us/Designer/frequently-asked-questions-about-microsoft-designer?utm_source=openai))\n\nIf you want the best \u201cwow\u201d images for ads and concepts\n- Midjourney: Top-tier visual quality for concept art/ads. For privacy, use Pro/Mega to enable Stealth mode. If your company\u2019s annual gross revenue exceeds $1M, you must be on Pro or Mega to use outputs commercially. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32019750070669-Stealth-Mode?utm_source=openai))\n\nIf you need API access or to embed image gen in your app/stack\n- OpenAI (DALL\u00b7E 3 / GPT Image API): Easy to integrate; you own the images you generate. OpenAI\u2019s service terms include IP\u2011infringement indemnification for API customers (with conditions). Also supports provenance signals (C2PA) in generated media. ([openai.com](https://openai.com/index/dall-e-3/?utm_source=openai))\n\nIf you need crisp text in images (posters, menus, covers)\n- Ideogram: Strongest text rendering among mainstream tools; hosted plans allow commercial use of generated images (review TOS for public vs private sharing). Use it to place precise, readable words in designs. ([ideogram.ai](https://ideogram.ai/features/text-rendering/?utm_source=openai))\n\nHow to choose in 30 seconds\n- Need the safest path for ads or large distribution? Start with Getty or Shutterstock (indemnification + clear licenses). ([gettyimages.com.au](https://www.gettyimages.com.au/ai/generation/faqs?utm_source=openai))\n- Already in Adobe? Use Firefly inside Photoshop/Express for product shots, background swaps, and on\u2011brand creatives. ([adobe.com](https://www.adobe.com/ai/overview/firefly/gen-ai-approach.html?utm_source=openai))\n- Want striking ad visuals and moodboards? Midjourney (use Pro with Stealth if privacy matters). ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32019750070669-Stealth-Mode?utm_source=openai))\n- Building the capability into your website/app? Use OpenAI\u2019s image API for flexible workflows and indemnity coverage under the API terms. ([openai.com](https://openai.com/policies/service-terms/?utm_source=openai))\n- Cranking social posts fast with templates? Canva Magic Media. ([canva.com](https://www.canva.com/policies/ai-product-terms/?msockid=238cdcc3ad6b613100b6ca1bac076080&utm_source=openai))\n\nImportant small\u2011print tips\n- Avoid using any generator to create final logos or trademarks; most licenses restrict that and you\u2019ll want human\u2011created, ownable marks. Stock\u2011style licenses typically prohibit trademark use. ([shutterstock.com](https://www.shutterstock.com/help/en/articles/10617089-shutterstock-standard-image-license-vs-enhanced-image-license?utm_source=openai))\n- Don\u2019t depict real people or public figures without rights/consent; some models block this by policy. ([openai.com](https://openai.com/index/dall-e-3/?utm_source=openai))\n- Keep records: save prompts, outputs, and the plan/license you used\u2014especially for ads and paid media.\n\nIf you tell me your top use cases (e.g., social ads, Amazon product photos, posters, blog art) and your monthly budget, I\u2019ll narrow this to a single pick and setup plan.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Adobe Firefly",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Canva",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 4,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 3,
@@ -10208,9 +10594,25 @@
     },
     {
       "answer": "Short answer\n- Most small businesses: Adobe Firefly for Teams (commercial\u2011safe, easy to roll out, and includes IP indemnification on eligible workflows). ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Best \u201cwow\u201d visuals with minimal prompting: Midjourney Pro (turn on Stealth for privacy; required if your company revenue is >$1M). ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870484040333-Comparing-Midjourney-Plans?utm_source=openai))\n- For automations, websites, or apps: OpenAI image generation in ChatGPT Team/Enterprise or the API (you own the outputs under OpenAI\u2019s terms). ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000&utm_source=openai))\n- Need maximum control or to keep content off the cloud: run Stable Diffusion XL locally (commercial use allowed under the model license; larger firms may need a Stability AI commercial license). ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n\nHow to choose in 60 seconds\n- Do you need contractual IP protection? Pick Adobe Firefly for Teams; Adobe offers IP indemnification on covered Firefly features in business plans. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Is visual style/realism your top priority? Pick Midjourney. Use a Pro or Mega plan to own assets if your company makes over $1M/year, and enable Stealth so work isn\u2019t public. Plans run about $10/$30/$60/$120 per month; Pro adds Stealth. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/27870484040333-Comparing-Midjourney-Plans?utm_source=openai))\n- Will you generate images via workflows, forms, or your website/app? Use OpenAI\u2019s Images via the API or ChatGPT Team/Enterprise; outputs are yours to use commercially per OpenAI terms. ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000&utm_source=openai))\n- Need Google Cloud governance or already on Vertex AI? Use Google\u2019s Gemini Image models on Vertex AI; Google provides copyright indemnification for designated Generative AI services (historically including Vertex AI\u2019s Imagen APIs\u2014confirm current coverage for Gemini Image when you buy). Also note Google has deprecated older Imagen endpoints as of August 17, 2026. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- Want no per\u2011image fees and full privacy? Run SDXL locally (Automatic1111/ComfyUI). The SDXL license permits commercial use; Stability AI requires an enterprise license if your org\u2019s annual revenue exceeds $1M. ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n\nQuick starter stacks that work\n- Brand\u2011safe marketing and social: Adobe Express/Photoshop with Firefly for Teams; add Midjourney Pro for concepting and hero visuals. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- Automation\u2011first (ecommerce, CRM, CMS): OpenAI Images API for generation + your CMS; optionally add Firefly for final polishing inside Adobe apps. ([openai.com](https://openai.com/index/image-generation-api/?utm_source=openai))\n- Regulated/IT\u2011controlled: Vertex AI Gemini Image for generation under Google Cloud controls and logs; check indemnification applies to your chosen model. ([cloud.google.com](https://cloud.google.com/terms/generative-ai-indemnified-services/index-20240221?utm_source=openai))\n- Private/on\u2011prem: SDXL locally with ComfyUI; use licensed assets for training/reference to reduce risk. ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n\nLicensing and safety gotchas to know before you pay\n- Midjourney is public by default; anyone can view/remix public generations. Use Stealth (Pro/Mega) or private channels for client work. If your company\u2019s revenue is >$1M, Midjourney requires Pro/Mega for commercial use. ([docs.midjourney.com](https://docs.midjourney.com/hc/en-us/articles/32019750070669-Stealth-Mode?utm_source=openai))\n- Adobe offers contractual IP indemnity only on eligible Firefly workflows and plans\u2014read plan details and terms. ([business.adobe.com](https://business.adobe.com/products/firefly-business/firefly-ai-approach.html?utm_source=openai))\n- OpenAI assigns you rights in outputs, but you\u2019re responsible for how you use them\u2014standard practice across tools. ([openai.com](https://openai.com/policies/terms-of-use/?fpc=39.29.365.3ee9646d6020430T.1722907241000&utm_source=openai))\n- Google has been migrating from Imagen to Gemini Image models; confirm pricing and indemnification for the exact model you select in Vertex AI. ([ai.google.dev](https://ai.google.dev/gemini-api/docs/image-generation?authuser=108&hl=en&utm_source=openai))\n- SDXL and many open models permit commercial use, but some community checkpoints have their own extra restrictions\u2014verify licenses for any model you download. ([github.com](https://github.com/Stability-AI/generative-models/blob/main/model_licenses/LICENSE-SDXL1.0?utm_source=openai))\n\nIf you tell me:\n- what you\u2019re making (product photos, ads, brand assets, blog art, etc.),\n- volume per month, and\n- whether you need indemnification or an API,\nI can narrow this to a single tool and plan.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Midjourney",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Stable Diffusion",
+          "position": 2,
+          "sentiment": "neutral"
+        },
+        {
+          "name": "Imagen",
+          "position": 3,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "chatgpt",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 4,
@@ -10287,9 +10689,35 @@
     },
     {
       "answer": "For most small businesses, **Canva AI** is the best default choice because it is the easiest all-around option for quickly making social posts, email graphics, and simple web visuals, and it is also the top-rated small-business leader in G2\u2019s category list.[1][6] If your main need is **higher-quality product mockups** or more control over image style, **Leonardo.ai** is a strong alternative, while **Midjourney** is better when campaign visuals and creative quality matter more than ease of use.[1]\n\nA practical way to choose:\n\n- **Canva AI** \u2014 best for speed, templates, and teams already using Canva.[1][19]\n- **Leonardo.ai** \u2014 best for product visuals and budget-conscious teams that want more control.[1]\n- **Midjourney** \u2014 best for standout marketing concepts and premium-looking creative assets.[1][8]\n- **Adobe Firefly** \u2014 best when commercial-use confidence and brand-safe workflows matter most.[12][15]\n- **ChatGPT image generation** \u2014 best for ease of use and prompt understanding, especially if you already use ChatGPT.[4][14]\n\nIf you want the simplest recommendation: **use Canva AI unless your business needs more advanced product imagery or higher-end creative output**.[1][6]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled\nSessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs\" SessionEnd] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 0,
@@ -10323,9 +10751,35 @@
     },
     {
       "answer": "For most small businesses, **Canva AI** is the best default choice because it is fast, affordable, and fits everyday marketing work like social posts, emails, and simple web graphics.[1][6] If your business needs more polished product visuals or stronger creative control, **Leonardo.ai** is a strong second pick.[1]\n\nA practical way to choose is:\n\n- **Canva AI** \u2014 best for the *easiest all-around workflow* and teams already making marketing assets in Canva.[1][6]\n- **Leonardo.ai** \u2014 best for **product mockups** and budget-conscious teams that want more image control.[1]\n- **Midjourney** \u2014 best for **high-impact campaign visuals** when image quality matters more than ease of use.[1]\n- **ChatGPT image generation** \u2014 best if you want strong overall ease of use and good general quality, especially if you already use ChatGPT.[4]\n- **Adobe Firefly** \u2014 best if your priority is *commercially safer* advertising-style work and Adobe ecosystem integration.[12][14]\n\nIf you want one straightforward recommendation: **start with Canva AI**, then switch only if you hit its limits on realism, control, or brand consistency.[1][7]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 5,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: SessionEnd hook [node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs\"] failed: Hook cancelled",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 1,
@@ -10359,9 +10813,40 @@
     },
     {
       "answer": "For most small businesses, **Canva AI** is the best default choice because it is the easiest all-around option for fast social posts, email graphics, and simple web visuals, and G2 lists Canva as the leader for small-business AI image generators.[1][6]\n\nIf your business needs are more specific, a better fit may be:\n\n- **Canva AI** \u2014 best for speed and teams that already use Canva for marketing content.[1][19]\n- **Leonardo.ai** \u2014 best for product mockups and more control on a budget.[1]\n- **Midjourney** \u2014 best for high-impact campaign visuals when image quality matters most and you can tolerate more learning friction.[1]\n- **Adobe Firefly** \u2014 best if commercial-use clarity and brand-safe workflows are a priority.[12][14]\n- **ChatGPT image generation** \u2014 best for ease of use and overall quality, especially if you already use ChatGPT.[4][14]\n- **Ideogram** \u2014 best when you need readable text inside images, like posters or ad creatives.[11][12]\n\nIf you want one practical recommendation, start with **Canva AI** unless you specifically need better product imagery or more advanced creative control.[1][7]\n\nFor a small business choosing quickly, a simple rule works well: use **Canva AI** for everyday marketing, **Leonardo.ai** for product-focused visuals, and **Midjourney** for standout campaign art.[1]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 4,
+          "sentiment": "positive"
+        },
+        {
+          "name": "DALL-E",
+          "position": 5,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Ideogram",
+          "position": 6,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 2,
@@ -10395,9 +10880,30 @@
     },
     {
       "answer": "For most small businesses, **Canva AI** is the best default choice because it\u2019s fast, easy to learn, and works well for social posts, email graphics, and web visuals.[1][6] If you need more creative control or stronger product mockups, **Leonardo.ai** is a strong second choice, while **Midjourney** is better when visual quality and campaign-style images matter more than ease of use.[1]\n\nA practical way to choose:\n\n- **Canva AI** \u2014 best all-around for small teams that already make marketing content and want speed over deep editing control.[1][6]\n- **Leonardo.ai** \u2014 best for product visuals, mockups, and budget-conscious teams that want more control.[1][2]\n- **Midjourney** \u2014 best for high-impact ad concepts and polished creative imagery, but it has more learning friction.[1][8]\n- **ChatGPT / GPT image tools** \u2014 good for overall ease of use and general-purpose image generation.[4][14]\n- **Adobe Firefly** \u2014 a better pick if *commercial safety and brand workflow* matter a lot, especially for businesses already in Adobe tools.[12][14]\n\nIf you want the simplest recommendation: **pick Canva AI unless your main need is product mockups or higher-end campaign visuals**.[1][7] If you tell me your business type and where you\u2019ll use the images, I can narrow it to one best option.",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 4,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 3,
@@ -10431,9 +10937,30 @@
     },
     {
       "answer": "For most small businesses, **Canva AI** is the best default choice because it is the easiest all-around option for fast social, email, and web graphics, and it sits in the common small-business price range.[1][6][7] If your main need is **product mockups** or more visual control, **Leonardo.ai** is a stronger pick; if you want **high-impact campaign visuals**, **Midjourney** is often better, but it comes with more learning friction.[1]\n\nA practical way to choose is:\n\n- **Canva AI** \u2014 best for everyday marketing assets, especially if your team already uses Canva.[1][6][19]\n- **Leonardo.ai** \u2014 best for product visuals and budget-conscious teams that want more control.[1]\n- **Midjourney** \u2014 best for standout creative concepts and ad-style imagery, but less beginner-friendly.[1][8]\n- **Adobe Firefly** \u2014 best when you want clearer commercial-use comfort and you already work in Adobe tools.[12][18]\n- **ChatGPT / DALL\u00b7E-style image generation** \u2014 good for ease of use and general quality, especially for simple business graphics.[4][10][15]\n\nIf you want the shortest recommendation: **start with Canva AI**, then switch only if you hit a specific limit in quality, control, or branding consistency.[1][7]",
-      "brands": [],
+      "brands": [
+        {
+          "name": "Canva",
+          "position": 1,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Leonardo AI",
+          "position": 2,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Midjourney",
+          "position": 3,
+          "sentiment": "positive"
+        },
+        {
+          "name": "Adobe Firefly",
+          "position": 4,
+          "sentiment": "positive"
+        }
+      ],
       "engine": "perplexity",
-      "error": "extract failed: claude-cli: exit 1: You've hit your session limit \u00b7 resets 2:30pm (America/New_York)",
+      "error": null,
       "question_id": "q15",
       "refused": false,
       "run_index": 4,
@@ -10469,23 +10996,31 @@
   "extractor": "claude-cli",
   "method_version": 1,
   "quarantined": [
+    "AI Ultra",
+    "AWS Bedrock Titan Image Generator",
     "AdStellar",
     "Adobe Creative Cloud",
     "Adobe Express Logo Maker",
     "Adobe Firefly Free",
     "Adobe Firefly for Business",
+    "Adobe Firefly for Business",
+    "Adobe Firefly for Teams",
+    "Adobe Firefly for Teams",
     "Adobe Illustrator/Express",
-    "Alibaba",
+    "Adobe Photoshop/Illustrator",
+    "Alibaba/Tongyi",
     "Amazon Bedrock",
     "Apple Intelligence",
     "Apple Photos",
     "Apple Photos",
     "Apple Photos Clean Up",
-    "Arena.ai",
+    "Azure OpenAI",
+    "Azure OpenAI",
     "BFL",
     "BFL",
     "Bing",
     "Black Forest Labs FLUX",
+    "Black Forest Labs FLUX.2",
     "Black Forest Labs FLUX.2",
     "BrandCrowd",
     "ByteDance",
@@ -10497,13 +11032,17 @@
     "Canva Magic Studio / Magic Media",
     "Canva Magic Studio / Magic Media",
     "Canva Magic Studio/Magic Media",
-    "ChatGPT / DALL\u00b7E 3",
+    "ChatGPT / DALL\u00b7E-style image generation",
     "ChatGPT / GPT Image",
     "ChatGPT / GPT Image",
+    "ChatGPT / GPT image tools",
+    "ChatGPT / OpenAI's image generator",
     "ChatGPT / OpenAI's image generator",
     "ChatGPT Images / GPT Image",
     "ChatGPT Images / GPT-4o",
+    "ChatGPT Team/Enterprise",
     "ChatGPT image / GPT-image-1",
+    "ChatGPT's image generator",
     "ChatGPT's image generator (DALL\u00b7E in ChatGPT)",
     "ChatGPT/ChatGPT Images",
     "ChatGPT/GPT Image",
@@ -10512,6 +11051,7 @@
     "Cleanup.pictures",
     "Clipdrop",
     "Copilot Image Creator",
+    "Copilot Images",
     "Craiyon",
     "Creatify",
     "Creatify",
@@ -10520,14 +11060,11 @@
     "Creatify AI",
     "Creatify AI",
     "Creative Cloud",
-    "Creative Cloud",
     "DALL\u00b7E inside ChatGPT",
     "Datacamp",
     "Diffusers",
     "Diffusers",
     "Envato Elements",
-    "Express",
-    "Express",
     "FLUX Schnell",
     "FLUX-based tools",
     "FLUX-style tools",
@@ -10538,22 +11075,19 @@
     "Fiverr Logo Maker",
     "Flair.ai",
     "Flux Klein",
-    "Flux open weights",
     "Forge",
     "GPT Image 2 / ChatGPT Images",
     "GPT Image 2 / OpenAI image generation",
-    "GPT Image API",
     "Gemini API",
-    "Gemini-based editing",
-    "Gemini/Nano Banana",
-    "Generative Fill",
-    "Getty",
     "Getty",
     "Getty Generative AI",
     "Getty Images' AI Generator",
     "GlyphControl",
     "Google AI Studio",
     "Google Cloud",
+    "Google Cloud",
+    "Google Cloud Vertex AI Imagen",
+    "Google Flow",
     "Google Flow",
     "Google Gemini \"Nano Banana\"",
     "Google Gemini / Nano Banana Pro",
@@ -10561,60 +11095,65 @@
     "Google Imagen on Vertex AI",
     "Google Imagen via Vertex AI",
     "Google Nano Banana",
-    "Google Nano Banana Pro",
     "Google Nano Banana Pro / Gemini",
     "Google Photos Magic Editor / \u201cNano Banana\u201d",
     "Google Vertex AI",
+    "Google Vertex AI",
+    "Google Vertex AI",
+    "Google Vertex AI",
     "Google Vertex AI Imagen",
+    "Google Vertex AI Imagen",
+    "Google's Gemini image models",
+    "Google's Nano Banana",
     "Google's Nano Banana",
     "Google's Nano Banana (Gemini 2.5 Flash Image)",
+    "Google's Nano Banana Pro",
+    "Google's Nano Banana Pro",
+    "Google's Nano Banana Pro",
     "Google's Nano Banana Pro (Gemini 3 Pro Image)",
-    "Google's Nano Banana Pro (Gemini 3 Pro Image)",
-    "Google's Nano Banana/Nano Banana 2",
+    "Hugging Face Spaces",
     "HunyuanImage",
     "HunyuanImage 3.0",
+    "HunyuanImage 3.0",
+    "HunyuanImage 3.0",
     "Hunyuan\u2011DiT",
-    "IP\u2011Adapter",
-    "IP\u2011Adapter",
-    "IP\u2011Adapter",
-    "IP\u2011Adapter",
     "ImageFX",
     "ImageFX",
     "ImageFX",
-    "InstantStyle",
+    "Imagen 4 / Imagen 4 Ultra",
     "Kandinsky 3",
     "Kittl",
-    "Kling",
     "LTX Studio",
     "LTX Studio",
     "LTX Studio",
-    "LoRA",
-    "LoRA",
-    "LoRA",
     "Logo.com",
     "Mage.Space",
     "Mage.space",
     "Microsoft Azure OpenAI / Copilot (Designer/Image Creator)",
     "Microsoft Bing Image Creator",
+    "Microsoft Bing Image Creator",
     "Microsoft Copilot Designer",
     "Microsoft Copilot's Image Creator",
+    "Microsoft Copilot/Designer",
     "Microsoft Copilot/Designer Image Creator",
-    "Microsoft Designer/Copilot Images",
     "Microsoft Photos",
     "Microsoft's Bing Image Creator",
-    "Microsoft's Bing Image Creator",
+    "NVIDIA",
     "NVIDIA",
     "Niji",
+    "OpenAI Enterprise/API",
     "OpenAI GPT Image",
     "OpenAI GPT Image 2",
-    "OpenAI GPT Image 2",
     "OpenAI GPT-Image 2",
+    "OpenAI Images",
+    "OpenAI Images",
     "OpenAI Images",
     "OpenAI Images",
     "OpenAI Images (API/Enterprise)",
     "OpenAI's DALL\u00b7E 3 / ChatGPT image generation",
     "OpenAI's GPT Image",
     "OpenAI's GPT Image (in ChatGPT)",
+    "OpenAI's GPT Image 2",
     "OpenAI's image model (ChatGPT/API)",
     "OpenArt",
     "OpenArt",
@@ -10624,7 +11163,6 @@
     "Photoroom",
     "PixArt\u2011\u03a3 (Sigma)",
     "Pixelcut",
-    "Premiere",
     "Recraft Studio",
     "Recraft V4 Vector",
     "Retouch4me",
@@ -10632,21 +11170,25 @@
     "Reve",
     "Reve",
     "Runway",
-    "Runway",
+    "Runway Gen\u20113",
     "Samsung Galaxy",
+    "Seedream v5.0 Lite",
     "Seedream v5.0 Lite",
     "Shutterstock AI Generator",
     "Shutterstock AI Generator",
     "Shutterstock AI Image Generator",
     "Shutterstock Generative AI",
+    "Shutterstock's AI tools",
     "Sozee",
+    "Stability AI Platform",
     "Stability AI Stable Diffusion 3",
+    "Stable Diffusion 3 Medium",
     "Stable Diffusion 3 Medium",
     "Stable Diffusion 3.x",
     "Stable Diffusion XL",
+    "Stable Diffusion XL",
     "Tencent",
     "TextDiffuser\u20112",
-    "Tongyi",
     "Tongyi-MAI",
     "Topaz Photo",
     "Topaz Photo",
@@ -10655,13 +11197,14 @@
     "Topaz Photo AI",
     "TouchRetouch",
     "USPTO",
-    "Veo",
     "Vertex AI",
     "Vertex AI",
-    "Zapier",
+    "Vertex AI",
+    "Vertex AI Imagen 3",
     "Zapier",
     "ZeroTwo",
-    "ZeroTwo"
+    "ZeroTwo",
+    "iStock AI Generator"
   ],
   "run_date": "2026-08-24",
   "runs_per_question": 5
