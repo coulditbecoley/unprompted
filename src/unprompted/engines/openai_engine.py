@@ -11,6 +11,11 @@ from .base import SYSTEM_PROMPT, Engine
 
 MODEL = "gpt-5"
 WEB_SEARCH_TOOL = {"type": "web_search"}
+# A web-search answer runs long, but not this long. Without an explicit cap the
+# SDK default plus three retries can hold a worker for the whole job timeout,
+# and six wedged workers stall the run behind them. Perplexity already caps at
+# 90s; this is the same idea with more headroom for search.
+TIMEOUT_SECONDS = 180
 
 
 class OpenAIEngine(Engine):
@@ -20,7 +25,7 @@ class OpenAIEngine(Engine):
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         from openai import OpenAI
 
-        client = OpenAI(api_key=self.api_key)
+        client = OpenAI(api_key=self.api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
         response = client.responses.create(
             model=MODEL,
             instructions=SYSTEM_PROMPT,

@@ -9,6 +9,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { load as loadYaml } from "js-yaml";
+
 import { CATEGORIES, getCategory as getCategoryFromRegistry } from "./categories";
 
 export const REPO_ROOT = process.cwd();
@@ -32,6 +34,12 @@ export type RunRecord = {
   method_version: number;
   runs_per_question: number;
   engines: string[];
+  /**
+   * Which reader turned the answers into structured data. Optional because runs
+   * archived before the field existed do not carry it, and the archive is
+   * append-only, so those files are never backfilled.
+   */
+  extractor?: string;
   extractions: Extraction[];
   quarantined: string[];
 };
@@ -67,6 +75,37 @@ function answered(run: RunRecord): Extraction[] {
   return run.extractions.filter((e) => !e.error && !e.refused);
 }
 
+/**
+ * Is this parsed JSON actually a run record?
+ *
+ * `as RunRecord` is an assertion, not a check: it tells the compiler to stop
+ * asking and does nothing at runtime. Every number on the site is derived from
+ * these files, so a truncated write or a hand edit would either crash the build
+ * or, worse, produce a board computed from a partial record. The shape is small
+ * and fixed, so this is a guard rather than a schema dependency.
+ */
+function isRunRecord(v: unknown): v is RunRecord {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return (
+    typeof r.category === "string" &&
+    typeof r.run_date === "string" &&
+    typeof r.method_version === "number" &&
+    typeof r.runs_per_question === "number" &&
+    Array.isArray(r.engines) &&
+    Array.isArray(r.extractions) &&
+    r.extractions.every(
+      (e) =>
+        typeof e === "object" &&
+        e !== null &&
+        Array.isArray((e as Extraction).brands) &&
+        (e as Extraction).brands.every(
+          (b) => typeof b?.name === "string" && typeof b?.position === "number",
+        ),
+    )
+  );
+}
+
 export function loadHistory(category: string): RunRecord[] {
   if (!fs.existsSync(RUNS_DIR)) return [];
   const dates = fs
@@ -77,9 +116,25 @@ export function loadHistory(category: string): RunRecord[] {
   const runs: RunRecord[] = [];
   for (const date of dates) {
     const file = path.join(RUNS_DIR, date, `${category}.json`);
-    if (fs.existsSync(file)) {
-      runs.push(JSON.parse(fs.readFileSync(file, "utf-8")) as RunRecord);
+    if (!fs.existsSync(file)) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
+    } catch {
+      throw new Error(`${file} is not valid JSON`);
     }
+    // Loud, not silent. A skipped week would quietly change every published
+    // number and every week-over-week delta derived from it; a failed build is
+    // the cheaper failure.
+    if (!isRunRecord(parsed)) {
+      throw new Error(`${file} is not a well-formed run record`);
+    }
+    if (parsed.category !== category || parsed.run_date !== date) {
+      throw new Error(
+        `${file} declares ${parsed.category}/${parsed.run_date}, which does not match its path`,
+      );
+    }
+    runs.push(parsed);
   }
   return runs;
 }
@@ -229,19 +284,26 @@ export function sourceCounts(run: RunRecord): Array<[string, number]> {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-/** Rotation across every recorded week, for a brand's history chart. */
+/**
+ * Rotation across every recorded week, for a brand's history chart.
+ *
+ * A week the brand was not named is a zero, not a gap. Dropping those rows made
+ * the sparkline join two non-adjacent weeks with a straight line — drawing a
+ * gentle decline over what was actually a fall to nothing and back — and made
+ * "Weeks tracked" count appearances rather than weeks.
+ */
 export function brandHistory(
   category: string,
   brand: string,
 ): Array<{ date: string; rotation: number; firstShare: number }> {
-  return loadHistory(category)
-    .map((run) => {
-      const row = standings(run).find((s) => s.brand === brand);
-      return row
-        ? { date: run.run_date, rotation: row.rotation, firstShare: row.firstShare }
-        : null;
-    })
-    .filter((x): x is { date: string; rotation: number; firstShare: number } => x !== null);
+  return loadHistory(category).map((run) => {
+    const row = standings(run).find((s) => s.brand === brand);
+    return {
+      date: run.run_date,
+      rotation: row?.rotation ?? 0,
+      firstShare: row?.firstShare ?? 0,
+    };
+  });
 }
 
 export function allBrands(category: string): string[] {
@@ -299,33 +361,46 @@ export type SelfPreference = {
   gap: number;
 };
 
-export function loadAffiliations(category: string): Record<string, string> {
+/**
+ * Brand -> the engines whose vendor makes it.
+ *
+ * A list rather than one name, because a vendor can field more than one engine:
+ * Anthropic answers as both the hosted `claude` API and the local `claude-code`
+ * harness. Counting the second as a rival of the first would understate exactly
+ * the self-preference this publication exists to measure.
+ *
+ * Read with js-yaml, which is already a dependency. The hand-rolled regex this
+ * replaces could only ever see a flat "Brand: engine" line, so it silently
+ * returned nothing for a list and the ownership simply vanished.
+ */
+export function loadAffiliations(category: string): Record<string, string[]> {
   const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
   if (!fs.existsSync(file)) return {};
-  // Deliberately a tiny reader rather than a YAML dependency: the block is a
-  // flat "Brand: engine" map and nothing more.
-  const text = fs.readFileSync(file, "utf-8");
-  // Matched with a multiline regex rather than split on newlines, so the
-  // reader is indifferent to CRLF and never carries a literal newline.
-  const block = /^affiliations:[ \t]*$([\s\S]*?)(?=^\S)/m.exec(text);
-  if (!block) return {};
-  const out: Record<string, string> = {};
-  for (const m of block[1].matchAll(/^[ \t]+(.+?):[ \t]*(\S+)[ \t]*$/gm)) {
-    out[m[1].trim()] = m[2].trim();
+  const parsed = loadYaml(fs.readFileSync(file, "utf-8")) as
+    | { affiliations?: Record<string, string | string[]> }
+    | undefined;
+  const raw = parsed?.affiliations;
+  if (!raw || typeof raw !== "object") return {};
+
+  const out: Record<string, string[]> = {};
+  for (const [brand, owner] of Object.entries(raw)) {
+    if (typeof owner === "string") out[brand] = [owner];
+    else if (Array.isArray(owner)) out[brand] = owner.filter((o) => typeof o === "string");
   }
   return out;
 }
 
 export function selfPreference(
   run: RunRecord,
-  affiliations: Record<string, string>,
+  affiliations: Record<string, string[]>,
 ): SelfPreference[] {
   const answers = run.extractions.filter((e) => !e.error && !e.refused);
   const out: SelfPreference[] = [];
 
   for (const [brand, owner] of Object.entries(affiliations)) {
-    const own = answers.filter((e) => e.engine === owner);
-    const rival = answers.filter((e) => e.engine !== owner);
+    const owners = typeof owner === "string" ? [owner] : owner;
+    const own = answers.filter((e) => owners.includes(e.engine));
+    const rival = answers.filter((e) => !owners.includes(e.engine));
     if (!own.length || !rival.length) continue;
 
     const namedIn = (rows: Extraction[]) =>
@@ -338,7 +413,7 @@ export function selfPreference(
 
     out.push({
       brand,
-      engine: owner,
+      engine: owners.join(", "),
       ownNamed,
       ownRuns: own.length,
       ownRate,
@@ -351,6 +426,43 @@ export function selfPreference(
 
   out.sort((a, b) => b.gap - a.gap);
   return out;
+}
+
+export type HeldRun = { category: string; date: string; errorRate: number };
+
+/**
+ * Runs that failed their checks and were withheld.
+ *
+ * These live in data/held and are deliberately not readable by any public page.
+ * The operator still needs to see them, because a held week is the one thing
+ * that needs a person: it is the pipeline saying it would rather print nothing
+ * than print something wrong.
+ */
+export function loadHeld(): HeldRun[] {
+  const dir = path.join(REPO_ROOT, "data", "held");
+  if (!fs.existsSync(dir)) return [];
+
+  const out: HeldRun[] = [];
+  for (const date of fs.readdirSync(dir).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))) {
+    for (const file of fs.readdirSync(path.join(dir, date))) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const run = JSON.parse(
+          fs.readFileSync(path.join(dir, date, file), "utf-8"),
+        ) as RunRecord;
+        const total = run.extractions.length;
+        const errored = run.extractions.filter((e) => e.error).length;
+        out.push({
+          category: run.category,
+          date: run.run_date,
+          errorRate: total ? errored / total : 0,
+        });
+      } catch {
+        // A corrupt held file must not take the dashboard down.
+      }
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export type QuarantineEntry = { name: string; count: number };

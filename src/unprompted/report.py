@@ -56,6 +56,7 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
     out.append(f"date: {date}")
     out.append(f"method_version: {run['method_version']}")
     out.append(f"engines: {', '.join(run['engines'])}")
+    out.append(f"extractor: {run.get('extractor', 'api')}")
     out.append("---")
     out.append("")
     out.append(f"# {pretty(category)}, week of {date}")

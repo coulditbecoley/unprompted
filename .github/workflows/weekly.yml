@@ -1,10 +1,17 @@
 name: Weekly run
 
-# Tuesday 13:00 UTC. Runs in the cloud so the chart never depends on a laptop
-# being awake: a missing week is worth far more damage than a late one.
+# The schedule is deliberately off.
+#
+# Method v2 includes two local CLI harnesses as engines, signed in to the
+# operator's machine. A GitHub runner cannot be signed in as the operator, so
+# the pipeline's pre-flight refuses to start here and the job could only ever
+# fail. The weekly measurement runs on that machine instead, via
+# scripts\weekly-run.cmd and Windows Task Scheduler.
+#
+# This file is kept, not deleted: it still runs the hosted-only engine set on
+# demand, and restoring the cron is the right move if the CLI engines are ever
+# turned off again (which is itself a method version change).
 on:
-  schedule:
-    - cron: "0 13 * * 2"
   workflow_dispatch:
     inputs:
       category:
@@ -49,10 +56,16 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          # Workflow inputs reach the shell as environment variables, never as
+          # interpolated source. `${{ }}` is substituted before bash parses the
+          # line, so a category string containing shell syntax would run as
+          # shell syntax.
+          CATEGORY: ${{ inputs.category || 'all' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: |
           python -m unprompted.run \
-            --category "${{ inputs.category || 'all' }}" \
-            ${{ inputs.dry_run && '--dry-run' || '' }}
+            --category "$CATEGORY" \
+            ${DRY_RUN:+--dry-run}
         continue-on-error: true
 
       # Exit code 2 means the sanity checks held at least one category. That is
@@ -60,9 +73,10 @@ jobs:
       # is set above and the outcome is branched on rather than failing.
 
       - name: Publish
-        # Categories that passed have already written their files, so publish
-        # runs even when another category was held. Holding one chart must not
-        # withhold the rest of the week.
+        # Runs even when a category was held: holding one chart must not
+        # withhold the rest of the week. This is safe because the hold decision
+        # is made before anything is written — a held run lands in data/held,
+        # which the site does not read — so committing data/ cannot publish it.
         if: always() && !inputs.dry_run
         run: |
           git config user.name "unprompted-bot"
@@ -78,10 +92,16 @@ jobs:
       - name: Hold and notify
         if: steps.measure.outcome != 'success'
         uses: actions/github-script@v7
+        env:
+          # Hold reasons quote brand names extracted from model output, so they
+          # are attacker-influenced text. Passed through the environment rather
+          # than interpolated into this script, where a backtick or ${} would
+          # otherwise be evaluated as JavaScript.
+          HOLD_REASONS: ${{ steps.measure.outputs.reasons }}
         with:
           script: |
             const date = new Date().toISOString().slice(0, 10);
-            const reasons = `${{ steps.measure.outputs.reasons }}`.trim();
+            const reasons = (process.env.HOLD_REASONS ?? "").trim();
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -102,6 +122,10 @@ jobs:
                 '- A brand moved more than 40 points week over week.',
                 '- More than 20% of engine calls errored.',
                 '- The brand count fell outside the expected range.',
+                '- The engine list changed without a method version bump.',
+                '',
+                'The held run is committed under `data/held/` with its answers intact.',
+                'Fix the cause, then re-read it with `python -m unprompted.reextract`.',
               ].join('\n'),
               labels: ['held'],
             });

@@ -212,7 +212,7 @@ class SelfPreference:
     """
 
     brand: str
-    engine: str            # the engine that owns this product
+    engine: str            # the engine, or engines, that own this product
     own_named: int
     own_runs: int
     own_rate: float
@@ -229,14 +229,17 @@ class SelfPreference:
         return {**asdict(self), "gap": self.gap}
 
 
-def self_preference(run: dict, affiliations: dict[str, str]) -> list[SelfPreference]:
+def self_preference(
+    run: dict, affiliations: dict[str, list[str]]
+) -> list[SelfPreference]:
     """For each product with a known owner, compare owner naming to rival naming."""
     answers = _answered(run)
     out: list[SelfPreference] = []
 
     for brand, owner in sorted(affiliations.items()):
-        own = [e for e in answers if e.get("engine") == owner]
-        rival = [e for e in answers if e.get("engine") != owner]
+        owners = [owner] if isinstance(owner, str) else list(owner)
+        own = [e for e in answers if e.get("engine") in owners]
+        rival = [e for e in answers if e.get("engine") not in owners]
         if not own or not rival:
             continue
 
@@ -250,7 +253,7 @@ def self_preference(run: dict, affiliations: dict[str, str]) -> list[SelfPrefere
         out.append(
             SelfPreference(
                 brand=brand,
-                engine=owner,
+                engine=", ".join(owners),
                 own_named=own_named,
                 own_runs=len(own),
                 own_rate=round(own_named / len(own), 4),
@@ -264,9 +267,20 @@ def self_preference(run: dict, affiliations: dict[str, str]) -> list[SelfPrefere
     return out
 
 
-def load_affiliations(path: str | Path) -> dict[str, str]:
-    """Read the brand -> owning-engine map from a category's alias file."""
+def load_affiliations(path: str | Path) -> dict[str, list[str]]:
+    """Read the brand -> owning-engines map from a category's alias file.
+
+    A value may be one engine name or a list of them. A list is needed because
+    one vendor can field more than one engine: Anthropic answers as both the
+    hosted `claude` API and the local `claude-code` harness, and counting the
+    second as a rival of the first would understate exactly the self-preference
+    this publication exists to measure.
+    """
     import yaml
 
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    return data.get("affiliations", {}) or {}
+    raw = data.get("affiliations", {}) or {}
+    return {
+        brand: [owner] if isinstance(owner, str) else list(owner)
+        for brand, owner in raw.items()
+    }

@@ -6,6 +6,8 @@ from .base import SYSTEM_PROMPT, Engine
 
 MODEL = "claude-opus-5"
 MAX_TOKENS = 4096
+# See openai_engine: an uncapped call can hold a worker until the job timeout.
+TIMEOUT_SECONDS = 180
 # Dynamic-filtering web search. Requires Opus 5 / 4.8 / 4.7 / 4.6 or Sonnet 5/4.6.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 4}
 
@@ -18,7 +20,7 @@ class AnthropicEngine(Engine):
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         from anthropic import Anthropic
 
-        client = Anthropic(api_key=self.api_key)
+        client = Anthropic(api_key=self.api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,

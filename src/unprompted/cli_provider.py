@@ -13,9 +13,12 @@ the boundary this is the far side of.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,9 +29,64 @@ REGISTRY = ROOT / "providers.json"
 # wedged process from stalling a 225-call run behind it.
 TIMEOUT_SECONDS = 180
 
-# Same shape the admin route enforces. Re-checked here because this is the side
-# that actually executes, and a file can be edited by hand.
-SAFE_COMMAND = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+# The CLIs this project knows how to talk to, and the exact arguments that make
+# each one read a prompt on stdin. Mirrors KNOWN_CLIS in lib/providers.ts.
+#
+# An allowlist rather than a name pattern, because the arguments are the risk.
+# `python` and `powershell` are both plain executable names that pass any
+# reasonable pattern, and `["-c", "..."]` after either one is a program. This is
+# the side that actually spawns the process, and providers.json can be edited by
+# hand without passing through the admin route at all, so the constraint has to
+# live here too. Adding a CLI is a code change, on purpose.
+# Each entry's arguments are pinned, not merely permitted, because they are the
+# harness's safety settings as much as its plumbing. Every combination below was
+# run against the real binary before being pinned; --help is not evidence. In
+# particular `claude --tools ""`, which the help text says disables all tools,
+# was observed reading a file from disk, so it is deliberately not relied on
+# here. The empty working directory in ask() is what actually holds.
+ALLOWED_CLIS: dict[str, tuple[str, ...]] = {
+    # --strict-mcp-config: no MCP servers from the operator's own config, so the
+    # extraction pass cannot reach whatever tools they have connected.
+    "claude": ("-p", "--strict-mcp-config"),
+    # --ignore-user-config drops hooks and MCP servers; --ignore-rules drops
+    # execpolicy; --sandbox read-only blocks writes from model-generated shell
+    # commands. The trailing "-" makes it read the prompt from stdin and must
+    # stay last.
+    "codex": (
+        "exec",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--sandbox",
+        "read-only",
+        "-",
+    ),
+    # Not installed here, so unverified: left at its documented invocation
+    # rather than given hardening flags nobody has run.
+    "gemini": ("-p",),
+}
+
+
+# What a CLI harness needs to start and find its own credentials, and nothing
+# else. An allowlist rather than a denylist of key names: a denylist has to be
+# updated every time a new secret joins the pipeline's environment, and the one
+# that gets forgotten is the one that leaks.
+#
+# The harnesses authenticate from their own config directories on disk, not from
+# these variables, so dropping the provider keys costs nothing.
+_ENV_ALLOWLIST = (
+    "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "SYSTEMDRIVE", "COMSPEC",
+    "WINDIR", "HOME", "HOMEDRIVE", "HOMEPATH", "USERPROFILE", "USERNAME",
+    "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "TEMP", "TMP", "TMPDIR",
+    "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS", "OS", "LANG", "LC_ALL",
+    # Where the harnesses keep their own auth and settings.
+    "CODEX_HOME", "CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME",
+)
+
+
+def _child_env() -> dict[str, str]:
+    """The environment an extractor process gets: no keys, no tokens."""
+    return {k: v for k, v in os.environ.items() if k in _ENV_ALLOWLIST}
 
 
 class ProviderError(RuntimeError):
@@ -48,15 +106,43 @@ class CliProvider:
         `shutil.which` matters on Windows, where these tools install as `.CMD`
         shims that are not found by bare name.
         """
-        if not SAFE_COMMAND.match(self.command):
-            raise ProviderError(f"{self.id}: unsafe command {self.command!r}")
+        expected = ALLOWED_CLIS.get(self.command)
+        if expected is None:
+            raise ProviderError(
+                f"{self.id}: {self.command!r} is not a known CLI "
+                f"(allowed: {', '.join(sorted(ALLOWED_CLIS))})"
+            )
+        if self.args != expected:
+            raise ProviderError(
+                f"{self.id}: args for {self.command} must be exactly {list(expected)}, "
+                f"got {list(self.args)}"
+            )
         found = shutil.which(self.command)
         if not found:
             raise ProviderError(f"{self.id}: {self.command} is not on PATH")
         return found
 
     def ask(self, prompt: str) -> str:
-        """Send a prompt on stdin, return stdout. Never uses a shell."""
+        """Send a prompt on stdin, return stdout. Never uses a shell.
+
+        The prompt embeds a verbatim answer from a model that searched the open
+        web, so it is untrusted text being handed to a coding agent that can
+        read files and run commands. Two containments, neither depending on a
+        given CLI's flags behaving as its --help claims:
+
+        * an empty working directory, so the repository, its git history and
+          the operator's home project are not reachable by a relative path;
+        * a scrubbed environment, so no provider key or GitHub token is
+          readable by the process even if the prompt talks it into looking.
+
+        Neither is a sandbox. A CLI harness can still reach the network and the
+        wider filesystem by absolute path. They remove the easy paths, and the
+        per-CLI flags in ALLOWED_CLIS remove more.
+        """
+        with tempfile.TemporaryDirectory(prefix="unprompted-extract-") as jail:
+            return self._run(prompt, jail)
+
+    def _run(self, prompt: str, cwd: str) -> str:
         try:
             result = subprocess.run(
                 [self.resolve(), *self.args],
@@ -66,6 +152,8 @@ class CliProvider:
                 timeout=TIMEOUT_SECONDS,
                 encoding="utf-8",
                 errors="replace",
+                cwd=cwd,
+                env=_child_env(),
             )
         except subprocess.TimeoutExpired as exc:
             raise ProviderError(f"{self.id}: timed out after {TIMEOUT_SECONDS}s") from exc
@@ -85,24 +173,61 @@ def load_registry() -> list[dict]:
         return []
 
 
-def cli_extractor() -> CliProvider | None:
-    """The enabled local extractor, if the operator configured one.
+def declared_clis(role: str) -> list[CliProvider]:
+    """Every enabled CLI registered for a role, in registry order.
 
-    Returns the first match rather than merging several: two extractors reading
-    the same week would make the numbers depend on which one happened to run.
+    Declared, not necessarily present. Availability is a separate question from
+    intent, and the two must not be collapsed: an engine the operator declared
+    and this machine cannot run is a reason to stop, not a reason to quietly
+    measure a smaller field.
     """
+    out: list[CliProvider] = []
     for entry in load_registry():
-        if (
+        if not (
             entry.get("kind") == "cli"
-            and entry.get("role") == "extractor"
+            and entry.get("role") == role
             and entry.get("enabled")
         ):
-            return CliProvider(
+            continue
+        out.append(
+            CliProvider(
                 id=entry.get("id", "cli"),
                 label=entry.get("label", entry.get("id", "cli")),
                 command=entry.get("command", ""),
                 args=tuple(entry.get("args") or ()),
             )
+        )
+    return out
+
+
+def is_available(provider: CliProvider) -> bool:
+    """Whether this machine can actually run it."""
+    try:
+        provider.resolve()
+        return True
+    except ProviderError:
+        return False
+
+
+def cli_extractor() -> CliProvider | None:
+    """The first enabled local extractor that actually exists on this machine.
+
+    Returns one rather than merging several: two extractors reading the same
+    week would make the numbers depend on which one happened to run.
+
+    Unlike an engine, a missing extractor is not fatal. Extraction is a
+    mechanical reading job with a hosted fallback that produces the same answer,
+    so falling through costs money rather than meaning. A missing *engine*
+    changes what was measured, so run.py refuses to start instead.
+    """
+    for provider in declared_clis("extractor"):
+        if is_available(provider):
+            return provider
+        print(
+            f"  cli extractor unavailable: {provider.id} "
+            f"({provider.command} is not on PATH)",
+            file=sys.stderr,
+        )
     return None
 
 

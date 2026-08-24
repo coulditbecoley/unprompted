@@ -3,6 +3,7 @@ import { load as loadYaml } from "js-yaml";
 
 import { isAuthorised } from "@/lib/auth";
 import { CATEGORY } from "@/lib/data";
+import { KNOWN_CLIS } from "@/lib/providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ type Target = keyof typeof TARGETS;
 const MAX_BYTES = 64 * 1024;
 
 export async function POST(request: Request) {
-  // Defence in depth: middleware gates /admin and /api/admin, and this route
+  // Defence in depth: proxy.ts gates /admin and /api/admin, and this route
   // checks again so a routing change can never silently expose the write path.
   if (!(await isAuthorised(request))) {
     return NextResponse.json({ error: "Not authorised" }, { status: 401 });
@@ -149,21 +150,28 @@ function validate(target: Target, content: string): string | null {
         return `${id}: an api provider needs the name of its key variable`;
       }
       if (kind === "cli") {
-        // The command is executed later by the local pipeline, so it is
-        // constrained here to a bare executable name. Shell metacharacters and
-        // path separators are rejected at the door rather than trusted to
-        // whatever runs it.
-        if (typeof command !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(command)) {
-          return `${id}: command must be a plain executable name, letters, digits, dot, dash or underscore only`;
+        // The command and its arguments are executed later by the local
+        // pipeline, so a committed entry must match a CLI this project already
+        // knows how to talk to, argument for argument.
+        //
+        // Restricting the command alone was not enough. `python` and
+        // `powershell` are plain executable names, and their arguments are a
+        // program: an entry of `python` with `["-c", "..."]` passed every check
+        // here and ran as written on the operator's machine the next time the
+        // pipeline was invoked. Adding a CLI stays a code change to KNOWN_CLIS,
+        // which is the posture lib/providers.ts already documents for detection.
+        const known = KNOWN_CLIS.find((k) => k.command === command);
+        if (!known) {
+          const names = KNOWN_CLIS.map((k) => k.command).join(", ");
+          return `${id}: unknown CLI "${String(command)}". Supported: ${names}. Adding one is a code change to KNOWN_CLIS.`;
         }
-        if (raw.args !== undefined && !Array.isArray(raw.args)) {
-          return `${id}: args must be a list`;
-        }
+        const args = raw.args ?? [];
         if (
-          Array.isArray(raw.args) &&
-          raw.args.some((a) => typeof a !== "string" || a.length > 200)
+          !Array.isArray(args) ||
+          args.length !== known.args.length ||
+          args.some((a, i) => a !== known.args[i])
         ) {
-          return `${id}: every argument must be a short string`;
+          return `${id}: args for ${known.command} must be exactly ${JSON.stringify(known.args)}`;
         }
       }
     }

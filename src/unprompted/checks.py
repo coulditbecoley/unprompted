@@ -1,4 +1,4 @@
-"""The four sanity rules that stand between a run and the public site.
+"""The five sanity rules that stand between a run and the public site.
 
 Fail safe, never fail open: if any rule trips, nothing publishes and a human
 looks at it. An embarrassing published chart costs more than a missed week.
@@ -42,9 +42,36 @@ def run_checks(
     this_week: list[BrandWeek],
     last_week: list[BrandWeek],
     max_brands: int = MAX_BRANDS,
+    previous: dict | None = None,
 ) -> CheckResult:
     """Return pass/fail plus every human-readable reason it failed."""
     reasons: list[str] = []
+
+    # 0. The series rule, enforced rather than merely written down.
+    #
+    # METHODOLOGY.md says changing the list of active engines changes what the
+    # numbers mean and must bump the method version. Until now that was an
+    # instruction to the operator and nothing checked it, so registering a new
+    # engine — a local CLI harness, say — would silently produce a week that
+    # was not comparable to the one before it and publish it as if it were.
+    if previous:
+        before = sorted(previous.get("engines", []))
+        now = sorted(run.get("engines", []))
+        if before and before != now:
+            same_version = previous.get("method_version") == run.get("method_version")
+            if same_version:
+                added = [e for e in now if e not in before]
+                removed = [e for e in before if e not in now]
+                changed = ", ".join(
+                    [f"+{e}" for e in added] + [f"-{e}" for e in removed]
+                )
+                reasons.append(
+                    f"the engine list changed ({changed}) but method_version is "
+                    f"still {run.get('method_version')}. A different set of "
+                    f"assistants answered, so this week is not comparable to the "
+                    f"last one: bump method_version in the question bank, or "
+                    f"restore the previous engines."
+                )
 
     # 1. A *material* unrecognised name. These engines name long-tail shops and
     #    services constantly, so holding on any single unknown would hold every
@@ -98,7 +125,10 @@ def run_checks(
 
     # 4. Brand count outside the expected band, ignoring the one-mention tail.
     count = sum(1 for b in this_week if b.rotation >= MIN_ROTATION_TO_COUNT)
-    if count and not (MIN_BRANDS <= count <= max_brands):
+    # Zero is a failing count, not an exemption. Guarding this with `if count`
+    # let a week in which every answer refused, or named nothing, pass every
+    # rule and publish an empty board as a market result.
+    if not (MIN_BRANDS <= count <= max_brands):
         reasons.append(
             f"{count} brands above the {MIN_ROTATION_TO_COUNT:.0%} floor, outside "
             f"the expected {MIN_BRANDS}-{max_brands} range "

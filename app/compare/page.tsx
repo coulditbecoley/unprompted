@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
 import {
-  CATEGORY,
   categoryLabel,
   allBrands,
   brandHistory,
@@ -10,7 +10,7 @@ import {
   slugify,
   standings,
 } from "@/lib/data";
-import { AwaitingFirstRun, TrimTop } from "@/components/ui";
+import { AwaitingFirstRun, TrimTop, brandHref } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Head to head",
@@ -26,11 +26,16 @@ export const metadata: Metadata = {
 export default async function ComparePage({
   searchParams,
 }: {
-  searchParams: Promise<{ a?: string; b?: string }>;
+  searchParams: Promise<{ a?: string; b?: string; c?: string }>;
 }) {
-  const { a, b } = await searchParams;
-  const run = latestRun(CATEGORY);
-  const brands = allBrands(CATEGORY);
+  const { a, b, c } = await searchParams;
+  // Which board these two brands are being compared on. A brand only means
+  // something inside its category — ChatGPT in writing tools is a different row
+  // from ChatGPT in image generators — so an unknown slug falls back rather
+  // than silently comparing against the wrong board.
+  const category = c && getCategory(c) ? c : DEFAULT_CATEGORY;
+  const run = latestRun(category);
+  const brands = allBrands(category);
 
   if (!run || brands.length === 0) {
     return (
@@ -51,7 +56,7 @@ export default async function ComparePage({
   const rows = [left, right].map((brand) => ({
     brand,
     row: board.find((s) => s.brand === brand) ?? null,
-    history: brandHistory(CATEGORY, brand),
+    history: brandHistory(category, brand),
   }));
 
   const [L, R] = rows;
@@ -64,7 +69,7 @@ export default async function ComparePage({
 
   return (
     <section className="shell section">
-      <p className="label">{categoryLabel(CATEGORY)} · head to head</p>
+      <p className="label">{categoryLabel(category)} · head to head</p>
       <h1 style={{ fontSize: "clamp(28px,5vw,46px)", fontWeight: 800, margin: "6px 0 12px" }}>
         {L.brand} vs {R.brand}
       </h1>
@@ -75,7 +80,7 @@ export default async function ComparePage({
           <div className="cmp-pick" key={brand}>
             <TrimTop />
             <h3 style={{ marginTop: 6 }}>
-              <Link href={`/brand/${slugify(brand)}`} style={{ textDecoration: "none" }}>
+              <Link href={brandHref(category, brand)} style={{ textDecoration: "none" }}>
                 {brand}
               </Link>
             </h3>
@@ -124,7 +129,7 @@ export default async function ComparePage({
           brand === L.brand ? null : (
             <Link
               key={brand}
-              href={`/compare?a=${slugify(L.brand)}&b=${slugify(brand)}`}
+              href={`/compare?c=${category}&a=${slugify(L.brand)}&b=${slugify(brand)}`}
               className="mono"
               style={{
                 fontSize: 12,

@@ -92,6 +92,12 @@ class RunRecord:
     method_version: int
     runs_per_question: int
     engines: list[str]
+    # Which reader turned the answers into structured data: a provider id from
+    # providers.json, or "api" for the hosted extractor. Recorded because more
+    # than one local harness can be registered and the pipeline falls through to
+    # the next one that resolves, so "who read this week" is not a constant and
+    # is not recoverable from anywhere else in the record.
+    extractor: str = "api"
     extractions: list[Extraction] = field(default_factory=list)
     quarantined: list[str] = field(default_factory=list)
 
@@ -102,6 +108,12 @@ class RunRecord:
             "method_version": self.method_version,
             "runs_per_question": self.runs_per_question,
             "engines": self.engines,
+            "extractor": self.extractor,
             "extractions": [e.to_dict() for e in self.extractions],
-            "quarantined": sorted(set(self.quarantined)),
+            # Sorted, not deduplicated. checks.py counts occurrences to decide
+            # whether an unrecognised name is material enough to hold the week,
+            # and the admin dashboard sorts triage by the same count. Collapsing
+            # to a set here capped every count at 1, so the frequency check
+            # could never fire.
+            "quarantined": sorted(self.quarantined),
         }

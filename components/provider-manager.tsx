@@ -7,9 +7,11 @@ import type { Provider } from "@/lib/providers";
 type Detected = {
   id: string;
   label: string;
+  engineId: string;
+  engineLabel: string;
   command: string;
   args?: string[];
-  version?: string;
+  path?: string;
 };
 
 /**
@@ -107,7 +109,7 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
     const content = JSON.stringify(
       {
         _comment:
-          "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does.",
+          "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary. An enabled CLI engine must be present on whatever machine runs the pipeline: the run refuses to start without it, because which assistants answered is part of what a week means. Extractors fall back instead.",
         providers,
       },
       null,
@@ -165,6 +167,13 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
       {scan && (
         <div className="panel" style={{ padding: "14px 16px", marginTop: 12 }}>
           <p style={{ fontSize: 13.5, color: "var(--fg-2)", margin: "0 0 10px" }}>{scan.note}</p>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "0 0 10px" }}>
+            An <strong>engine</strong> is asked the shopper&rsquo;s questions and gets its own
+            row on the chart. It answers on your subscription rather than per call, but
+            reports no citations, and the run will refuse to start on any machine where it
+            is not installed. An <strong>extractor</strong> only reads answers other engines
+            gave, never appears on the chart, and falls back to the API when absent.
+          </p>
           {scan.detected.length === 0 ? (
             <p className="mono" style={{ fontSize: 12.5, color: "var(--fg-3)", margin: 0 }}>
               Nothing found.
@@ -174,11 +183,37 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
               {scan.detected.map((d) => (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span className="mono" style={{ fontSize: 12.5, flex: 1 }}>
-                    {d.label} <span style={{ color: "var(--fg-3)" }}>{d.version}</span>
+                    {d.label} <span style={{ color: "var(--fg-3)" }}>{d.path}</span>
                   </span>
+                  {/*
+                    Two roles, two buttons, because they are genuinely different
+                    jobs and a harness can hold both at once. As an engine it is
+                    asked the shopper's questions and gets its own chart row; as
+                    an extractor it only reads answers other engines gave.
+                  */}
                   <button
                     className="btn"
                     style={{ fontSize: 11 }}
+                    title="Ask this harness the shopper's questions. It becomes its own row on the chart."
+                    onClick={() =>
+                      add({
+                        id: d.engineId,
+                        label: d.engineLabel,
+                        kind: "cli",
+                        role: "engine",
+                        enabled: true,
+                        command: d.command,
+                        args: d.args ?? [],
+                        note: `Local harness detected at ${d.path}. Answers on a subscription rather than per call, and reports no citations.`,
+                      })
+                    }
+                  >
+                    Add as engine
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ fontSize: 11 }}
+                    title="Use this harness to read answers other engines gave. Does not appear on the chart."
                     onClick={() =>
                       add({
                         id: d.id,
@@ -188,11 +223,11 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
                         enabled: true,
                         command: d.command,
                         args: d.args ?? [],
-                        note: d.version,
+                        note: `Detected at ${d.path}`,
                       })
                     }
                   >
-                    Add
+                    Add as extractor
                   </button>
                 </div>
               ))}

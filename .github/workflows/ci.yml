@@ -1,0 +1,40 @@
+name: CI
+
+# The pipeline had a full test suite and nothing ever ran it. Both halves of the
+# project are checked here, on every push and every pull request, so a change
+# that breaks the publish gate or the shared metric fails before a Tuesday run
+# reaches the site.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e . pytest
+      - name: Test
+        run: python -m pytest tests/test_pipeline.py -q
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build

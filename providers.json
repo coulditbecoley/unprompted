@@ -1,5 +1,5 @@
 {
-  "_comment": "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary.",
+  "_comment": "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary. Extractor order matters: the first enabled entry whose command resolves on PATH is the one that runs, and the run record stores which one it was.",
   "providers": [
     {
       "id": "chatgpt",
@@ -42,9 +42,59 @@
       "enabled": true,
       "command": "claude",
       "args": [
-        "-p"
+        "-p",
+        "--strict-mcp-config"
       ],
-      "note": "Runs on this machine's subscription; no API credit, no key."
+      "note": "Primary extractor. Runs on this machine's subscription; no API credit, no key. Declared conflict: it reads answers about its own products."
+    },
+    {
+      "id": "codex-cli",
+      "label": "Codex (local CLI)",
+      "kind": "cli",
+      "role": "extractor",
+      "enabled": true,
+      "command": "codex",
+      "args": [
+        "exec",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--sandbox",
+        "read-only",
+        "-"
+      ],
+      "note": "Fallback, used when claude is not on PATH. Listed after claude-cli because the first enabled extractor that resolves is the one that runs. Costs no API credit; carries roughly 9k tokens of harness overhead per call."
+    },
+    {
+      "id": "claude-code",
+      "label": "Claude Code (local)",
+      "kind": "cli",
+      "role": "engine",
+      "enabled": true,
+      "command": "claude",
+      "args": [
+        "-p",
+        "--strict-mcp-config"
+      ],
+      "note": "Own chart row, not a substitute for the hosted claude engine: this is a coding agent with a different system prompt, and it volunteers that it is made by Anthropic. Enabled, which means the weekly run must happen on this machine: see scripts/weekly-run.cmd."
+    },
+    {
+      "id": "codex",
+      "label": "Codex (local)",
+      "kind": "cli",
+      "role": "engine",
+      "enabled": true,
+      "command": "codex",
+      "args": [
+        "exec",
+        "--skip-git-repo-check",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--sandbox",
+        "read-only",
+        "-"
+      ],
+      "note": "Own chart row, not a substitute for the hosted chatgpt engine. In testing it ranked Claude Code above OpenAI's own Codex. Enabled for the same reason as claude-code."
     }
   ]
 }

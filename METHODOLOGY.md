@@ -18,9 +18,14 @@ record stamps the version it ran under.
    declined to recommend anything.
 4. Brand names are normalised against `aliases/<category>.yml`. Anything
    unrecognised is quarantined and **never appears on the chart**.
-5. The run is appended to `data/runs/`. Nothing is ever overwritten or edited.
-6. Four sanity checks run. If all pass, the site republishes. If any fail, the
-   week is held and a human reviews it before anything is published.
+5. Five sanity checks run, **before anything is written**.
+6. A run that passes is appended to `data/runs/` and the site republishes. A run
+   that fails is written to `data/held/` instead, where it is kept in full for
+   review and is not read by the site. Nothing in either directory is ever
+   overwritten or edited.
+
+The order of steps 5 and 6 is the point. The checks decide where a run lands,
+not merely whether someone is told about it.
 
 ---
 
@@ -69,10 +74,37 @@ the thing worth measuring, so each engine is queried natively.
 | ChatGPT | OpenAI API with OpenAI's own web search | v1 |
 | Claude | Anthropic API with Anthropic's web search | v1 |
 | Perplexity | Perplexity Sonar API | v1 |
+| Claude Code | Local CLI harness on the operator's machine | registered, off |
+| Codex | Local CLI harness on the operator's machine | registered, off |
 | Google AI Overviews | Planned, via a SERP data provider | not yet active |
 
+**A local harness is charted as its own engine, never as a stand-in for the
+hosted engine of a similar name.** `claude -p` is Claude Code, a coding agent
+with a coding agent's system prompt: asked what the best AI coding assistant is,
+it volunteers "I'm made by Anthropic, so take my read on Claude products with
+that in mind", which the consumer assistant does not do. `codex` is not ChatGPT,
+and in testing it ranked Claude Code above OpenAI's own Codex. Treating either as
+interchangeable with its hosted namesake would change what a row means partway
+through a series.
+
+Two things a local engine cannot report, both visible in the data rather than
+hidden: it returns **no citations**, so it contributes nothing to the source
+counts; and it reports no token usage, so the cost report shows $0.00 for it,
+which is accurate because those calls are billed to a subscription.
+
+Turning a local engine on changes the engine list, which is a method version
+bump. That rule is now enforced rather than merely written down: a run whose
+engine list differs from the previous week's without a version bump is held.
+
 An engine that errors or returns nothing has that fact recorded as data. One
-failing engine does not discard the week.
+failing engine does not discard the week; enough of them do, because the error
+rate is one of the five checks.
+
+An engine whose credentials are missing is queried anyway and its calls are
+recorded as errors, rather than being dropped from the run. Dropping them would
+let a vanished key quietly change which engines the week was measured across —
+exactly the change "Never break the series" below says must never happen
+silently.
 
 Where an engine declines to recommend anything, that is recorded as a refusal
 rather than dropped. How often the machines refuse to answer a buying question is
@@ -117,10 +149,13 @@ companies whose assistants we query. We report the gap between how often an
 engine names its own product and how often rivals name it.
 
 That measurement has a problem we did not choose and cannot fully remove:
-**the extraction step also runs on Claude.** After each engine answers, a Claude
-model reads that prose and decides which companies were named. So when the
-result says Claude named Claude Code more often than rivals did, a Claude model
-was the one counting.
+**the extraction step also runs on Claude by default.** After each engine
+answers, a Claude model reads that prose and decides which companies were named.
+So when the result says Claude named Claude Code more often than rivals did, a
+Claude model was the one counting.
+
+Which reader ran is no longer implicit: every run record carries an `extractor`
+field naming it, and the weekly note prints it in its frontmatter.
 
 We think the effect is small, because extraction is a mechanical reading task
 and the raw answers are published alongside the counts, so anyone can check a
@@ -128,7 +163,15 @@ row by hand. But "we think it is small" is not evidence, and the honest position
 is that this figure carries a conflict until it has been checked with a
 different model doing the extraction.
 
-Until that check is run, treat any self-preference number involving Claude as
+That check is now runnable rather than hypothetical. A second local harness
+(Codex) is registered as an extractor, and because every raw answer is stored, a
+past week can be re-read by the other harness without re-querying any engine:
+
+    python -m unprompted.reextract <date> --category <slug>
+
+with the other extractor enabled in `providers.json`. Comparing the two
+resulting records is the cross-extractor check. Until it has been run over a
+full week and published, treat any self-preference number involving Claude as
 provisional. The raw answers behind every count are in `data/runs/`, which is
 exactly why they are published.
 

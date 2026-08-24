@@ -85,9 +85,13 @@ canonical:
 # engines and compare.
 #
 # The engine names match the pipeline's own (chatgpt, claude, perplexity).
+# Brand -> every engine whose vendor makes it. A list because one vendor can
+# field more than one engine: Anthropic answers as both the hosted `claude` API
+# and, where registered, the local `claude-code` harness. Listing only the first
+# would count the second as a neutral rival and shrink the measured gap.
 affiliations:
-  Claude Code: claude
-  Codex: chatgpt
+  Claude Code: [claude, claude-code]
+  Codex: [chatgpt, codex]
 
 # Known, and deliberately not charted. Real things the engines name while
 # answering, but not coding assistants, so charting them would be wrong.

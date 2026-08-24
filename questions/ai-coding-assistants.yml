@@ -12,7 +12,7 @@
 # version below.
 category: ai-coding-assistants
 label: AI Coding Assistants
-method_version: 1
+method_version: 2
 runs_per_question: 5
 # This field is genuinely wider than card grading: the first real run found 18
 # distinct tools, all of them real products. An operational threshold, not a

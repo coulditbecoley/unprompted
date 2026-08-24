@@ -1,7 +1,9 @@
 """The weekly orchestrator. Ask, extract, normalize, append, check, emit.
 
 Writes exactly one dated file per category per run and never touches an existing
-one. Exit code 0 means the site may publish; exit code 2 means the week is held.
+one. A run that passes its checks lands in data/runs, which the site reads; a
+run that is held lands in data/held, which nothing reads. Exit code 0 means
+every category published; exit code 2 means at least one was held.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import yaml
 from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .cost import cost_of_run, format_report
-from .engines import ENGINES
+from .engines import all_engines
 from .cli_provider import cli_extractor
 from .extract import extract_one
 from .models import RunRecord
@@ -36,6 +38,27 @@ HELD_EXIT_CODE = 2
 MAX_WORKERS = 6
 
 
+def load_local_env() -> None:
+    """Read .env.local into the environment, without overriding what is set.
+
+    The keys live in that file because the web app reads them there, but nothing
+    put them in front of the pipeline, so a scheduled task on this machine
+    started with no credentials at all. Real environment variables always win,
+    so CI is unaffected.
+    """
+    path = ROOT / ".env.local"
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
 def load_questions(category: str) -> dict:
     path = ROOT / "questions" / f"{category}.yml"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -47,18 +70,32 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
     runs_per_question = int(spec["runs_per_question"])
     questions = spec["questions"]
 
-    engines = {}
-    for name, cls in ENGINES.items():
-        engine = cls()
-        if engine.is_configured:
-            engines[name] = engine
-        else:
-            print(f"  engine '{name}' skipped: no API key present", file=sys.stderr)
+    # Pre-flight. Which assistants answered is part of what a week means, so a
+    # declared engine this machine cannot query is a reason to stop before
+    # spending anything, not to quietly measure a smaller field and publish it.
+    #
+    # Checked up front rather than discovered call by call: the previous
+    # behaviour skipped an unconfigured engine outright, so a vanished secret
+    # silently changed the population; recording 75 errors instead would have
+    # caught it, but only after paying for the other 150 calls.
+    engines = all_engines()
+    unavailable = sorted(
+        (name for name, e in engines.items() if not e.is_configured),
+        key=str,
+    )
+    if unavailable:
+        detail = "\n".join(
+            f"  - {name}: {engines[name].unavailable_reason}" for name in unavailable
+        )
+        raise SystemExit(
+            f"{len(unavailable)} of {len(engines)} declared engines cannot be "
+            f"queried on this machine:\n{detail}\n"
+            "Every declared engine must answer, or the week measures a different "
+            "field from the weeks around it. Fix the credential or the PATH, or "
+            "disable that engine in providers.json and bump the method version."
+        )
 
-    if not engines:
-        raise SystemExit("no engines configured: set at least one provider API key")
-
-    print(f"  engines active: {', '.join(sorted(engines))}", file=sys.stderr)
+    print(f"  engines queried: {', '.join(sorted(engines))}", file=sys.stderr)
 
     tasks = [
         (engine, question["id"], question["text"], run_index)
@@ -127,6 +164,7 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         method_version=int(spec["method_version"]),
         runs_per_question=runs_per_question,
         engines=sorted(engines),
+        extractor=extractor.id if extractor else "api",
         extractions=extractions,
         quarantined=quarantined,
     )
@@ -139,35 +177,59 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         this_week,
         last_week,
         max_brands=int(spec.get("max_brands", 15)),
+        previous=history[-1] if history else None,
     )
 
     if not dry_run:
-        out_dir = ROOT / "data" / "runs" / run_date
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{category}.json"
-        if out_path.exists():
-            raise SystemExit(
-                f"refusing to overwrite {out_path}: run data is append-only"
-            )
-        out_path.write_text(
-            json.dumps(record.to_dict(), indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        print(f"  wrote {out_path.relative_to(ROOT)}", file=sys.stderr)
-
-        # The readable note lives beside the data so the scheduled cloud run
-        # produces it too, not just a local run.
-        report_path = write_report(record.to_dict(), ROOT)
-        print(f"  wrote {report_path.relative_to(ROOT)}", file=sys.stderr)
-
-        if quarantined:
-            qdir = ROOT / "data" / "quarantine"
-            qdir.mkdir(parents=True, exist_ok=True)
-            (qdir / f"{run_date}-{category}.json").write_text(
-                json.dumps(sorted(set(quarantined)), indent=2) + "\n", encoding="utf-8"
-            )
+        persist(record, result.reasons)
 
     return record, result.reasons
+
+
+def persist(record: RunRecord, reasons: list[str], overwrite: bool = False) -> Path:
+    """Write one run to disk, on the side of the line its checks put it.
+
+    The checks decide *where* a run lands, not merely whether a human is paged.
+    A held run written into data/runs is published by the next `git add data/`,
+    which is how a week with a 100% error rate reached the site reading "no
+    brand was named". Held runs go to data/held: kept for review and for the
+    archive, invisible to the site, which reads only data/runs.
+
+    Shared with reextract so a second write path cannot drift back to the far
+    side of this gate.
+    """
+    held = bool(reasons)
+    data = record.to_dict()
+    out_dir = ROOT / "data" / ("held" if held else "runs") / record.run_date
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{record.category}.json"
+    if out_path.exists() and not overwrite:
+        raise SystemExit(f"refusing to overwrite {out_path}: run data is append-only")
+    out_path.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(f"  wrote {out_path.relative_to(ROOT)}", file=sys.stderr)
+
+    # The readable note lives beside the data so the scheduled cloud run
+    # produces it too, not just a local run. A held run gets no report: the
+    # report is the published artefact, and publishing is what is withheld.
+    if not held:
+        report_path = write_report(data, ROOT)
+        print(f"  wrote {report_path.relative_to(ROOT)}", file=sys.stderr)
+
+    # Quarantine is written either way. It is the operator's to-do list, and a
+    # held week is exactly when it needs reading. Every occurrence, not the
+    # distinct set: the triage signal is how often a name appeared, and
+    # deduplicating here made every count read 1 in the admin dashboard and
+    # disarmed the frequency check in checks.py.
+    if record.quarantined:
+        qdir = ROOT / "data" / "quarantine"
+        qdir.mkdir(parents=True, exist_ok=True)
+        (qdir / f"{record.run_date}-{record.category}.json").write_text(
+            json.dumps(sorted(record.quarantined), indent=2) + "\n", encoding="utf-8"
+        )
+
+    return out_path
 
 
 def all_categories() -> list[str]:
@@ -190,6 +252,8 @@ def main() -> int:
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
     args = parser.parse_args()
+
+    load_local_env()
 
     categories = all_categories() if args.category == "all" else [args.category]
     if not categories:
@@ -219,7 +283,8 @@ def main() -> int:
         print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)
 
     # One held category must not suppress the others. Everything that passed is
-    # already written; the exit code only decides whether a human is called.
+    # in data/runs and will publish; everything held is in data/held and will
+    # not. The exit code only decides whether a human is called.
     if held:
         out = os.environ.get("GITHUB_OUTPUT")
         if out:

@@ -4,7 +4,12 @@ The raw answers are on the record, so a corrected prompt or a widened alias map
 costs a few cheap extraction calls rather than 225 engine calls and half an
 hour. This is the payoff for storing answers.
 
-Usage: python -m unprompted.reextract 2026-08-21 [--category pokemon-grading]
+The rewritten run is a *new* dated file, never an overwrite. `data/runs` is the
+public archive and the methodology calls it append-only; silently replacing a
+week under the same path would make a published number unreproducible from the
+repository that is supposed to prove it.
+
+Usage: python -m unprompted.reextract 2026-08-22 --category ai-coding-assistants
 """
 
 from __future__ import annotations
@@ -13,23 +18,41 @@ import argparse
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
+from datetime import date
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
+from .cli_provider import cli_extractor
 from .extract import extract_one
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
-from .run import MAX_WORKERS, ROOT
+from .run import MAX_WORKERS, ROOT, persist
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("date")
-    parser.add_argument("--category", default="pokemon-grading")
+    parser.add_argument("--category", required=True)
+    parser.add_argument(
+        "--out-date",
+        help="date to write the re-extracted run under (default: today)",
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="overwrite the source run instead of writing a new dated file. "
+        "Only for a run that was never published.",
+    )
     args = parser.parse_args()
 
     path = ROOT / "data" / "runs" / args.date / f"{args.category}.json"
+    if not path.exists():
+        # A held run is a re-extraction's most common subject: it was held
+        # *because* something needed re-reading.
+        held = ROOT / "data" / "held" / args.date / f"{args.category}.json"
+        if not held.exists():
+            raise SystemExit(f"no run at {path} or {held}")
+        path = held
     record = json.loads(path.read_text(encoding="utf-8"))
 
     answers = [
@@ -49,14 +72,31 @@ def main() -> int:
                 if (e.get("error") or "").startswith("extract failed")
                 else e.get("error")
             ),
+            # The engine's own token counts live on the stored extraction and
+            # are not recoverable from anywhere else. Rebuilding the answer
+            # without them made every re-extracted week report $0.00.
+            usage={
+                k: v
+                for k, v in (e.get("usage") or {}).items()
+                if not k.startswith("extract_")
+            },
         )
         for e in record["extractions"]
     ]
-    print(f"re-extracting {len(answers)} stored answers", file=sys.stderr, flush=True)
+    # Same reader the live pipeline would use, resolved once. Previously this
+    # always took the hosted API path regardless of the registry, so a re-read
+    # could silently use a different extractor from the run it was correcting.
+    extractor = cli_extractor()
+    via = f" via {extractor.label}" if extractor else " via the API extractor"
+    print(
+        f"re-extracting {len(answers)} stored answers{via}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     extractions = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = [pool.submit(extract_one, a) for a in answers]
+        futures = [pool.submit(extract_one, a, None, extractor) for a in answers]
         for done, future in enumerate(as_completed(futures), start=1):
             extractions.append(future.result())
             if done % 25 == 0 or done == len(futures):
@@ -67,18 +107,27 @@ def main() -> int:
     aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
+    # A re-extraction is a new reading of the same answers, so it gets its own
+    # dated file unless the operator says otherwise. --in-place exists for a run
+    # that was never published, where correcting the original is the honest move.
+    out_date = args.out_date or (args.date if args.in_place else date.today().isoformat())
+
     fresh = RunRecord(
         category=record["category"],
-        run_date=record["run_date"],
+        run_date=out_date,
         method_version=record["method_version"],
         runs_per_question=record["runs_per_question"],
         engines=record["engines"],
+        extractor=extractor.id if extractor else "api",
         extractions=extractions,
         quarantined=quarantined,
     )
 
-    history = [h for h in load_history(ROOT / "data" / "runs", args.category)
-               if h["run_date"] != args.date]
+    history = [
+        h
+        for h in load_history(ROOT / "data" / "runs", args.category)
+        if h["run_date"] not in {args.date, out_date}
+    ]
     this_week = brand_week(fresh.to_dict())
     import yaml as _yaml
 
@@ -90,12 +139,12 @@ def main() -> int:
         this_week,
         brand_week(history[-1]) if history else [],
         max_brands=int(spec.get("max_brands", 15)),
+        previous=history[-1] if history else None,
     )
 
-    path.write_text(
-        json.dumps(fresh.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    print(f"\nrewrote {path.relative_to(ROOT)}", file=sys.stderr)
+    # Same gate as a live run: a re-extraction that still fails its checks is
+    # held, not published.
+    persist(fresh, result.reasons, overwrite=args.in_place)
 
     print("\nSTANDINGS:", file=sys.stderr)
     for i, b in enumerate(this_week, 1):

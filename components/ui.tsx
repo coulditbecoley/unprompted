@@ -18,10 +18,6 @@ export function TrimTop() {
   return <span className="trim-top" aria-hidden="true" />;
 }
 
-export function TrimLeft() {
-  return ;
-}
-
 /* -- the sequencer row: one cell per run ---------------------------------- */
 
 export function SequencerRow({

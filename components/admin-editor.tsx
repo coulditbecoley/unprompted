@@ -104,7 +104,7 @@ export function AdminEditor({
             className="mono"
             style={{
               fontSize: 11.5,
-              color: status === "error" ? "var(--fall)" : "var(--rise)",
+              color: status === "error" ? "var(--down)" : "var(--up)",
             }}
           >
             {message}

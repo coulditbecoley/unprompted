@@ -13,7 +13,7 @@
 # version below.
 category: ai-image-generators
 label: AI Image Generators
-method_version: 1
+method_version: 2
 runs_per_question: 5
 max_brands: 25
 questions:

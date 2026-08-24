@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from unprompted.aggregate import BrandWeek, brand_week, movement, source_counts, the_snub
 from unprompted.checks import run_checks
 from unprompted.engines.base import Engine
-from unprompted.models import BrandMention, EngineAnswer, Extraction
+from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
 from unprompted.normalize import AliasMap, normalize
 
 
@@ -574,3 +574,399 @@ def test_registry_picks_one_enabled_cli_extractor():
     if chosen is not None:
         assert chosen.command
         assert chosen.args
+
+
+# --- the publish gate -------------------------------------------------------
+#
+# The rule these cover: a run that fails its checks must not reach data/runs,
+# because the weekly workflow commits everything under data/. A 100%-error week
+# once published as "no brand was named" because the checks ran, returned their
+# reasons, and were then ignored by the writer.
+
+def test_a_held_run_is_written_outside_the_published_directory(tmp_path, monkeypatch):
+    from unprompted import run as run_module
+
+    monkeypatch.setattr(run_module, "ROOT", tmp_path)
+    record = RunRecord(
+        category="ai-coding-assistants",
+        run_date="2026-09-01",
+        method_version=1,
+        runs_per_question=15,
+        engines=["chatgpt"],
+        extractions=[ex(run=0, brands=["PSA"])],
+    )
+
+    run_module.persist(record, ["37% of engine calls errored"])
+
+    assert not (tmp_path / "data" / "runs" / "2026-09-01").exists()
+    assert (tmp_path / "data" / "held" / "2026-09-01" / "ai-coding-assistants.json").exists()
+    # No report either: the report is the published artefact.
+    assert not (tmp_path / "reports").exists()
+
+
+def test_a_passing_run_is_written_where_the_site_reads(tmp_path, monkeypatch):
+    from unprompted import run as run_module
+
+    monkeypatch.setattr(run_module, "ROOT", tmp_path)
+    # The report reads the category's alias map for the affiliations block.
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases" / "ai-coding-assistants.yml").write_text(
+        "canonical:\n  PSA: []\n", encoding="utf-8"
+    )
+    record = RunRecord(
+        category="ai-coding-assistants",
+        run_date="2026-09-01",
+        method_version=1,
+        runs_per_question=15,
+        engines=["chatgpt"],
+        extractions=[ex(run=0, brands=["PSA"])],
+    )
+
+    run_module.persist(record, [])
+
+    assert (tmp_path / "data" / "runs" / "2026-09-01" / "ai-coding-assistants.json").exists()
+    assert not (tmp_path / "data" / "held").exists()
+
+
+# --- quarantine frequency ---------------------------------------------------
+
+def test_the_record_keeps_every_quarantined_occurrence():
+    """checks.py counts occurrences to decide whether a name is material.
+
+    Serialising through a set capped every count at 1, so the frequency rule
+    could never fire in production no matter how often a name appeared. The
+    hand-built dictionary in the check's own test missed it, because it never
+    passed through RunRecord.
+    """
+    record = RunRecord(
+        category="c",
+        run_date="2026-09-01",
+        method_version=1,
+        runs_per_question=15,
+        engines=["chatgpt"],
+        quarantined=["New Grader Co"] * 20 + ["One Off Shop"],
+    )
+    assert record.to_dict()["quarantined"].count("New Grader Co") == 20
+
+
+def test_a_repeated_unknown_holds_the_week_through_a_real_record():
+    """The end-to-end version of the rule above, with no hand-built dict."""
+    record = RunRecord(
+        category="c",
+        run_date="2026-09-01",
+        method_version=1,
+        runs_per_question=15,
+        engines=["chatgpt"],
+        extractions=[ex(run=i, brands=["PSA", "CGC"]) for i in range(50)],
+        quarantined=["New Grader Co"] * 20,
+    )
+    data = record.to_dict()
+    result = run_checks(data, brand_week(data), [])
+    assert result.held and "New Grader Co" in " ".join(result.reasons)
+
+
+# --- the zero-brand hole ----------------------------------------------------
+
+def test_a_run_where_every_answer_refused_is_held():
+    """No errors, no quarantine, no brands: it passed every rule and published.
+
+    A refusal is a real outcome, but a board with nothing on it is a system
+    failure until a human says otherwise.
+    """
+    run = _run([ex(run=i, refused=True) for i in range(50)])
+    assert run_checks(run, brand_week(run), []).held
+
+
+def test_a_run_that_names_nothing_at_all_is_held():
+    run = _run([ex(run=i, brands=[]) for i in range(50)])
+    assert run_checks(run, brand_week(run), []).held
+
+
+# --- extractor availability -------------------------------------------------
+
+def test_an_unavailable_cli_extractor_is_skipped_rather_than_selected(monkeypatch):
+    """The registry is edited on a machine that is not the one that runs.
+
+    Selecting a CLI that is not installed turned all 225 extractions into
+    errors, and before the publish gate existed, published the result.
+    """
+    from unprompted import cli_provider
+
+    monkeypatch.setattr(
+        cli_provider,
+        "load_registry",
+        lambda: [
+            {
+                "id": "ghost-cli",
+                "kind": "cli",
+                "role": "extractor",
+                "enabled": True,
+                "command": "definitely-not-installed",
+            }
+        ],
+    )
+    assert cli_provider.cli_extractor() is None
+
+
+def test_an_available_cli_extractor_is_still_selected(monkeypatch):
+    from unprompted import cli_provider
+
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+    monkeypatch.setattr(
+        cli_provider,
+        "load_registry",
+        lambda: [
+            {
+                "id": "claude-cli",
+                "kind": "cli",
+                "role": "extractor",
+                "enabled": True,
+                "command": "claude",
+                "args": ["-p", "--strict-mcp-config"],
+            }
+        ],
+    )
+    chosen = cli_provider.cli_extractor()
+    assert chosen is not None and chosen.id == "claude-cli"
+
+
+def test_a_cli_entry_with_rewritten_arguments_is_refused(monkeypatch):
+    """The command name was never the risk; the arguments are.
+
+    `python -c "..."` passes any plain-executable-name check and is a program.
+    The registry is a file on disk, so the executing side re-checks both halves
+    against the allowlist rather than trusting whatever committed it.
+    """
+    from unprompted.cli_provider import CliProvider, ProviderError
+
+    monkeypatch.setattr("shutil.which", lambda cmd: f"/usr/bin/{cmd}")
+
+    with pytest.raises(ProviderError):
+        CliProvider("evil", "Evil", "python", ("-c", "import os; os.system('id')")).resolve()
+    with pytest.raises(ProviderError):
+        # A known command with substituted arguments is refused too.
+        CliProvider("evil", "Evil", "claude", ("--dangerously-skip-permissions",)).resolve()
+
+
+# --- the two halves of the CLI allowlist ------------------------------------
+
+def test_the_python_and_typescript_cli_allowlists_agree():
+    """lib/providers.ts validates what may be committed; cli_provider.py runs it.
+
+    If the two drift, the admin dashboard accepts an entry the pipeline then
+    refuses, or worse, pins weaker arguments than the ones that were reviewed.
+    The arguments are the harness's safety settings, so this is a security
+    boundary and not merely tidiness.
+    """
+    import json
+    import re
+
+    from unprompted.cli_provider import ALLOWED_CLIS
+
+    root = Path(__file__).resolve().parents[1]
+    ts = (root / "lib" / "providers.ts").read_text(encoding="utf-8")
+    block = re.search(r"KNOWN_CLIS[^=]*=\s*\[(.*?)\n\];", ts, re.S)
+    assert block, "could not find KNOWN_CLIS in lib/providers.ts"
+
+    # Strip line comments and trailing commas so the arrays parse as JSON.
+    body = re.sub(r"//[^\n]*", "", block.group(1))
+    found = {
+        command: json.loads(re.sub(r",(\s*\])", r"\1", args))
+        for command, args in re.findall(
+            r'command:\s*"([^"]+)",\s*args:\s*(\[[^\]]*\])', body, re.S
+        )
+    }
+    assert found, "could not parse any CLI entries from lib/providers.ts"
+    assert found == {k: list(v) for k, v in ALLOWED_CLIS.items()}
+
+
+def test_every_registered_cli_provider_is_on_the_allowlist():
+    """providers.json is committed from the dashboard and editable by hand."""
+    import json
+
+    from unprompted.cli_provider import ALLOWED_CLIS
+
+    root = Path(__file__).resolve().parents[1]
+    registry = json.loads((root / "providers.json").read_text(encoding="utf-8"))
+    for entry in registry["providers"]:
+        if entry.get("kind") != "cli":
+            continue
+        command = entry.get("command")
+        assert command in ALLOWED_CLIS, f"{entry['id']}: {command} is not allowlisted"
+        assert tuple(entry.get("args") or ()) == ALLOWED_CLIS[command], (
+            f"{entry['id']}: args do not match the pinned allowlist"
+        )
+
+
+def test_the_extractor_environment_carries_no_secrets(monkeypatch):
+    """The prompt is untrusted text; the pipeline's environment holds every key."""
+    from unprompted.cli_provider import _child_env
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-should-not-leak")
+    monkeypatch.setenv("PERPLEXITY_API_KEY", "sk-should-not-leak")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp-should-not-leak")
+
+    env = _child_env()
+    assert not [v for v in env.values() if "should-not-leak" in v]
+    # Still usable: the harness needs to be findable and to locate its own auth.
+    assert "PATH" in env
+
+
+def test_the_run_record_names_the_extractor_that_read_it():
+    """More than one local harness can be registered, and the pipeline falls
+    through to the next that resolves. Which one read a given week is therefore
+    not a constant, and is not recoverable from anywhere else in the record."""
+    record = RunRecord(
+        category="c",
+        run_date="2026-09-01",
+        method_version=1,
+        runs_per_question=15,
+        engines=["chatgpt"],
+        extractor="codex-cli",
+    )
+    assert record.to_dict()["extractor"] == "codex-cli"
+    # Runs that never configured a local harness say so rather than being blank.
+    assert RunRecord("c", "2026-09-01", 1, 15, ["chatgpt"]).to_dict()["extractor"] == "api"
+
+
+# --- local CLI engines ------------------------------------------------------
+
+def test_a_cli_engine_answers_and_reports_no_citations(monkeypatch):
+    """A CLI prints prose on stdout and nothing else.
+
+    Empty sources are correct rather than missing: the hosted engines return the
+    pages their search actually used, and a harness has no equivalent to report.
+    """
+    from unprompted.cli_provider import CliProvider
+    from unprompted.engines.cli_engine import CliEngine
+
+    provider = CliProvider("claude-code", "Claude Code", "claude", ("-p",))
+    monkeypatch.setattr(CliProvider, "resolve", lambda self: "/usr/bin/claude")
+    monkeypatch.setattr(CliProvider, "ask", lambda self, prompt: "Try Cursor, then Copilot.")
+
+    answer = CliEngine(provider).ask_one("q01", "best coding assistant?", 0)
+    assert answer.engine == "claude-code"
+    assert "Cursor" in answer.text
+    assert answer.sources == []
+    assert answer.usage == {}
+    assert answer.error is None
+
+
+def test_a_cli_engine_that_is_not_installed_says_so_rather_than_blaming_a_key():
+    from unprompted.cli_provider import CliProvider
+    from unprompted.engines.cli_engine import CliEngine
+
+    engine = CliEngine(CliProvider("ghost", "Ghost", "claude", ("-p",)))
+    # Same command, but nothing resolves it in this test environment unless the
+    # harness happens to be installed, so assert on the wording, not the result.
+    assert "not on PATH" in engine.unavailable_reason
+
+
+def test_a_declared_cli_engine_joins_the_registry(monkeypatch):
+    from unprompted import cli_provider
+    from unprompted.engines import all_engines
+
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+    monkeypatch.setattr(
+        cli_provider,
+        "load_registry",
+        lambda: [
+            {
+                "id": "claude-code",
+                "kind": "cli",
+                "role": "engine",
+                "enabled": True,
+                "command": "claude",
+                "args": ["-p", "--strict-mcp-config"],
+            },
+            # An extractor must not be mistaken for an engine.
+            {
+                "id": "codex-cli",
+                "kind": "cli",
+                "role": "extractor",
+                "enabled": True,
+                "command": "codex",
+                "args": list(cli_provider.ALLOWED_CLIS["codex"]),
+            },
+        ],
+    )
+    names = set(all_engines())
+    assert "claude-code" in names
+    assert "codex-cli" not in names
+    # The hosted three are the definition of the series and are always present.
+    assert {"chatgpt", "claude", "perplexity"} <= names
+
+
+def test_a_vendor_with_two_engines_is_not_its_own_rival():
+    """Anthropic answers as both `claude` and `claude-code`.
+
+    Counting the second as a neutral rival of the first would shrink the very
+    self-preference gap this publication exists to measure.
+    """
+    from unprompted.aggregate import self_preference
+
+    answers = (
+        [ex(engine="claude", run=i, brands=["Claude Code"]) for i in range(10)]
+        + [ex(engine="claude-code", run=i, brands=["Claude Code"]) for i in range(10)]
+        + [ex(engine="perplexity", run=i, brands=[]) for i in range(10)]
+    )
+    run = _run(answers)
+
+    both = self_preference(run, {"Claude Code": ["claude", "claude-code"]})[0]
+    assert both.own_runs == 20 and both.own_rate == 1.0
+    assert both.rival_runs == 10 and both.rival_rate == 0.0
+    assert both.gap == 100.0
+
+    # Naming only the hosted engine hides half the vendor's own answers in the
+    # rival bucket, and the measured gap collapses.
+    one = self_preference(run, {"Claude Code": ["claude"]})[0]
+    assert one.rival_runs == 20
+    assert one.gap < both.gap
+
+
+def test_a_single_owner_string_still_works():
+    """Older alias files name one engine; they must keep parsing."""
+    from unprompted.aggregate import self_preference
+
+    run = _run(
+        [ex(engine="claude", run=i, brands=["Claude Code"]) for i in range(5)]
+        + [ex(engine="perplexity", run=i, brands=[]) for i in range(5)]
+    )
+    assert self_preference(run, {"Claude Code": "claude"})[0].gap == 100.0
+
+
+def test_adding_an_engine_without_a_method_bump_holds_the_week():
+    """Registering a local harness as an engine is exactly this case."""
+    previous = {
+        "engines": ["chatgpt", "claude", "perplexity"],
+        "method_version": 1,
+    }
+    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
+    run["method_version"] = 1
+
+    result = run_checks(run, brand_week(run), [], previous=previous)
+    assert result.held
+    assert "claude-code" in " ".join(result.reasons)
+
+
+def test_adding_an_engine_with_a_method_bump_passes():
+    previous = {
+        "engines": ["chatgpt", "claude", "perplexity"],
+        "method_version": 1,
+    }
+    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
+    run["method_version"] = 2
+
+    assert run_checks(run, brand_week(run), [], previous=previous).passed
+
+
+def test_an_unchanged_engine_list_is_not_flagged():
+    previous = {"engines": ["chatgpt", "claude"], "method_version": 1}
+    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run["engines"] = ["claude", "chatgpt"]  # order must not matter
+    run["method_version"] = 1
+
+    assert run_checks(run, brand_week(run), [], previous=previous).passed

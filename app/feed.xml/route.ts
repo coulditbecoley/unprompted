@@ -1,5 +1,5 @@
+import { CATEGORIES } from "@/lib/categories";
 import {
-  CATEGORY,
   categoryLabel,
   loadHistory,
   movement,
@@ -25,25 +25,33 @@ const SITE = "https://unprompted.report";
  * code here.
  */
 export function GET() {
-  const history = loadHistory(CATEGORY);
+  // Every live category, not just the flagship. The feed is the publication's
+  // "get it without coming back" mechanism, and a subscriber who follows it
+  // should receive every chart that publishes, not one of three.
+  const weeks = CATEGORIES.flatMap((category) => {
+    const history = loadHistory(category.slug);
+    return history
+      .slice()
+      .reverse()
+      .map((run, i) => ({ run, older: history[history.length - 2 - i] }));
+  }).sort((x, y) => y.run.run_date.localeCompare(x.run.run_date));
+
   const updated =
-    history.length > 0
-      ? new Date(`${history[history.length - 1].run_date}T13:00:00Z`).toISOString()
+    weeks.length > 0
+      ? new Date(`${weeks[0].run.run_date}T13:00:00Z`).toISOString()
       : new Date(0).toISOString();
 
-  const entries = history
-    .slice()
-    .reverse()
-    .map((run, i) => {
+  const entries = weeks
+    .map(({ run, older }) => {
       const board = standings(run);
-      const older = history[history.length - 2 - i];
       const moves = movement(board, older ? standings(older) : []);
       const snub = theSnub(moves);
       const leader = board[0];
+      const label = categoryLabel(run.category);
 
       const title = leader
-        ? `Week of ${run.run_date}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of runs`
-        : `Week of ${run.run_date}: no brand was named`;
+        ? `${label}, week of ${run.run_date}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of runs`
+        : `${label}, week of ${run.run_date}: no brand was named`;
 
       const rows = board
         .slice(0, 8)
@@ -54,17 +62,17 @@ export function GET() {
         .join("");
 
       const body = [
-        `<p>${categoryLabel(CATEGORY)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${run.engines.join(", ")}), method v${run.method_version}.</p>`,
+        `<p>${esc(label)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${esc(run.engines.join(", "))}), method v${run.method_version}.</p>`,
         `<ol>${rows}</ol>`,
         snub
           ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? "named last week, not named once this week" : `down ${Math.abs(snub.rotationDelta)} points`}.</p>`
           : "",
-        `<p><a href="${SITE}/chart">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
+        `<p><a href="${SITE}/chart/${run.category}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
       ].join("");
 
       return `  <entry>
     <title>${esc(title)}</title>
-    <link href="${SITE}/chart"/>
+    <link href="${SITE}/chart/${run.category}"/>
     <id>tag:unprompted.report,${run.run_date}:${run.category}</id>
     <updated>${new Date(`${run.run_date}T13:00:00Z`).toISOString()}</updated>
     <content type="html">${esc(body)}</content>

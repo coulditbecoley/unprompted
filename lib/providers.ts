@@ -22,9 +22,16 @@ import { REPO_ROOT } from "@/lib/data";
  * Execution happens in exactly one place: the local Python pipeline, invoked
  * by a human or a scheduled task on the machine that owns the CLIs.
  *
- * Detection is the one place the web app touches a binary, and it is limited
- * to the fixed allowlist in KNOWN_CLIS below. It never probes a name supplied
- * by a request.
+ * The web app spawns no process at all, not even a limited one. Detection used
+ * to run each allowlisted binary with `--version`; it now resolves the name
+ * against PATH and reports the path, which answers the same question without a
+ * child process. Nothing here should reintroduce one.
+ *
+ * KNOWN_CLIS is also the allowlist the admin commit route validates against,
+ * command *and* arguments. The arguments are a harness's safety settings as
+ * much as its plumbing, so they are pinned rather than merely permitted, and
+ * ALLOWED_CLIS in src/unprompted/cli_provider.py mirrors this list on the side
+ * that actually executes. A test fails if the two drift.
  */
 
 export type ProviderRole = "engine" | "extractor";
@@ -54,8 +61,17 @@ export type Provider = {
  * attacker named.
  */
 export const KNOWN_CLIS: Array<{
+  /** Registry id when added as an extractor. */
   id: string;
   label: string;
+  /**
+   * Registry id when added as an engine. Separate from `id` because an engine
+   * id is a public chart row and a vendor can field both roles at once, so the
+   * two must be able to coexist in one registry. Kept readable for the same
+   * reason: it is printed in the status bar and the weekly note.
+   */
+  engineId: string;
+  engineLabel: string;
   command: string;
   args: string[];
   versionArgs: string[];
@@ -63,22 +79,41 @@ export const KNOWN_CLIS: Array<{
   {
     id: "claude-cli",
     label: "Claude Code",
+    engineId: "claude-code",
+    engineLabel: "Claude Code (local)",
     command: "claude",
-    args: ["-p"],
+    // --strict-mcp-config keeps the operator's MCP servers out of a pass that
+    // is only meant to read one block of prose.
+    args: ["-p", "--strict-mcp-config"],
     versionArgs: ["--version"],
   },
   {
     id: "codex-cli",
     label: "Codex",
+    engineId: "codex",
+    engineLabel: "Codex (local)",
     command: "codex",
-    // --skip-git-repo-check because the pipeline runs it from wherever the job
-    // starts, and codex otherwise refuses outside a trusted repository.
-    args: ["exec", "--skip-git-repo-check", "-"],
+    // --skip-git-repo-check because the pipeline runs it from an empty
+    // directory, and codex otherwise refuses outside a trusted repository.
+    // The rest drop the operator's hooks, MCP servers and execpolicy, and stop
+    // model-generated shell commands from writing anything. The trailing "-"
+    // reads the prompt from stdin and must stay last.
+    args: [
+      "exec",
+      "--skip-git-repo-check",
+      "--ignore-user-config",
+      "--ignore-rules",
+      "--sandbox",
+      "read-only",
+      "-",
+    ],
     versionArgs: ["--version"],
   },
   {
     id: "gemini-cli",
     label: "Gemini",
+    engineId: "gemini-cli-engine",
+    engineLabel: "Gemini (local)",
     command: "gemini",
     args: ["-p"],
     versionArgs: ["--version"],
@@ -118,7 +153,41 @@ function isProvider(v: unknown): v is Provider {
   );
 }
 
-/** Whether a provider is usable right now, and why not when it is not. */
+/**
+ * Resolve a bare command name against PATH, the way a shell would.
+ *
+ * On Windows the extension is what makes a file executable and these tools
+ * install as `.CMD` shims, so extensions are tried before the bare name.
+ * Returns the resolved path, or null when nothing on PATH matches.
+ */
+export function resolveOnPath(command: string): string | null {
+  const isWindows = process.platform === "win32";
+  const extensions = isWindows
+    ? [...(process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean), ""]
+    : [""];
+
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidate = path.join(dir, command + extension);
+      try {
+        if (fs.statSync(candidate).isFile()) return candidate;
+      } catch {
+        // Not there, or not readable. Try the next one.
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether a provider is usable right now, and why not when it is not.
+ *
+ * A local CLI used to report "LOCAL CLI" unconditionally, which read as ready
+ * whether or not the thing existed. That was harmless while CLIs only did
+ * extraction, which falls back. It is not harmless now that one can be an
+ * engine: an engine that is not installed stops the run outright, and the
+ * dashboard is where you would go to find out why.
+ */
 export function providerStatus(p: Provider): { ready: boolean; detail: string } {
   if (!p.enabled) return { ready: false, detail: "DISABLED" };
   if (p.kind === "api") {
@@ -126,5 +195,12 @@ export function providerStatus(p: Provider): { ready: boolean; detail: string } 
       ? { ready: true, detail: "READY" }
       : { ready: false, detail: "NO KEY" };
   }
-  return { ready: true, detail: "LOCAL CLI" };
+  if (process.env.VERCEL) {
+    // A serverless function cannot see the operator's laptop, so "missing"
+    // here would be a lie rather than a finding.
+    return { ready: false, detail: "LOCAL ONLY" };
+  }
+  return resolveOnPath(p.command ?? "")
+    ? { ready: true, detail: "ON PATH" }
+    : { ready: false, detail: "NOT INSTALLED" };
 }

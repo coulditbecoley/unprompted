@@ -133,7 +133,7 @@ export default function Home() {
             <ShareRow
               headline={
                 leader
-                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about Pokémon card grading.`
+                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${categoryLabel(CATEGORY).toLowerCase()}.`
                   : "What AI recommends when nobody's paying."
               }
             />

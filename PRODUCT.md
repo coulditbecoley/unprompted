@@ -1,5 +1,11 @@
 # Product
 
+> **Out of date.** This describes the launch plan, whose category was Pokémon
+> card grading. That category is archived (`data/archive/`) and the publication
+> now runs three AI-software categories; see `lib/categories.ts` for the live
+> set and the rationale. The audience and positioning sections below have not
+> been rewritten for that change.
+
 <!-- impeccable:product-schema 1 -->
 
 ## Platform

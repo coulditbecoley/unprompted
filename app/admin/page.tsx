@@ -3,7 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
-import { CATEGORY, REPO_ROOT, latestRun, loadHistory, loadQuarantine, standings } from "@/lib/data";
+import {
+  CATEGORY,
+  REPO_ROOT,
+  latestRun,
+  loadHeld,
+  loadHistory,
+  loadQuarantine,
+  standings,
+} from "@/lib/data";
+import { CATEGORIES } from "@/lib/categories";
 import { TrimTop } from "@/components/ui";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
@@ -15,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 /**
- * The only gated surface. Auth is enforced in middleware, not here.
+ * The only gated surface. Auth is enforced in proxy.ts, not here.
  *
  * Every save opens a commit against the public repository rather than writing
  * to a database, so the method's history is public by construction. That is
@@ -39,7 +48,31 @@ export default function AdminPage() {
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
   const providers = loadProviders();
-  const engines = providers.map((p) => ({ p, ...providerStatus(p) }));
+  const withStatus = providers
+    .filter((p) => p.enabled)
+    .map((p) => ({ p, ...providerStatus(p) }));
+  const engines = withStatus.filter(({ p }) => p.role === "engine");
+  const extractors = withStatus.filter(({ p }) => p.role === "extractor");
+
+  // Where the week actually runs. A local CLI engine cannot exist on a GitHub
+  // runner, so registering one moves the measurement onto this machine, and the
+  // dashboard should say so rather than leaving it to be inferred.
+  const localEngines = engines.filter(({ p }) => p.kind === "cli");
+  const held = loadHeld();
+
+  // Every category, not just the flagship: a held or stale category is exactly
+  // what an operator needs to notice, and it would be invisible here otherwise.
+  const perCategory = CATEGORIES.map((c) => {
+    const latest = latestRun(c.slug);
+    return {
+      slug: c.slug,
+      label: c.label,
+      date: latest?.run_date ?? null,
+      methodVersion: latest?.method_version ?? null,
+      extractor: latest?.extractor ?? null,
+      engines: latest?.engines ?? [],
+    };
+  });
 
   return (
     <section className="shell section">
@@ -50,7 +83,8 @@ export default function AdminPage() {
       <p className="section-lead">
         Every change here becomes a commit on the public repository. Editing
         questions, run count or the engine list changes what the numbers mean, so
-        each of those bumps the method version.
+        each of those bumps the method version &mdash; and a run whose engine list
+        moved without one is held rather than published.
       </p>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
@@ -66,15 +100,36 @@ export default function AdminPage() {
 
         <div className="cmp-pick">
           <TrimTop />
-          <h3 style={{ marginTop: 6 }}>Providers</h3>
+          <h3 style={{ marginTop: 6 }}>Engines ({engines.length})</h3>
           {engines.map(({ p, ready, detail }) => (
             <div className="cmp-stat" key={p.id}>
-              <span>{p.label}</span>
+              <span>
+                {p.label}{" "}
+                <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                  {p.kind === "cli" ? "LOCAL" : "API"}
+                </small>
+              </span>
               <span className={ready ? "" : "pending"}>{detail}</span>
             </div>
           ))}
+
+          <h3 style={{ marginTop: 18 }}>Extractors</h3>
+          {extractors.map(({ p, ready, detail }) => (
+            <div className="cmp-stat" key={p.id}>
+              <span>
+                {p.label}{" "}
+                <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                  {p.kind === "cli" ? "LOCAL" : "API"}
+                </small>
+              </span>
+              <span className={ready ? "" : "pending"}>{detail}</span>
+            </div>
+          ))}
+
           <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-            Keys are read from the environment. They are never stored in the repo.
+            API keys are read from the environment and never stored in the repo.
+            Local harnesses are found on this machine&rsquo;s PATH, so they read
+            NOT INSTALLED anywhere they are not signed in.
           </p>
         </div>
 
@@ -126,6 +181,82 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/*
+        Where the week runs, and what came out of it. Split out from State
+        because "is the automatic flow actually working" is a different question
+        from "what is the method", and it is the one asked most often.
+      */}
+      <section style={{ marginBottom: 26 }}>
+        <p className="label">Measurement</p>
+        <div className="seq-board">
+          <TrimTop />
+          <div className="seq-row" style={{ gridTemplateColumns: "1fr auto" }}>
+            <span className="seq-brand" style={{ gap: 3 }}>
+              Runs on
+              <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
+                {localEngines.length > 0
+                  ? "scripts/weekly-run.cmd, Windows Task Scheduler, Tuesdays 13:00"
+                  : ".github/workflows/weekly.yml, GitHub Actions"}
+              </small>
+            </span>
+            <span className="mono" style={{ fontSize: 11 }}>
+              {localEngines.length > 0 ? "THIS MACHINE" : "CLOUD"}
+            </span>
+          </div>
+
+          {localEngines.length > 0 && (
+            <div className="seq-row" style={{ gridTemplateColumns: "1fr auto" }}>
+              <span className="seq-brand" style={{ gap: 3 }}>
+                Why not the cloud
+                <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
+                  {localEngines.map(({ p }) => p.label).join(", ")} sign in on this
+                  machine, and a run refuses to start without every declared engine
+                </small>
+              </span>
+              <span className="mono" style={{ fontSize: 11 }}>
+                {localEngines.length} LOCAL
+              </span>
+            </div>
+          )}
+
+          {perCategory.map((c) => (
+            <div className="seq-row" key={c.slug} style={{ gridTemplateColumns: "1fr auto" }}>
+              <span className="seq-brand" style={{ gap: 3 }}>
+                {c.label}
+                <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
+                  {c.date
+                    ? `${c.date} · method v${c.methodVersion} · read by ${c.extractor ?? "api"} · ${c.engines.length} engines`
+                    : "no published run yet"}
+                </small>
+              </span>
+              <span className="mono" style={{ fontSize: 11, color: c.date ? "var(--fg-2)" : "var(--fg-3)" }}>
+                {c.date ? "PUBLISHED" : "NONE"}
+              </span>
+            </div>
+          ))}
+
+          {held.map((h) => (
+            <div className="seq-row" key={`${h.date}-${h.category}`} style={{ gridTemplateColumns: "1fr auto" }}>
+              <span className="seq-brand" style={{ gap: 3 }}>
+                {h.category}
+                <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
+                  {h.date} · held, {Math.round(h.errorRate * 100)}% of calls errored ·
+                  kept in data/held, never published
+                </small>
+              </span>
+              <span className="mono seq-delta is-down" style={{ fontSize: 11 }}>
+                HELD
+              </span>
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 10 }}>
+          A held run is the checks working, not a crash. Its answers are kept, so
+          it can be re-read with <span className="mono">unprompted.reextract</span>{" "}
+          once the cause is fixed, without paying to ask anything again.
+        </p>
+      </section>
 
       <ProviderManager initial={providers} />
 

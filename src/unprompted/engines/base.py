@@ -39,6 +39,9 @@ class Engine:
 
     name: str = "engine"
     key_names: tuple[str, ...] = ()
+    # Why this engine could not answer, in words that fit how it is configured.
+    # Overridden by CliEngine, whose problem is never a missing key.
+    unavailable_reason: str = "not configured: no API key present"
 
     def __init__(self) -> None:
         self.api_key = read_key(*self.key_names)
@@ -63,7 +66,7 @@ class Engine:
                 question_id=question_id,
                 question=question,
                 run_index=run_index,
-                error="not configured: no API key present",
+                error=self.unavailable_reason,
                 fetched_at=utc_now(),
             )
 

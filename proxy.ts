@@ -6,6 +6,9 @@ import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
 /**
  * Gates the only non-public surface.
  *
+ * Named `proxy` rather than `middleware`: Next 16 deprecated the middleware
+ * file convention in favour of this one.
+ *
  * Single operator, so this is a shared secret rather than an account system.
  * Building user accounts for one person would be more machinery than the job
  * needs, and more attack surface than it deserves.
@@ -13,7 +16,7 @@ import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
  * If ADMIN_PASSWORD is unset the admin surface is closed entirely rather than
  * open — an unconfigured deploy must never be an unlocked one.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const secret = process.env.ADMIN_PASSWORD?.trim();
 
   if (!secret) {

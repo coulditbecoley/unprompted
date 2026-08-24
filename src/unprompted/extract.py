@@ -18,6 +18,9 @@ from .models import BrandMention, EngineAnswer, Extraction
 
 MODEL = "claude-opus-5"
 MAX_TOKENS = 2048
+# The CLI path is capped in cli_provider; cap the API path too, so one hung
+# extraction cannot hold a worker for the length of the job.
+TIMEOUT_SECONDS = 120
 
 EXTRACT_PROMPT = """\
 Below is an answer an AI assistant gave to a shopper's question.
@@ -103,7 +106,11 @@ def extract_one(
     try:
         from anthropic import Anthropic
 
-        client = Anthropic(api_key=api_key) if api_key else Anthropic()
+        client = (
+            Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS)
+            if api_key
+            else Anthropic(timeout=TIMEOUT_SECONDS)
+        )
         result = client.messages.parse(
             model=MODEL,
             max_tokens=MAX_TOKENS,

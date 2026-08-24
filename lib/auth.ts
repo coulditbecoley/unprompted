@@ -7,8 +7,8 @@
  * carries an HMAC of a fixed label under the secret: it proves the holder
  * authenticated, and it cannot be reversed into the password.
  *
- * Runs in both the edge middleware and the Node route handler, so it uses Web
- * Crypto rather than node:crypto.
+ * Runs in both the proxy and the Node route handler, so it uses Web Crypto
+ * rather than node:crypto.
  */
 
 const LABEL = "unprompted-admin-session-v1";
@@ -48,15 +48,23 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Defence in depth. Middleware already gates this path; checking again here
+ * Defence in depth. The proxy already gates this path; checking again here
  * means a future routing change can never silently expose the write path.
  */
 export async function isAuthorised(request: Request): Promise<boolean> {
   const secret = process.env.ADMIN_PASSWORD?.trim();
   if (!secret) return false;
-  const cookie = request.headers.get("cookie") ?? "";
-  const match = new RegExp(`(?:^|;\s*)${ADMIN_COOKIE}=([^;]+)`).exec(cookie);
-  if (!match) return false;
+  // Split rather than a regex. The previous pattern was built from a template
+  // literal, where `\s` is not a valid escape and collapses to a bare `s`: the
+  // compiled pattern was `(?:^|;s*)`, so it matched only when the admin cookie
+  // happened to be first in the header and rejected every other valid request.
+  const prefix = `${ADMIN_COOKIE}=`;
+  const value = (request.headers.get("cookie") ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length);
+  if (!value) return false;
   const expected = await deriveSessionToken(secret);
-  return safeEqual(decodeURIComponent(match[1]), expected);
+  return safeEqual(decodeURIComponent(value), expected);
 }
