@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
@@ -203,7 +204,15 @@ def persist(record: RunRecord, reasons: list[str], overwrite: bool = False) -> P
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{record.category}.json"
     if out_path.exists() and not overwrite:
-        raise SystemExit(f"refusing to overwrite {out_path}: run data is append-only")
+        # Not SystemExit. This is a condition of one category, and killing the
+        # process here cost a real week: on 2026-08-24 a leftover held file
+        # aborted the run after ai-image-generators had already paid for 375
+        # engine calls, and ai-writing-tools never ran at all. FileExistsError
+        # is caught per category by main(), so the rest of the week continues
+        # and everything that did publish still gets committed.
+        raise FileExistsError(
+            f"refusing to overwrite {out_path}: run data is append-only"
+        )
     out_path.write_text(
         json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -264,7 +273,24 @@ def main() -> int:
 
     for category in categories:
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
-        record, reasons = run_category(category, args.date, dry_run=args.dry_run)
+        try:
+            record, reasons = run_category(category, args.date, dry_run=args.dry_run)
+        except Exception as exc:  # noqa: BLE001 - one category must not cost the rest
+            # Categories are independent measurements that happen to share a
+            # scheduler. Letting one crash out of the loop skipped every
+            # category after it, and left whatever had already been written
+            # sitting uncommitted, because the wrapper script treats an
+            # unexpected exit code as "commit nothing".
+            #
+            # A crash is recorded as a hold: same exit code, so the categories
+            # that did publish are still committed, and the reason is in the
+            # log beside the ones the checks produced. SystemExit is not caught
+            # on purpose, because pre-flight refuses before spending anything
+            # and that should stop the whole run.
+            print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
+            traceback.print_exc()
+            held[category] = [f"the run raised {type(exc).__name__}: {exc}"]
+            continue
 
         print("\nCOST", file=sys.stderr)
         print(format_report(record.to_dict()), file=sys.stderr)

@@ -1,4 +1,4 @@
-"""The five sanity rules that stand between a run and the public site.
+"""The six sanity rules that stand between a run and the public site.
 
 Fail safe, never fail open: if any rule trips, nothing publishes and a human
 looks at it. An embarrassing published chart costs more than a missed week.
@@ -134,5 +134,31 @@ def run_checks(
             f"the expected {MIN_BRANDS}-{max_brands} range "
             f"({len(this_week)} distinct names in total)"
         )
+
+    # 5. An engine that answered nothing at all.
+    #
+    # The chart's claim is that these particular assistants were asked, so an
+    # assistant that errored on every question makes the week measure a
+    # narrower field than it says it does. The error-rate rule above does not
+    # catch this: with five engines a completely dead one is exactly 20% of
+    # calls, which is inside the limit by a rounding error.
+    #
+    # This is not hypothetical. On 2026-08-24 the hosted claude engine returned
+    # 0 of 75 while its API spend cap was exhausted, and the run went on to pass
+    # rule 3 at precisely the threshold. It only failed to publish because it
+    # crashed for an unrelated reason.
+    for engine in sorted(run.get("engines", [])):
+        got = [e for e in extractions if e.get("engine") == engine]
+        # `got` empty means a hand-built record rather than a real run: the
+        # pipeline builds one task per engine per question, so a declared engine
+        # always has rows. Only "it answered, and every answer failed" is a
+        # condition this can actually be in.
+        if got and all(e.get("error") for e in got):
+            reasons.append(
+                f"{engine} answered none of its {len(got)} calls, so this week "
+                f"measures a smaller field than the {len(run.get('engines', []))} "
+                f"engines it claims. Fix that engine, or drop it from "
+                f"providers.json and bump method_version."
+            )
 
     return CheckResult(passed=not reasons, reasons=reasons)

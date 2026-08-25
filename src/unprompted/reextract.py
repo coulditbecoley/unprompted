@@ -132,7 +132,12 @@ def main() -> int:
 
     # Same gate as a live run: a re-extraction that still fails its checks is
     # held, not published.
-    persist(fresh, result.reasons, overwrite=args.in_place)
+    try:
+        persist(fresh, result.reasons, overwrite=args.in_place)
+    except FileExistsError as exc:
+        # A re-read is normally aimed at a date that already has a file, so this
+        # is an ordinary mistake rather than a crash. --out-date is the answer.
+        raise SystemExit(f"{exc}\nPass --out-date to write it under another date.")
 
     print("\nSTANDINGS:", file=sys.stderr)
     for i, b in enumerate(this_week, 1):

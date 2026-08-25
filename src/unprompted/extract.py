@@ -35,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pydantic import BaseModel, Field
 
-from .cli_provider import CliProvider, ProviderError, cli_extractor, parse_json_reply
+from .cli_provider import CliProvider, ProviderError, parse_json_reply
 from .models import BrandMention, EngineAnswer, Extraction
 
 MODEL = "claude-opus-5"
@@ -45,11 +45,16 @@ MAX_TOKENS = 2048
 TIMEOUT_SECONDS = 120
 
 # A batch of a few hundred short reads has finished in minutes every time it has
-# been run. The cap is a stop, not an expectation: the weekly task is allowed
-# eight hours, so a batch still going after two has gone wrong and should say so
-# rather than sit there until the scheduler kills the whole run.
+# been run: 201 answers took 139 seconds. The cap is a stop, not an expectation.
+#
+# One hour rather than the API's own 24, because the cap is paid once per
+# category and the scheduled task is allowed eight hours total. Three categories
+# of roughly 375 calls each spend about 45 minutes apiece querying engines, so a
+# two-hour cap put the worst case at 8.4 hours and the scheduler would have
+# killed the run mid-week. At one hour the worst case is 5.4 hours, and giving
+# up early costs nothing: the answers are kept and `reextract` re-reads them.
 BATCH_POLL_SECONDS = 15
-BATCH_MAX_WAIT_SECONDS = 2 * 3600
+BATCH_MAX_WAIT_SECONDS = 3600
 
 EXTRACT_PROMPT = """\
 Below is an answer an AI assistant gave to a shopper's question.
@@ -281,13 +286,21 @@ def extract_all_batch(
 ) -> list[Extraction]:
     """Structure a whole run in one Batch API job. Half the price of live calls.
 
-    Returns records in the order given. Never raises for a single bad answer;
-    a failure lands on that record as `error`, the same as every other path.
-    A failure of the *batch* does raise, because a run that silently extracted
-    nothing would publish an empty week.
+    Returns records in the order given, and does not raise. A failure lands on
+    the affected records as `error`, whether it hit one answer or the whole
+    batch.
+
+    Raising instead destroyed the run. The engine answers exist only in memory
+    until a record is written, and extraction happens after every engine call
+    has already been paid for, so one 529 on submit threw away a full
+    category's spend with nothing left on disk to re-read. Marking the records
+    instead sends the week through machinery that already exists for exactly
+    this: the error-rate check holds it, the held file keeps every raw answer,
+    and `reextract` reads it again for the price of the extraction alone.
     """
     bases: list[Extraction] = []
     requests = []
+    output_config = {**_effort(MODEL).get("output_config", {}), "format": _json_format()}
     for i, answer in enumerate(answers):
         base, needed = _base_for(answer)
         bases.append(base)
@@ -299,10 +312,7 @@ def extract_all_batch(
                 "params": {
                     "model": MODEL,
                     "max_tokens": MAX_TOKENS,
-                    "output_config": {
-                        **_effort(MODEL).get("output_config", {}),
-                        "format": _json_format(),
-                    },
+                    "output_config": output_config,
                     "messages": [
                         {
                             "role": "user",
@@ -316,59 +326,83 @@ def extract_all_batch(
     if not requests:
         return bases
 
-    client = _client(api_key)
-    batch = client.messages.batches.create(requests=requests)
-    print(
-        f"  batch {batch.id}: {len(requests)} answers submitted",
-        file=sys.stderr,
-        flush=True,
-    )
+    seen: set[int] = set()
+    batch_id = "not submitted"
+    failure: str | None = None
 
-    waited = 0
-    while batch.processing_status != "ended":
-        if waited >= BATCH_MAX_WAIT_SECONDS:
-            raise RuntimeError(
-                f"batch {batch.id} still {batch.processing_status} after "
-                f"{waited // 60} minutes; results are retrievable for 29 days, "
-                f"re-read them with reextract rather than re-querying the engines"
-            )
-        time.sleep(BATCH_POLL_SECONDS)
-        waited += BATCH_POLL_SECONDS
-        batch = client.messages.batches.retrieve(batch.id)
-        if waited % 60 == 0:
-            c = batch.request_counts
-            print(
-                f"  batch {batch.id}: {c.succeeded} done, {c.processing} left"
-                f" ({waited // 60}m)",
-                file=sys.stderr,
-                flush=True,
-            )
+    try:
+        client = _client(api_key)
+        batch = client.messages.batches.create(requests=requests)
+        batch_id = batch.id
+        print(
+            f"  batch {batch.id}: {len(requests)} answers submitted",
+            file=sys.stderr,
+            flush=True,
+        )
 
-    seen = set()
-    for entry in client.messages.batches.results(batch.id):
-        index = int(entry.custom_id[1:])
-        seen.add(index)
-        base = bases[index]
-        if entry.result.type != "succeeded":
-            base.error = f"extract failed: batch {entry.result.type}"
-            continue
-        message = entry.result.message
-        try:
-            _apply(base, json.loads(message.content[0].text))
-        except (ValueError, IndexError, AttributeError) as exc:
-            base.error = f"extract failed: {type(exc).__name__}: {exc}"
-            continue
-        u = getattr(message, "usage", None)
-        if u is not None:
-            base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
-            base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+        waited = 0
+        while batch.processing_status != "ended":
+            if waited >= BATCH_MAX_WAIT_SECONDS:
+                raise TimeoutError(
+                    f"still {batch.processing_status} after {waited // 60} minutes"
+                )
+            time.sleep(BATCH_POLL_SECONDS)
+            waited += BATCH_POLL_SECONDS
+            batch = client.messages.batches.retrieve(batch.id)
+            if waited % 60 == 0:
+                c = batch.request_counts
+                print(
+                    f"  batch {batch.id}: {c.succeeded} done, {c.processing} left"
+                    f" ({waited // 60}m)",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
-    # Results come back unordered and, in principle, incomplete. An answer that
-    # was submitted and never came back must not read as a clean refusal.
+        for entry in client.messages.batches.results(batch.id):
+            index = int(entry.custom_id[1:])
+            seen.add(index)
+            base = bases[index]
+            if entry.result.type != "succeeded":
+                base.error = f"extract failed: batch {entry.result.type}"
+                continue
+            message = entry.result.message
+            try:
+                _apply(base, json.loads(message.content[0].text))
+            except (ValueError, IndexError, AttributeError) as exc:
+                base.error = f"extract failed: {type(exc).__name__}: {exc}"
+                continue
+            u = getattr(message, "usage", None)
+            if u is not None:
+                base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
+                base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+    except Exception as exc:  # noqa: BLE001 - recorded on the records, not raised
+        failure = f"{type(exc).__name__}: {exc}"
+        print(
+            f"  batch {batch_id} failed: {failure}",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
+            "  the week will be held with every answer intact; re-read it with "
+            "python -m unprompted.reextract",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    # One sweep covers both cases. Results come back unordered and, in
+    # principle, incomplete, and a batch that died halfway still returned some
+    # of them. An answer that was submitted and never came back must not read
+    # as a clean refusal: that is a real brand mention silently becoming
+    # "this answer named nobody".
     for request in requests:
         index = int(request["custom_id"][1:])
-        if index not in seen:
-            bases[index].error = "extract failed: no result returned for this answer"
+        if index in seen:
+            continue
+        bases[index].error = (
+            f"extract failed: batch {batch_id} did not complete: {failure}"
+            if failure
+            else "extract failed: no result returned for this answer"
+        )
 
     return bases
 
@@ -418,12 +452,3 @@ def extract_run(
                 )
     return out
 
-
-def extract_all(
-    answers: list[EngineAnswer],
-    api_key: str | None = None,
-    provider: CliProvider | None = None,
-) -> list[Extraction]:
-    if provider is None:
-        provider = cli_extractor()
-    return [extract_one(a, api_key=api_key, provider=provider) for a in answers]

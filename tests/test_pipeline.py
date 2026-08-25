@@ -15,7 +15,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from unprompted.aggregate import BrandWeek, brand_week, movement, source_counts, the_snub
-from unprompted.checks import run_checks
+from unprompted.checks import MAX_ERROR_RATE, run_checks
 from unprompted.engines.base import Engine
 from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
 from unprompted.normalize import AliasMap, normalize
@@ -1274,3 +1274,121 @@ def test_an_enabled_api_extractor_beats_a_cli_below_it(monkeypatch, tmp_path):
     data["providers"][0]["enabled"] = False
     registry.write_text(json.dumps(data), encoding="utf-8")
     assert cli_provider.cli_extractor().id == "claude-cli"
+
+
+def test_a_dead_batch_holds_the_week_instead_of_destroying_it(monkeypatch):
+    """The regression that made batching dangerous.
+
+    Engine answers exist only in memory until a record is written, and
+    extraction runs after every engine call has been paid for. extract_all_batch
+    raising on submit therefore threw away a whole category's spend with nothing
+    left on disk to re-read, and the error text told the operator to reextract a
+    file that was never written.
+
+    Marking the records instead routes the week through machinery that already
+    exists: the error-rate check holds it, the held file keeps every raw answer,
+    and reextract re-reads it for the price of the extraction alone.
+    """
+    from unprompted import extract
+
+    answers = [_answer(f"q{i:02d}", f"Try Midjourney. {i}") for i in range(6)]
+
+    class Refusing:
+        def create(self, requests):
+            raise RuntimeError("529 overloaded")
+
+    monkeypatch.setattr(
+        extract,
+        "_client",
+        lambda _key: type("C", (), {"messages": type("M", (), {"batches": Refusing()})()})(),
+    )
+
+    out = extract.extract_all_batch(answers)
+
+    assert len(out) == len(answers)
+    assert all(r.answer for r in out), "the raw answers must survive to be re-read"
+    assert all(r.error for r in out), "a lost answer must not read as a clean refusal"
+    assert not any(r.refused for r in out)
+    assert all("529 overloaded" in r.error for r in out), "say what actually broke"
+
+
+def test_a_batch_that_dies_halfway_keeps_what_it_already_read(monkeypatch):
+    """A partial failure should cost the unread answers, not the read ones."""
+    from unprompted import extract
+
+    answers = [_answer(f"q{i:02d}", f"Try Midjourney. {i}") for i in range(3)]
+    good = '{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}'
+
+    class HalfDead(_FakeBatches):
+        def results(self, _id):
+            yield next(iter(super().results(_id)))
+            raise ConnectionError("stream dropped")
+
+    batches = HalfDead({f"x{i}": good for i in range(3)})
+    monkeypatch.setattr(extract, "_client", lambda _key: _fake_client(batches))
+
+    out = extract.extract_all_batch(answers)
+
+    read = [r for r in out if not r.error]
+    assert len(read) == 1 and [b.name for b in read[0].brands] == ["Midjourney"]
+    assert sum(1 for r in out if r.error) == 2
+    assert all("stream dropped" in r.error for r in out if r.error)
+
+
+def test_an_engine_that_answered_nothing_holds_the_week():
+    """The near-miss of 2026-08-24, made into a rule.
+
+    The hosted claude engine returned 0 of 75 that day because its API spend cap
+    was exhausted. With five engines a completely dead one is exactly 20% of
+    calls, and rule 3 allows up to 20%, so the week passed the error check on a
+    rounding error and would have published a chart claiming five assistants
+    were asked when four were.
+    """
+    live = [ex(engine="chatgpt", run=i, brands=["PSA", "CGC"]) for i in range(40)]
+    dead = [
+        ex(engine="claude", run=i, error="engine failed: 400 usage limit reached")
+        for i in range(10)
+    ]
+
+    run = _run(live + dead) | {"engines": ["chatgpt", "claude"]}
+    # Exactly the boundary that let this through: 10 of 50 is 20%, and rule 3
+    # allows up to 20%, so nothing else in the suite objects.
+    assert 10 / 50 == MAX_ERROR_RATE
+    result = run_checks(run, brand_week(run), [])
+
+    assert result.held
+    assert any("claude answered none" in r for r in result.reasons)
+    assert not any("errored" in r for r in result.reasons), "rule 3 stays silent here"
+
+    # The same run with that engine actually answering passes.
+    alive = [ex(engine="claude", run=i, brands=["PSA"]) for i in range(10)]
+    ok = _run(live + alive) | {"engines": ["chatgpt", "claude"]}
+    assert run_checks(ok, brand_week(ok), []).passed
+
+
+def test_a_stale_file_for_one_category_does_not_abort_the_week(tmp_path, monkeypatch):
+    """persist() used to raise SystemExit, which killed the whole run.
+
+    On 2026-08-24 a leftover held file did exactly that: the run aborted after
+    ai-image-generators had already paid for 375 engine calls, and
+    ai-writing-tools never ran. FileExistsError is an ordinary exception, so
+    main()'s per-category handler can absorb it.
+    """
+    from unprompted import run as run_mod
+
+    monkeypatch.setattr(run_mod, "ROOT", tmp_path)
+    record = RunRecord(
+        category="x", run_date="2026-08-24", method_version=1, runs_per_question=1,
+        engines=["claude"], extractor="api",
+        extractions=[Extraction(engine="claude", question_id="q01", run_index=0)],
+        quarantined=[],
+    )
+    # Held rather than published, so persist does not also try to write a
+    # report; the report template is not what this is testing.
+    run_mod.persist(record, reasons=["held for the test"])
+
+    with pytest.raises(FileExistsError):
+        run_mod.persist(record, reasons=["held for the test"])
+
+    # Still an ordinary Exception, so the per-category handler in main() sees it.
+    assert issubclass(FileExistsError, Exception)
