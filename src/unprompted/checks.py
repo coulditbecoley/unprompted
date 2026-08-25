@@ -14,6 +14,10 @@ from .aggregate import BrandWeek
 # methodology version when you do.
 MAX_ROTATION_SWING = 40.0    # percentage points, week over week
 MAX_ERROR_RATE = 0.20        # share of engine calls allowed to fail
+# The same bound, applied to each engine's own calls rather than to the pile.
+# A global rate cannot see a single broken engine: with five engines, one that
+# answers once and fails its other 74 calls is 19.7% of the run and passes.
+MAX_ENGINE_ERROR_RATE = 0.20
 # Measured against the first real run: 24 distinct companies appeared, but the
 # long tail was named once or twice out of 225. Counting raw distinct names
 # would hold the week forever on a perfectly healthy result, so the bound
@@ -135,30 +139,42 @@ def run_checks(
             f"({len(this_week)} distinct names in total)"
         )
 
-    # 5. An engine that answered nothing at all.
+    # 5. An engine that answered too little of its own share.
     #
     # The chart's claim is that these particular assistants were asked, so an
-    # assistant that errored on every question makes the week measure a
-    # narrower field than it says it does. The error-rate rule above does not
-    # catch this: with five engines a completely dead one is exactly 20% of
-    # calls, which is inside the limit by a rounding error.
+    # assistant that mostly failed makes the week measure a narrower field than
+    # it says it does. Rule 3 cannot see this, because it averages one engine's
+    # failures across every engine's calls.
     #
-    # This is not hypothetical. On 2026-08-24 the hosted claude engine returned
-    # 0 of 75 while its API spend cap was exhausted, and the run went on to pass
-    # rule 3 at precisely the threshold. It only failed to publish because it
-    # crashed for an unrelated reason.
+    # Neither hypothetical nor caught by the earlier version of this rule, which
+    # only fired when an engine failed *every* call:
+    #
+    #   - 2026-08-24, held: hosted claude returned 0 of 75 with its spend cap
+    #     exhausted. 75/375 is exactly 20%, inside rule 3 by a rounding error.
+    #   - 2026-08-24, published: claude failed 24 of its own 75 in the image
+    #     category, a third of that engine, while being only 10.7% of the run.
+    #     It published, and the standings compare three engines of which one
+    #     answered two thirds of the time.
+    #
+    # A single success would have satisfied the all-failed test, so that test is
+    # replaced rather than added to.
     for engine in sorted(run.get("engines", [])):
         got = [e for e in extractions if e.get("engine") == engine]
         # `got` empty means a hand-built record rather than a real run: the
         # pipeline builds one task per engine per question, so a declared engine
-        # always has rows. Only "it answered, and every answer failed" is a
-        # condition this can actually be in.
-        if got and all(e.get("error") for e in got):
+        # always has rows.
+        if not got:
+            continue
+        failed = sum(1 for e in got if e.get("error"))
+        rate = failed / len(got)
+        if rate > MAX_ENGINE_ERROR_RATE:
             reasons.append(
-                f"{engine} answered none of its {len(got)} calls, so this week "
-                f"measures a smaller field than the {len(run.get('engines', []))} "
-                f"engines it claims. Fix that engine, or drop it from "
-                f"providers.json and bump method_version."
+                f"{engine} failed {failed} of its own {len(got)} calls "
+                f"({rate:.0%}), over the {MAX_ENGINE_ERROR_RATE:.0%} limit for a "
+                f"single engine. This week would compare "
+                f"{len(run.get('engines', []))} engines of which one barely "
+                f"answered. Fix that engine, or drop it from providers.json and "
+                f"bump method_version."
             )
 
     return CheckResult(passed=not reasons, reasons=reasons)

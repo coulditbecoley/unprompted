@@ -1,4 +1,5 @@
 import { CATEGORIES } from "@/lib/categories";
+import { runInstant } from "@/lib/schedule";
 import {
   categoryLabel,
   loadHistory,
@@ -38,7 +39,7 @@ export function GET() {
 
   const updated =
     weeks.length > 0
-      ? new Date(`${weeks[0].run.run_date}T13:00:00Z`).toISOString()
+      ? runInstant(weeks[0].run.run_date).toISOString()
       : new Date(0).toISOString();
 
   const entries = weeks

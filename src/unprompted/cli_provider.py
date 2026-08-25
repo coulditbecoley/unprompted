@@ -186,12 +186,28 @@ class CliProvider:
 
 
 def load_registry() -> list[dict]:
+    """The provider registry, or a hard failure.
+
+    Swallowing a parse error here returned an empty registry, which reads as
+    "no local engines are declared" rather than "the file is broken". A run
+    would then quietly measure a smaller field, and on a first run there is no
+    previous engine list for the series check to compare against, so nothing
+    downstream would notice. Configuration that cannot be read must stop the
+    run, not shrink it.
+    """
     if not REGISTRY.exists():
         return []
     try:
-        return json.loads(REGISTRY.read_text(encoding="utf-8")).get("providers", [])
-    except (json.JSONDecodeError, AttributeError):
-        return []
+        data = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ProviderError(f"{REGISTRY} is not valid JSON: {exc}") from exc
+    providers = data.get("providers") if isinstance(data, dict) else None
+    if not isinstance(providers, list):
+        raise ProviderError(f"{REGISTRY} has no 'providers' list")
+    for entry in providers:
+        if not isinstance(entry, dict) or not entry.get("id"):
+            raise ProviderError(f"{REGISTRY} has a provider entry with no id: {entry!r}")
+    return providers
 
 
 def declared_clis(role: str) -> list[CliProvider]:

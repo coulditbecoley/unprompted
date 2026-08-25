@@ -4,10 +4,15 @@ version = "0.1.0"
 description = "Weekly public chart of which brands AI assistants recommend"
 requires-python = ">=3.11"
 dependencies = [
-  "anthropic>=0.40.0",
-  "openai>=1.60.0",
-  "pydantic>=2.0",
-  "PyYAML>=6.0",
+  # Upper bounds, not because a major bump is expected to break anything, but
+  # because this runs unattended on a schedule: an upgrade that lands between
+  # Mondays gets found by a failed week, not by a person. extract.py also uses
+  # one private anthropic path (with a tested fallback), so that one is the most
+  # exposed. Raise these deliberately and run the suite, rather than drifting.
+  "anthropic>=1.0.0,<2.0.0",
+  "openai>=1.60.0,<3.0.0",
+  "pydantic>=2.0,<3.0",
+  "PyYAML>=6.0,<7.0",
 ]
 
 [project.optional-dependencies]

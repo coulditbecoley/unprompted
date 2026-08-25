@@ -50,6 +50,45 @@ class Engine:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
+    @staticmethod
+    def is_retryable(exc: Exception) -> bool:
+        """Is this worth trying again, or is it the same answer three times?
+
+        A spend cap, a revoked key and a malformed request do not improve with a
+        second attempt. Retrying them costs the run its time budget and, where
+        the provider bills rejected calls, its money: on 2026-08-24 every one of
+        claude's 75 image-category calls hit an exhausted usage limit and each
+        was attempted three times.
+
+        Judged on the exception type name and message rather than a typed status
+        code, because four providers with four SDKs raise four class
+        hierarchies, and this has to hold for all of them. Unknown failures stay
+        retryable: a transient error wrongly treated as permanent loses an
+        answer, while a permanent one wrongly retried only wastes time.
+        """
+        name = type(exc).__name__.lower()
+        text = str(exc).lower()
+
+        # Rate limits are the one 4xx worth waiting out.
+        if "ratelimit" in name or "rate_limit" in text or "429" in text:
+            return True
+
+        permanent = (
+            "authenticationerror", "permissiondeniederror", "notfounderror",
+            "badrequesterror", "unprocessableentityerror",
+        )
+        if name in permanent:
+            return False
+
+        return not any(
+            phrase in text
+            for phrase in (
+                "usage limit", "spending limit", "quota", "insufficient_quota",
+                "credit balance", "billing", "invalid api key", "invalid_api_key",
+                "authentication", "unauthorized", "forbidden",
+            )
+        )
+
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         """Return (answer_text, source_urls, usage). May raise; caller handles it."""
         raise NotImplementedError
@@ -78,6 +117,8 @@ class Engine:
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
                 error = f"{type(exc).__name__}: {exc}"
+                if not self.is_retryable(exc):
+                    break
                 if attempt < MAX_ATTEMPTS - 1:
                     time.sleep(BACKOFF_SECONDS * (attempt + 1))
 

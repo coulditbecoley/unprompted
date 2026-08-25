@@ -68,6 +68,11 @@ class Extraction:
     # raw answer is public, and because a failed extraction should cost a cheap
     # re-parse rather than re-querying every engine.
     answer: str = ""
+    # When the engine was actually asked. EngineAnswer has carried this from the
+    # start and the extraction step dropped it, so a stored run could say which
+    # week it belonged to but not when any answer in it was fetched. That is the
+    # difference between "measured on Monday" and "re-read on Wednesday".
+    fetched_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +85,7 @@ class Extraction:
             "error": self.error,
             "answer": self.answer,
             "usage": self.usage,
+            "fetched_at": self.fetched_at,
         }
 
 
@@ -98,6 +104,22 @@ class RunRecord:
     # the next one that resolves, so "who read this week" is not a constant and
     # is not recoverable from anywhere else in the record.
     extractor: str = "api"
+    # The model that did the reading, when the extractor was the hosted API.
+    # "api" alone does not say which model, and the answer to "why did the
+    # numbers move" is often "a different model read them".
+    extractor_model: str = ""
+    # The date the engines were actually queried. Normally the same as run_date.
+    # A re-extraction re-reads stored answers and writes a file dated today, so
+    # without this the archive says engines were asked on a day they were not,
+    # and week-over-week movement compares a re-read against a real week.
+    measured_on: str = ""
+    # For a re-extraction: the run this was read from, as "<date>/<category>".
+    # Empty for a run that queried engines itself.
+    source_run: str = ""
+    # The commit the pipeline ran from. Questions, aliases and prompts all live
+    # in the repository, so this is what makes a published week reproducible:
+    # without it, "which same-day commit was this" has no answer.
+    git_sha: str = ""
     extractions: list[Extraction] = field(default_factory=list)
     quarantined: list[str] = field(default_factory=list)
 
@@ -109,6 +131,10 @@ class RunRecord:
             "runs_per_question": self.runs_per_question,
             "engines": self.engines,
             "extractor": self.extractor,
+            "extractor_model": self.extractor_model,
+            "measured_on": self.measured_on or self.run_date,
+            "source_run": self.source_run,
+            "git_sha": self.git_sha,
             "extractions": [e.to_dict() for e in self.extractions],
             # Sorted, not deduplicated. checks.py counts occurrences to decide
             # whether an unrecognised name is material enough to hold the week,

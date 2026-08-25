@@ -1,6 +1,7 @@
 @echo off
 REM Mirrors the published weekly notes into the Obsidian vault.
-REM Scheduled daily rather than weekly: the run happens in the cloud, so a daily
-REM idempotent pull catches the week whenever this machine is next awake.
+REM Scheduled daily rather than weekly. The weekly run calls this itself at the
+REM end, so the daily pass is a safety net: it catches a week published from
+REM elsewhere, or one whose run was interrupted after publishing.
 cd /d "%~dp0.."
 python scripts\sync_vault.py >> "%TEMP%\unprompted-sync.log" 2>&1

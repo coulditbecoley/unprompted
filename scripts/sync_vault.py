@@ -1,8 +1,10 @@
 """Copy the weekly notes into the Obsidian vault.
 
-The measurement runs in the cloud, so the vault cannot be written by the run
-itself. This pulls whatever the cloud published and mirrors the readable notes
-into the vault, which is the archive that outlives the repository.
+The weekly run now happens on this machine and calls this script itself at the
+end (see scripts/weekly-run.cmd). It stays scheduled daily as well, and stays
+idempotent, so a week published from anywhere else still reaches the vault, and
+so a missed or interrupted run is picked up the next day rather than lost. The
+vault is the archive that outlives the repository.
 
 Safe to run any number of times: it only writes files it generated (identified
 by their `type: unprompted-week` frontmatter) and never deletes anything.

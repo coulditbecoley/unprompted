@@ -25,7 +25,8 @@ from .cli_provider import cli_extractor
 from .extract import extract_run
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
-from .run import MAX_WORKERS, ROOT, load_local_env, persist
+from .extract import MODEL as EXTRACT_MODEL
+from .run import MAX_WORKERS, ROOT, git_sha, load_local_env, persist
 
 
 def main() -> int:
@@ -54,6 +55,18 @@ def main() -> int:
         if not held.exists():
             raise SystemExit(f"no run at {path} or {held}")
         path = held
+    # The help string said --in-place was "only for a run that was never
+    # published" and nothing enforced it, so re-reading a published date with
+    # --in-place overwrote the public archive at its own path. data/runs is the
+    # thing the methodology calls append-only; the guarantee has to be code.
+    published = path.parent.parent.name == "runs"
+    if args.in_place and published:
+        raise SystemExit(
+            f"{path} is a published run and data/runs is append-only.\n"
+            "Re-read it without --in-place to write a new dated file, or use "
+            "--out-date to choose that date yourself."
+        )
+
     record = json.loads(path.read_text(encoding="utf-8"))
 
     answers = [
@@ -107,6 +120,14 @@ def main() -> int:
         runs_per_question=record["runs_per_question"],
         engines=record["engines"],
         extractor=extractor.id if extractor else "api",
+        extractor_model="" if extractor else EXTRACT_MODEL,
+        # The answers were fetched when the source run fetched them. Dating a
+        # re-read as if the engines were queried today put a day in the archive
+        # on which nothing was asked, and made week-over-week movement compare a
+        # re-reading against a real week.
+        measured_on=record.get("measured_on") or record["run_date"],
+        source_run=f"{record['run_date']}/{record['category']}",
+        git_sha=git_sha(),
         extractions=extractions,
         quarantined=quarantined,
     )

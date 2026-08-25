@@ -101,15 +101,22 @@ changes what the week means, so the run stops before spending anything.
 
 | Harness | Command | Extractor | Engine |
 |---|---|---|---|
-| Claude Code | `claude` | primary | registered, off |
-| Codex | `codex` | fallback | registered, off |
+| Claude Code | `claude` | fallback | on, charted |
+| Codex | `codex` | fallback | on, charted |
 | Gemini | `gemini` | allowlisted, unverified | — |
 
-**Local engines ship disabled**, because an enabled CLI engine has to exist on
-whatever machine runs the pipeline and the GitHub runner has no local
-subscription. Turn them on when you run the week yourself, and bump
-`method_version` in the question bank when you do — the engine list changing is
-a method change, and a check now holds the week if the two disagree.
+**Both local engines are on**, which is why the week runs on the operator's
+machine rather than a GitHub runner: an enabled CLI engine has to exist wherever
+the pipeline runs, and a runner has no local subscription. See
+`scripts/weekly-run.cmd`. Turning one off changes the engine list, which is a
+method change, and a check holds the week if the two disagree.
+
+**Extraction no longer runs through a local harness.** The hosted API extractor
+is first in `providers.json` and reads a whole run as one Batch API job; the two
+CLIs sit below it as fallbacks for a machine with no key. A harness call carried
+roughly 48k tokens of its own context to do about 900 tokens of work, which is
+where a subscription's allowance went. Registry order is priority, and the
+`/admin` dashboard marks which extractor will actually run.
 
 A local engine is charted under its own name and never substitutes for the
 hosted engine it resembles; `METHODOLOGY.md` explains why they are different
@@ -169,15 +176,17 @@ Categories are grouped into sectors so a visitor sees the shape of the
 publication before they see a list of slugs. Adding one is a data change, not a
 code change:
 
-1. Add an entry to `CATEGORIES` in [`lib/categories.ts`](lib/categories.ts),
-   with `status: "planned"`.
+1. Add an entry to `CATEGORIES` in [`lib/categories.ts`](lib/categories.ts).
 2. Write `questions/<slug>.yml` — the buyer questions, a `method_version` and a
    `runs_per_question`.
 3. Write `aliases/<slug>.yml` — `canonical` for the brands you will chart, and
    `exclude` for the things that are real but are not in this category.
 4. Run it: `python -m unprompted.run --category <slug> --dry-run`
-5. Once it has published a real week, flip `status` to `"live"`.
+
+There is no `status` field to flip. Whether a category is live is a fact already
+on disk — it has run data or it does not — and a hand-maintained flag beside
+that fact can only be right by accident.
 
 The board, the per-brand pages, the feed and the social card all come from the
-registry, so no UI work is involved. A category listed as `planned` never claims
-to have a chart it does not have.
+registry, so no UI work is involved. A category with no run data never claims to
+have a chart it does not have.

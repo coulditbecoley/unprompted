@@ -9,24 +9,14 @@ import { useEffect, useState } from "react";
  * faith, and a visitor with no idea when the chart updates has no reason to
  * come back. Both are cheap to answer and expensive to leave unanswered.
  *
- * The next-run time is computed on the client from the same schedule the run
- * actually keeps (Monday 13:00) rather than hardcoded, so it cannot drift into
- * a lie as weeks pass. Keep these two in step with the trigger in
- * scripts/install-weekly-task.ps1, which is what now runs the week.
+ * The next-run time is computed from the schedule the run actually keeps rather
+ * than hardcoded, so it cannot drift into a lie as weeks pass. That schedule
+ * now lives in lib/schedule.ts, shared with the Atom feed: this file used to
+ * hold its own copy that assumed 13:00 UTC, while the task has always run at
+ * 13:00 in the operator's timezone, so the countdown was four hours early.
  */
 
-const RUN_DAY = 1; // Monday
-const RUN_HOUR_UTC = 13;
-
-function nextRun(now: Date): Date {
-  const next = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), RUN_HOUR_UTC, 0, 0),
-  );
-  while (next.getUTCDay() !== RUN_DAY || next <= now) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-  return next;
-}
+import { nextRun } from "@/lib/schedule";
 
 function relative(target: Date, now: Date): string {
   const mins = Math.round((target.getTime() - now.getTime()) / 60000);

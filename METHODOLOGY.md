@@ -1,6 +1,6 @@
 # Methodology
 
-**Version 1** · effective 2026-08-21
+**Version 2** · effective 2026-08-24
 
 Unprompted measures which brands AI assistants name when people ask real buying
 questions, and publishes the result every week. This document is the method. It
@@ -13,12 +13,13 @@ record stamps the version it ran under.
 
 1. A fixed bank of buyer questions is read from `questions/<category>.yml`.
 2. Each question is asked of every active engine **five times**.
-3. Every raw answer is stored, then parsed into a structured record: which brands
-   were named, in what order, which sources were cited, and whether the engine
-   declined to recommend anything.
+3. Every raw answer is read into a structured record: which brands were named,
+   in what order, which sources were cited, and whether the engine declined to
+   recommend anything. The verbatim answer is kept on that record, so every
+   published number can be re-derived from the text it came from.
 4. Brand names are normalised against `aliases/<category>.yml`. Anything
    unrecognised is quarantined and **never appears on the chart**.
-5. Five sanity checks run, **before anything is written**.
+5. Six sanity checks run, **before anything is written**.
 6. A run that passes is appended to `data/runs/` and the site republishes. A run
    that fails is written to `data/held/` instead, where it is kept in full for
    review and is not read by the site. Nothing in either directory is ever
@@ -26,6 +27,11 @@ record stamps the version it ran under.
 
 The order of steps 5 and 6 is the point. The checks decide where a run lands,
 not merely whether someone is told about it.
+
+One honest caveat about step 3: answers are held in memory until the run is
+complete, so a machine that loses power mid-run loses that run's answers rather
+than writing a partial week. Nothing incomplete is ever published, but nothing
+incomplete is recovered either.
 
 ---
 
@@ -42,8 +48,20 @@ appeared.
 That figure is called **Rotation**:
 
 ```
-rotation = times_named / total_runs
+rotation = times_named / answered_runs
 ```
+
+`answered_runs` is the runs that produced an answer: attempts where the engine
+errored, and attempts where it declined to recommend anything, are not in the
+denominator. This is deliberate and it is the one place the figure is not simply
+"out of five". An engine outage would otherwise read as every brand losing
+ground in the same week, which is a fact about the provider, not about the
+brands. The counts it is built from — answered, refused and errored — are on
+every run record, so the denominator can always be checked.
+
+Because that exclusion could hide a broken engine, no engine is allowed to fail
+more than 20% of its own calls: past that the week is held rather than published
+against a thinner sample. See the checks below.
 
 "Named in 8 of 10 runs" is a measurement. "Was named" is a coin flip written down.
 
@@ -74,8 +92,8 @@ the thing worth measuring, so each engine is queried natively.
 | ChatGPT | OpenAI API with OpenAI's own web search | v1 |
 | Claude | Anthropic API with Anthropic's web search | v1 |
 | Perplexity | Perplexity Sonar API | v1 |
-| Claude Code | Local CLI harness on the operator's machine | registered, off |
-| Codex | Local CLI harness on the operator's machine | registered, off |
+| Claude Code | Local CLI harness on the operator's machine | v2 |
+| Codex | Local CLI harness on the operator's machine | v2 |
 | Google AI Overviews | Planned, via a SERP data provider | not yet active |
 
 **A local harness is charted as its own engine, never as a stand-in for the
@@ -97,8 +115,11 @@ bump. That rule is now enforced rather than merely written down: a run whose
 engine list differs from the previous week's without a version bump is held.
 
 An engine that errors or returns nothing has that fact recorded as data. One
-failing engine does not discard the week; enough of them do, because the error
-rate is one of the five checks.
+failing call does not discard the week; enough of them do. Two of the six checks
+cover this: more than 20% of all calls failing holds the week, and separately,
+any single engine failing more than 20% of *its own* calls holds it. The second
+exists because the first cannot see one broken engine — with five engines, one
+that fails every call is only 20% of the run.
 
 An engine whose credentials are missing is queried anyway and its calls are
 recorded as errors, rather than being dropped from the run. Dropping them would
@@ -133,8 +154,19 @@ engines changes what the numbers mean. Any such change **bumps the version at th
 top of this file**, and either the history is re-run under the new method or a
 clearly separate series begins.
 
-The past is never edited. Run files are append-only, and the repository's public
-git history is the audit trail.
+Only the engine-list rule is currently enforced in code; the others are a
+commitment kept by the operator, and that difference is stated here rather than
+implied to be automatic.
+
+Every run also records the commit it ran from, the model that read the answers,
+and the date the engines were actually queried. Re-reading stored answers with a
+corrected alias map produces a **new** file that carries the original
+measurement date and a pointer to the run it was read from, so a re-reading is
+never mistaken for a fresh week.
+
+The past is never edited. `data/runs/` is append-only and the tooling refuses to
+write over anything in it, including on a re-read. The repository's public git
+history is the audit trail.
 
 ---
 

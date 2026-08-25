@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -24,7 +25,7 @@ from .checks import run_checks
 from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import cli_extractor
-from .extract import extract_run
+from .extract import MODEL as EXTRACT_MODEL, extract_run
 from .models import RunRecord
 from .normalize import AliasMap, normalize
 from .report import write_report
@@ -58,6 +59,29 @@ def load_local_env() -> None:
         key, value = key.strip(), value.strip().strip('"').strip("'")
         if key and value and key not in os.environ:
             os.environ[key] = value
+
+
+def git_sha() -> str:
+    """The commit this run executed from, or "" if that cannot be determined.
+
+    Questions, alias maps and prompts all live in the repository, so the commit
+    is what makes a published week reproducible: without it, two runs on the
+    same day are indistinguishable from each other. A dirty tree is marked,
+    because a run from uncommitted code is not reproducible at all and saying so
+    is more useful than a SHA that does not describe what ran.
+    """
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        return f"{sha}-dirty" if dirty else sha
+    except Exception:  # noqa: BLE001 - provenance is best effort, never fatal
+        return ""
 
 
 def load_questions(category: str) -> dict:
@@ -165,6 +189,9 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         runs_per_question=runs_per_question,
         engines=sorted(engines),
         extractor=extractor.id if extractor else "api",
+        extractor_model="" if extractor else EXTRACT_MODEL,
+        measured_on=run_date,
+        git_sha=git_sha(),
         extractions=extractions,
         quarantined=quarantined,
     )

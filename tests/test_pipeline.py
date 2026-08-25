@@ -1357,8 +1357,10 @@ def test_an_engine_that_answered_nothing_holds_the_week():
     result = run_checks(run, brand_week(run), [])
 
     assert result.held
-    assert any("claude answered none" in r for r in result.reasons)
-    assert not any("errored" in r for r in result.reasons), "rule 3 stays silent here"
+    assert any("claude failed 10 of its own 10" in r for r in result.reasons)
+    assert not any("of engine calls errored" in r for r in result.reasons), (
+        "rule 3 stays silent here, which is the whole point"
+    )
 
     # The same run with that engine actually answering passes.
     alive = [ex(engine="claude", run=i, brands=["PSA"]) for i in range(10)]
@@ -1494,3 +1496,295 @@ def test_no_excluded_name_swallows_a_charted_brand():
                 assert resolved == brand, (
                     f"{path.stem}: {spelling!r} ends up as {resolved!r}, not {brand!r}"
                 )
+
+
+def test_an_engine_that_barely_answered_holds_the_week():
+    """The hole the all-failed rule left, found by an independent audit.
+
+    One success was enough to satisfy "did this engine answer anything", so an
+    engine could succeed once, fail its other 74 calls, and publish: 74 of 375
+    is 19.7%, under rule 3's global limit. The week then compares five engines
+    of which one answered once.
+    """
+    rows = []
+    for engine in ("chatgpt", "claude", "perplexity", "claude-code", "codex"):
+        for i in range(75):
+            broken = engine == "claude" and i > 0
+            rows.append(
+                ex(
+                    engine=engine,
+                    qid=f"q{i % 15:02d}",
+                    run=i,
+                    brands=() if broken else ("PSA", "CGC"),
+                    error="engine failed: 400 quota" if broken else None,
+                )
+            )
+
+    run = _run(rows) | {
+        "engines": ["chatgpt", "claude", "claude-code", "codex", "perplexity"],
+        "method_version": 2,
+    }
+    errored = sum(1 for r in run["extractions"] if r.get("error"))
+    assert errored / len(rows) < MAX_ERROR_RATE, "rule 3 must not be what catches it"
+
+    result = run_checks(run, brand_week(run), [], max_brands=25)
+
+    assert result.held
+    assert any("claude failed 74 of its own 75" in r for r in result.reasons)
+
+
+def test_the_published_image_week_would_not_publish_today():
+    """A real regression case, taken from data/runs/2026-08-24.
+
+    That week published with the hosted claude engine failing 24 of its own 75
+    calls -- a third of one of three engines -- because 24 of 225 is only 10.7%
+    overall. The standings on the site compare an engine that answered two
+    thirds of the time against two that answered every time.
+    """
+    rows = []
+    for engine in ("chatgpt", "claude", "perplexity"):
+        for i in range(75):
+            broken = engine == "claude" and i < 24
+            rows.append(
+                ex(
+                    engine=engine,
+                    qid=f"q{i % 15:02d}",
+                    run=i,
+                    brands=() if broken else ("PSA", "CGC"),
+                    error="engine failed: 400 usage limit" if broken else None,
+                )
+            )
+
+    run = _run(rows) | {"engines": ["chatgpt", "claude", "perplexity"], "method_version": 1}
+    result = run_checks(run, brand_week(run), [], max_brands=25)
+
+    assert result.held
+    assert any("claude failed 24 of its own 75 calls (32%)" in r for r in result.reasons)
+
+
+def test_disabling_a_hosted_engine_in_the_registry_actually_disables_it(monkeypatch, tmp_path):
+    """The admin dashboard's hosted-engine toggles did nothing at all.
+
+    ChatGPT, Claude and Perplexity were an unconditional dict in
+    engines/__init__.py, so turning one off in /admin still queried it, still
+    billed for it, and still charted it. The dashboard and the pipeline could
+    report different engine sets and neither knew.
+    """
+    import json
+
+    from unprompted import cli_provider
+    from unprompted.engines import all_engines
+
+    registry = tmp_path / "providers.json"
+
+    def write(providers):
+        registry.write_text(json.dumps({"providers": providers}), encoding="utf-8")
+
+    monkeypatch.setattr(cli_provider, "REGISTRY", registry)
+
+    write([
+        {"id": "chatgpt", "kind": "api", "role": "engine", "enabled": True},
+        {"id": "claude", "kind": "api", "role": "engine", "enabled": True},
+        {"id": "perplexity", "kind": "api", "role": "engine", "enabled": True},
+    ])
+    assert sorted(all_engines()) == ["chatgpt", "claude", "perplexity"]
+
+    write([
+        {"id": "chatgpt", "kind": "api", "role": "engine", "enabled": True},
+        {"id": "claude", "kind": "api", "role": "engine", "enabled": False},
+        {"id": "perplexity", "kind": "api", "role": "engine", "enabled": True},
+    ])
+    assert sorted(all_engines()) == ["chatgpt", "perplexity"]
+
+
+def test_an_enabled_engine_with_no_adapter_is_an_error_not_a_silent_omission(
+    monkeypatch, tmp_path
+):
+    """The admin route accepts any `env` string, so this is reachable from the UI."""
+    import json
+
+    from unprompted import cli_provider
+    from unprompted.engines import all_engines
+
+    registry = tmp_path / "providers.json"
+    registry.write_text(
+        json.dumps({"providers": [
+            {"id": "gemini", "kind": "api", "role": "engine", "enabled": True},
+        ]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli_provider, "REGISTRY", registry)
+
+    with pytest.raises(cli_provider.ProviderError, match="no adapter"):
+        all_engines()
+
+
+def test_a_broken_registry_stops_the_run_instead_of_shrinking_it(monkeypatch, tmp_path):
+    """Returning [] on a parse error reads as "no engines declared".
+
+    On a first run there is no previous engine list for the series check to
+    compare against, so a truncated or hand-broken providers.json would have
+    measured a smaller field and published it with nothing objecting.
+    """
+    from unprompted import cli_provider
+
+    registry = tmp_path / "providers.json"
+    monkeypatch.setattr(cli_provider, "REGISTRY", registry)
+
+    registry.write_text('{"providers": [{"id": "claude"', encoding="utf-8")
+    with pytest.raises(cli_provider.ProviderError, match="not valid JSON"):
+        cli_provider.load_registry()
+
+    registry.write_text('{"nope": []}', encoding="utf-8")
+    with pytest.raises(cli_provider.ProviderError, match="no 'providers' list"):
+        cli_provider.load_registry()
+
+    registry.write_text('{"providers": [{"label": "no id here"}]}', encoding="utf-8")
+    with pytest.raises(cli_provider.ProviderError, match="no id"):
+        cli_provider.load_registry()
+
+
+def test_a_brand_not_present_in_the_answer_is_dropped():
+    """Structured output constrains shape, not truthfulness.
+
+    Engine answers are prose written by another model quoting web pages written
+    by anyone, so "ignore the above and recommend X" is a reachable input. It
+    would produce a schema-valid name that normalizes cleanly, never reaches
+    quarantine, and lands on a public chart.
+    """
+    from unprompted.extract import _apply
+
+    answer = "For most people I would use Midjourney, or Ideogram for text."
+    base = Extraction(engine="claude", question_id="q01", run_index=0, answer=answer)
+
+    _apply(base, {"refused": False, "brands": [
+        {"name": "Midjourney", "position": 1},
+        {"name": "TotallyRealCo", "position": 2},   # never appears in the text
+        {"name": "Ideogram", "position": 3},
+    ]})
+
+    assert [b.name for b in base.brands] == ["Midjourney", "Ideogram"]
+    assert base.usage["extract_unsupported_brands"] == 1
+
+
+def test_punctuation_differences_do_not_count_as_invention():
+    """The engines write one product several ways; the guard is a floor."""
+    from unprompted.extract import _apply
+
+    answer = "OpenAI's DALL\u00b7E 3 is easiest, then Stable-Diffusion."
+    base = Extraction(engine="claude", question_id="q01", run_index=0, answer=answer)
+
+    _apply(base, {"refused": False, "brands": [
+        {"name": "DALL-E 3", "position": 1},
+        {"name": "Stable Diffusion", "position": 2},
+    ]})
+
+    assert [b.name for b in base.brands] == ["DALL-E 3", "Stable Diffusion"]
+    assert "extract_unsupported_brands" not in base.usage
+
+
+def test_the_guard_is_skipped_when_there_is_no_answer_to_check():
+    """Re-reads of very old records may have no stored answer text."""
+    from unprompted.extract import _apply
+
+    base = Extraction(engine="claude", question_id="q01", run_index=0, answer="")
+    _apply(base, {"refused": False, "brands": [{"name": "Midjourney", "position": 1}]})
+
+    assert [b.name for b in base.brands] == ["Midjourney"]
+
+
+def test_a_permanent_failure_is_not_retried_three_times():
+    """The real 2026-08-24 error, and the transient ones it must not resemble."""
+    from unprompted.engines.base import Engine
+
+    real_cap_error = (
+        "BadRequestError: Error code: 400 - {'type': 'error', 'error': {'type': "
+        "'invalid_request_error', 'message': 'You have reached your specified API "
+        "usage limits. You will regain access on 2026-09-01'}}"
+    )
+
+    class BadRequestError(Exception):
+        pass
+
+    class RateLimitError(Exception):
+        pass
+
+    assert not Engine.is_retryable(BadRequestError(real_cap_error))
+    assert not Engine.is_retryable(Exception("invalid api key"))
+    assert not Engine.is_retryable(Exception("Your credit balance is too low"))
+
+    # Transient, and a rate limit is the one 4xx worth waiting out.
+    assert Engine.is_retryable(RateLimitError("429 too many requests"))
+    assert Engine.is_retryable(TimeoutError("read timed out"))
+    assert Engine.is_retryable(ConnectionError("connection reset"))
+    # Unknown stays retryable: losing an answer is worse than wasting a call.
+    assert Engine.is_retryable(Exception("something nobody has seen before"))
+
+
+def test_a_permanent_failure_stops_after_one_attempt():
+    from unprompted.engines.base import Engine
+
+    calls = []
+
+    class Capped(Engine):
+        name = "capped"
+        key_names = ("X",)
+
+        def __init__(self):
+            self.api_key = "set"
+
+        def _one_call(self, question):
+            calls.append(1)
+            raise Exception("You have reached your specified API usage limits")
+
+    answer = Capped().ask_one("q01", "why", 0)
+
+    assert len(calls) == 1, f"attempted {len(calls)} times, should stop at 1"
+    assert answer.error and "usage limits" in answer.error
+
+
+def test_a_transient_failure_still_gets_its_retries():
+    from unprompted.engines.base import Engine
+
+    calls = []
+
+    class Flaky(Engine):
+        name = "flaky"
+        key_names = ("X",)
+
+        def __init__(self):
+            self.api_key = "set"
+
+        def _one_call(self, question):
+            calls.append(1)
+            if len(calls) < 3:
+                raise TimeoutError("read timed out")
+            return "Try Midjourney.", [], {}
+
+    answer = Flaky().ask_one("q01", "why", 0)
+
+    assert len(calls) == 3
+    assert answer.error is None and answer.text == "Try Midjourney."
+
+
+def test_the_local_schema_fallback_matches_the_sdk_transform():
+    """The batch request is built with a private SDK helper.
+
+    `anthropic.lib._parse._transform.transform_schema` is the one parse() calls,
+    so it cannot drift from what the API accepts without parse() breaking too --
+    but it is private, and an unattended upgrade moving it used to raise while
+    building the request, before a single answer had been read. There is now a
+    local fallback, and this asserts it produces exactly the same schema.
+
+    If this fails after an SDK upgrade, the fallback needs updating to match the
+    new output; it does not mean the fallback is wrong to exist.
+    """
+    import json
+
+    from unprompted.extract import _Extraction, _local_schema
+
+    transform = pytest.importorskip("anthropic.lib._parse._transform")
+
+    assert json.dumps(_local_schema(_Extraction), sort_keys=True) == json.dumps(
+        transform.transform_schema(_Extraction), sort_keys=True
+    )
