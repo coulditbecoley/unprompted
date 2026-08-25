@@ -32,13 +32,21 @@ RATES: dict[str, dict[str, float]] = {
         "output_per_m": 1.00,
         "per_search": 0.005,      # per-request search fee
     },
-    # The extraction pass, billed as ordinary Anthropic tokens.
+    # The extraction pass, billed as ordinary Anthropic tokens. List price; the
+    # batch discount below is applied on top when the run actually used batch.
     "_extract": {
         "input_per_m": 5.00,
         "output_per_m": 25.00,
         "per_search": 0.0,
     },
 }
+
+# The weekly extraction pass goes through the Batch API at half list price.
+# Applied as a multiplier rather than baked into the rates above, because a
+# re-read of a handful of answers still goes out as live calls and is billed in
+# full. A run records which extractor read it, so this is read off the run
+# rather than assumed.
+BATCH_DISCOUNT = 0.5
 
 
 @dataclass
@@ -74,6 +82,9 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
     guess. A missing measurement should look missing.
     """
     buckets: dict[str, LineItem] = {}
+    # "api" is the batch path; any other value is a local CLI, which reports no
+    # extraction tokens at all and so never reaches the discount.
+    extract_rate = BATCH_DISCOUNT if run.get("extractor") == "api" else 1.0
 
     for ex in run.get("extractions", []):
         engine = ex.get("engine", "unknown")
@@ -98,7 +109,7 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
             ex_item.calls += 1
             ex_item.input_tokens += ein
             ex_item.output_tokens += eout
-            ex_item.dollars += _price(
+            ex_item.dollars += extract_rate * _price(
                 "_extract", {"input_tokens": ein, "output_tokens": eout}
             )
 

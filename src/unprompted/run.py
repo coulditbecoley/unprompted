@@ -23,7 +23,7 @@ from .checks import run_checks
 from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import cli_extractor
-from .extract import extract_one
+from .extract import extract_run
 from .models import RunRecord
 from .normalize import AliasMap, normalize
 from .report import write_report
@@ -97,6 +97,22 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
 
     print(f"  engines queried: {', '.join(sorted(engines))}", file=sys.stderr)
 
+    # Same pre-flight, same reason. Extraction happens after every engine call
+    # has been paid for, so an extractor that cannot run is found at the worst
+    # possible moment: a full run's spend with nothing readable at the end of
+    # it. Resolved here rather than at the point of use so the failure is free.
+    extractor = cli_extractor()
+    if extractor is None and not os.environ.get("ANTHROPIC_API_KEY"):
+        raise SystemExit(
+            "the API extractor is first in providers.json but ANTHROPIC_API_KEY "
+            "is not set.\nSet the key, or enable a local extractor in "
+            "providers.json to read this run instead."
+        )
+    print(
+        f"  extractor: {extractor.label if extractor else 'Claude (API, batch)'}",
+        file=sys.stderr,
+    )
+
     tasks = [
         (engine, question["id"], question["text"], run_index)
         for question in questions
@@ -132,27 +148,10 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         ok = sum(1 for a in got if not a.error)
         print(f"  {name}: {ok}/{len(got)} ok", file=sys.stderr)
 
-    # Resolved once: a local CLI extractor, if the operator configured one in
-    # providers.json. Otherwise this stays None and the API path runs.
-    extractor = cli_extractor()
-    via = f" via {extractor.label}" if extractor else ""
-    print(f"  extracting {len(answers)} answers{via}", file=sys.stderr, flush=True)
+    extractions = extract_run(answers, extractor, max_workers=MAX_WORKERS)
 
-    extractions = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = [pool.submit(extract_one, a, None, extractor) for a in answers]
-        for done, future in enumerate(as_completed(futures), start=1):
-            extractions.append(future.result())
-            if done % 25 == 0 or done == len(futures):
-                failed = sum(1 for e in extractions if e.error)
-                print(
-                    f"  extracted {done}/{len(futures)} ({failed} failed)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-    # as_completed returns out of order; restore a deterministic sort so the run
-    # file stays stable and diffable.
+    # The live path returns out of order; restore a deterministic sort so the
+    # run file stays stable and diffable.
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
 
     aliases = AliasMap.load(ROOT / "aliases" / f"{category}.yml")

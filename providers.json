@@ -1,5 +1,5 @@
 {
-  "_comment": "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary. Extractor order matters: the first enabled entry whose command resolves on PATH is the one that runs, and the run record stores which one it was.",
+  "_comment": "Provider registry. Edited from /admin, committed to this public repo like any method change. The web app never executes `command`; only the local Python pipeline does. See lib/providers.ts for the security boundary. Extractor order is priority: the first enabled extractor wins, and an enabled API entry beats every CLI below it. The run record stores which one actually ran.",
   "providers": [
     {
       "id": "chatgpt",
@@ -30,9 +30,9 @@
       "label": "Claude (API)",
       "kind": "api",
       "role": "extractor",
-      "enabled": false,
+      "enabled": true,
       "env": "ANTHROPIC_API_KEY",
-      "note": "Default extractor. Declared conflict: it reads answers about its own products."
+      "note": "Primary extractor, and the only one that costs no subscription tokens. Runs as one Batch API job per run: half price, and a Monday chart does not care that a read takes minutes instead of seconds. Listed first, so it wins. Measured against 150 stored answers it agrees with the archive on 89% of first-named brands, which is the task's own noise floor. Declared conflict: it reads answers about its own products."
     },
     {
       "id": "claude-cli",
@@ -45,7 +45,7 @@
         "-p",
         "--strict-mcp-config"
       ],
-      "note": "Primary extractor. Runs on this machine's subscription; no API credit, no key. Declared conflict: it reads answers about its own products."
+      "note": "Fallback, used only when no API key is set. Reads correctly but carries ~48.5k tokens of harness context per call against this machine's subscription, which is ~98% of the call and roughly 55M tokens a week across a full run. That is why the API entry is listed above it."
     },
     {
       "id": "codex-cli",
@@ -63,7 +63,7 @@
         "read-only",
         "-"
       ],
-      "note": "Fallback, used when claude is not on PATH. Listed after claude-cli because the first enabled extractor that resolves is the one that runs. Costs no API credit; carries roughly 9k tokens of harness overhead per call."
+      "note": "Last-resort extractor, used when neither the API nor claude is available. ~9k tokens of harness overhead per call; cheaper than claude-cli, but still subscription tokens rather than metered ones."
     },
     {
       "id": "claude-code",

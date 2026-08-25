@@ -53,6 +53,10 @@ export default function AdminPage() {
     .map((p) => ({ p, ...providerStatus(p) }));
   const engines = withStatus.filter(({ p }) => p.role === "engine");
   const extractors = withStatus.filter(({ p }) => p.role === "extractor");
+  // Registry order is priority, and only one extractor ever reads a run. Which
+  // one is not obvious from a list of enabled toggles, and getting it wrong is
+  // expensive rather than visible, so the dashboard names it.
+  const activeExtractor = extractors.find(({ p, ready }) => p.kind === "api" || ready);
 
   // Where the week actually runs. A local CLI engine cannot exist on a GitHub
   // runner, so registering one moves the measurement onto this machine, and the
@@ -121,6 +125,11 @@ export default function AdminPage() {
                 <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
                   {p.kind === "cli" ? "LOCAL" : "API"}
                 </small>
+                {p.id === activeExtractor?.p.id && (
+                  <small className="mono" style={{ fontSize: 10.5, marginLeft: 6, fontWeight: 700 }}>
+                    RUNS
+                  </small>
+                )}
               </span>
               <span className={ready ? "" : "pending"}>{detail}</span>
             </div>
@@ -130,6 +139,26 @@ export default function AdminPage() {
             API keys are read from the environment and never stored in the repo.
             Local harnesses are found on this machine&rsquo;s PATH, so they read
             NOT INSTALLED anywhere they are not signed in.
+          </p>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 8 }}>
+            Only the one marked RUNS reads the week: the first enabled extractor
+            that this machine can actually reach, in registry order. The rest are
+            fallbacks and cost nothing until it is unavailable.{" "}
+            {activeExtractor?.p.kind === "api" ? (
+              <>
+                The API extractor reads a whole run as one Batch API job, at half
+                the live rate and roughly $7 a week, and spends no subscription
+                tokens at all. A local harness carries about 48k tokens of its own
+                context per answer, which is where a run&rsquo;s allowance goes.
+              </>
+            ) : (
+              <>
+                A local harness carries about 48k tokens of its own context per
+                answer, so a full week costs roughly 55M subscription tokens.
+                Enabling the API extractor above moves that onto metered billing
+                for about $7 a week.
+              </>
+            )}
           </p>
         </div>
 

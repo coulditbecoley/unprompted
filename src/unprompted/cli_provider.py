@@ -210,15 +210,17 @@ def declared_clis(role: str) -> list[CliProvider]:
             and entry.get("enabled")
         ):
             continue
-        out.append(
-            CliProvider(
-                id=entry.get("id", "cli"),
-                label=entry.get("label", entry.get("id", "cli")),
-                command=entry.get("command", ""),
-                args=tuple(entry.get("args") or ()),
-            )
-        )
+        out.append(_provider_from(entry))
     return out
+
+
+def _provider_from(entry: dict) -> CliProvider:
+    return CliProvider(
+        id=entry.get("id", "cli"),
+        label=entry.get("label", entry.get("id", "cli")),
+        command=entry.get("command", ""),
+        args=tuple(entry.get("args") or ()),
+    )
 
 
 def is_available(provider: CliProvider) -> bool:
@@ -231,7 +233,13 @@ def is_available(provider: CliProvider) -> bool:
 
 
 def cli_extractor() -> CliProvider | None:
-    """The first enabled local extractor that actually exists on this machine.
+    """The extractor to read this run with, or None to use the hosted API.
+
+    Walks the registry in order and stops at the first *enabled* extractor of
+    any kind, so the order in providers.json is the priority and the admin
+    toggle means what it looks like it means. Previously this skipped API
+    entries entirely, which made enabling the API extractor in the registry do
+    nothing at all while a local CLI stayed silently in charge.
 
     Returns one rather than merging several: two extractors reading the same
     week would make the numbers depend on which one happened to run.
@@ -241,7 +249,12 @@ def cli_extractor() -> CliProvider | None:
     so falling through costs money rather than meaning. A missing *engine*
     changes what was measured, so run.py refuses to start instead.
     """
-    for provider in declared_clis("extractor"):
+    for entry in load_registry():
+        if entry.get("role") != "extractor" or not entry.get("enabled"):
+            continue
+        if entry.get("kind") != "cli":
+            return None  # hosted API wins by being listed first
+        provider = _provider_from(entry)
         if is_available(provider):
             return provider
         print(

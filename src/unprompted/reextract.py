@@ -17,13 +17,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .cli_provider import cli_extractor
-from .extract import extract_one
+from .extract import extract_run
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
 from .run import MAX_WORKERS, ROOT, load_local_env, persist
@@ -89,21 +88,8 @@ def main() -> int:
     # always took the hosted API path regardless of the registry, so a re-read
     # could silently use a different extractor from the run it was correcting.
     extractor = cli_extractor()
-    via = f" via {extractor.label}" if extractor else " via the API extractor"
-    print(
-        f"re-extracting {len(answers)} stored answers{via}",
-        file=sys.stderr,
-        flush=True,
-    )
-
-    extractions = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = [pool.submit(extract_one, a, None, extractor) for a in answers]
-        for done, future in enumerate(as_completed(futures), start=1):
-            extractions.append(future.result())
-            if done % 25 == 0 or done == len(futures):
-                failed = sum(1 for e in extractions if e.error)
-                print(f"  {done}/{len(futures)} ({failed} failed)", file=sys.stderr, flush=True)
+    print(f"re-extracting {len(answers)} stored answers", file=sys.stderr, flush=True)
+    extractions = extract_run(answers, extractor, max_workers=MAX_WORKERS)
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
     aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")

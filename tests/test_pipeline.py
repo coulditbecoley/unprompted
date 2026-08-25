@@ -1105,3 +1105,172 @@ def test_a_genuinely_broken_call_still_fails():
     result = _extract_via_cli(base, answer, Broken("x", "X", "claude", ("-p",)))
 
     assert result.error and "extract failed" in result.error
+
+
+# -- the batch extractor ------------------------------------------------------
+#
+# The whole weekly read goes through one batch job, so the mapping from result
+# back to answer is the thing that must not be wrong. Results come back
+# unordered, an answer that never needed a call was never submitted, and a
+# request can go missing entirely. Each of those puts a brand on the wrong row
+# or reads as a clean refusal, and neither shows up as an error anywhere.
+
+
+class _FakeBatches:
+    """Enough of client.messages.batches to exercise the mapping."""
+
+    def __init__(self, replies, drop=()):
+        self.replies = replies  # custom_id -> reply text, or None to error
+        self.drop = set(drop)  # custom_ids to withhold entirely
+        self.submitted = []
+
+    def create(self, requests):
+        self.submitted = list(requests)
+        return self._batch()
+
+    def retrieve(self, _id):
+        return self._batch()
+
+    def _batch(self):
+        counts = type("C", (), {"succeeded": 0, "processing": 0})()
+        return type(
+            "B", (), {"id": "msgbatch_test", "processing_status": "ended", "request_counts": counts}
+        )()
+
+    def results(self, _id):
+        # Reversed, because real batches come back in no particular order.
+        for request in reversed(self.submitted):
+            cid = request["custom_id"]
+            if cid in self.drop:
+                continue
+            text = self.replies.get(cid)
+            if text is None:
+                yield type("E", (), {"custom_id": cid, "result": type("R", (), {"type": "errored"})()})()
+                continue
+            usage = type("U", (), {"input_tokens": 11, "output_tokens": 22})()
+            message = type(
+                "M", (), {"content": [type("T", (), {"text": text})()], "usage": usage}
+            )()
+            yield type(
+                "E",
+                (),
+                {"custom_id": cid, "result": type("R", (), {"type": "succeeded", "message": message})()},
+            )()
+
+
+def _fake_client(batches):
+    return type("C", (), {"messages": type("M", (), {"batches": batches})()})()
+
+
+def _answer(qid, text, error=None):
+    return EngineAnswer(
+        engine="claude", question_id=qid, question="", run_index=0, text=text, error=error
+    )
+
+
+def test_batch_results_land_on_the_answer_they_came_from(monkeypatch):
+    """Out-of-order results, and answers that were never submitted at all."""
+    from unprompted import extract
+
+    answers = [
+        _answer("q01", "engine died", error="engine failed: timeout"),  # not submitted
+        _answer("q02", "Try Midjourney first."),
+        _answer("q03", "   "),  # empty: a refusal, not submitted
+        _answer("q04", "I would use Ideogram."),
+    ]
+    batches = _FakeBatches(
+        {
+            "x1": '{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}',
+            "x3": '{"refused": false, "brands": [{"name": "Ideogram", "position": 1}]}',
+        }
+    )
+    monkeypatch.setattr(extract, "_client", lambda _key: _fake_client(batches))
+
+    out = extract.extract_all_batch(answers)
+
+    assert [r["custom_id"] for r in batches.submitted] == ["x1", "x3"]
+    assert len(out) == 4
+    assert out[0].error == "engine failed: timeout"
+    assert [b.name for b in out[1].brands] == ["Midjourney"]
+    assert out[2].refused is True and out[2].error is None
+    assert [b.name for b in out[3].brands] == ["Ideogram"]
+    assert out[1].usage["extract_input_tokens"] == 11
+
+
+def test_a_batch_result_that_never_comes_back_is_an_error_not_a_refusal(monkeypatch):
+    """A withheld result must not read as "this answer named nobody"."""
+    from unprompted import extract
+
+    answers = [_answer("q01", "Try Midjourney."), _answer("q02", "Try Ideogram.")]
+    batches = _FakeBatches(
+        {"x0": '{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}'},
+        drop=["x1"],
+    )
+    monkeypatch.setattr(extract, "_client", lambda _key: _fake_client(batches))
+
+    out = extract.extract_all_batch(answers)
+
+    assert [b.name for b in out[0].brands] == ["Midjourney"]
+    assert out[1].error and "no result" in out[1].error
+    assert out[1].refused is False
+
+
+def test_a_failed_request_inside_a_good_batch_only_costs_that_answer(monkeypatch):
+    from unprompted import extract
+
+    answers = [_answer("q01", "Try Midjourney."), _answer("q02", "Try Ideogram.")]
+    batches = _FakeBatches(
+        {
+            "x0": '{"refused": false, "brands": [{"name": "Midjourney", "position": 1}]}',
+            "x1": None,  # errored
+        }
+    )
+    monkeypatch.setattr(extract, "_client", lambda _key: _fake_client(batches))
+
+    out = extract.extract_all_batch(answers)
+
+    assert [b.name for b in out[0].brands] == ["Midjourney"]
+    assert out[1].error and "errored" in out[1].error
+
+
+def test_an_enabled_api_extractor_beats_a_cli_below_it(monkeypatch, tmp_path):
+    """Registry order is the priority, and this used to silently not be true.
+
+    cli_extractor() only ever looked at CLI entries, so enabling the API
+    extractor in providers.json changed nothing and a local CLI stayed in
+    charge, burning subscription tokens the operator thought they had switched
+    off.
+    """
+    import json
+
+    from unprompted import cli_provider
+
+    registry = tmp_path / "providers.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "providers": [
+                    {"id": "api", "kind": "api", "role": "extractor", "enabled": True},
+                    {
+                        "id": "claude-cli",
+                        "kind": "cli",
+                        "role": "extractor",
+                        "enabled": True,
+                        "command": "claude",
+                        "args": ["-p", "--strict-mcp-config"],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli_provider, "REGISTRY", registry)
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    assert cli_provider.cli_extractor() is None
+
+    # Disabling it hands the job back to the CLI rather than to nothing.
+    data = json.loads(registry.read_text(encoding="utf-8"))
+    data["providers"][0]["enabled"] = False
+    registry.write_text(json.dumps(data), encoding="utf-8")
+    assert cli_provider.cli_extractor().id == "claude-cli"
