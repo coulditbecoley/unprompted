@@ -89,7 +89,9 @@ exit /b 3
 
 :published
 
-REM Mirror the week into the Obsidian vault while the data is fresh.
+REM Mirror the week into the Obsidian vault while the data is fresh, and
+REM archive the audience counters with it.
 python scripts\sync_vault.py --no-pull >> "%TEMP%\unprompted-weekly.log" 2>&1
+python scripts\sync_analytics.py >> "%TEMP%\unprompted-weekly.log" 2>&1
 
 exit /b %RUN_EXIT%

@@ -1,0 +1,197 @@
+{
+  "_comment": "Which automated readers this site can name, and why each one fetches. Data rather than code so the TypeScript that classifies a request and the Python that archives the counts read the same list: they were two copies for about an hour, which is one hour longer than two copies stay in step. `pattern` is matched case-insensitively against the user agent, first match wins, so a more specific token must come before the prefix it extends. `purpose` is the distinction the dashboard is built on: live means a person asked and this page was read to answer them.",
+  "agents": [
+    {
+      "pattern": "ChatGPT-User",
+      "name": "ChatGPT-User",
+      "vendor": "OpenAI",
+      "purpose": "live"
+    },
+    {
+      "pattern": "OAI-SearchBot",
+      "name": "OAI-SearchBot",
+      "vendor": "OpenAI",
+      "purpose": "search"
+    },
+    {
+      "pattern": "GPTBot",
+      "name": "GPTBot",
+      "vendor": "OpenAI",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Claude-User",
+      "name": "Claude-User",
+      "vendor": "Anthropic",
+      "purpose": "live"
+    },
+    {
+      "pattern": "Claude-SearchBot",
+      "name": "Claude-SearchBot",
+      "vendor": "Anthropic",
+      "purpose": "search"
+    },
+    {
+      "pattern": "ClaudeBot",
+      "name": "ClaudeBot",
+      "vendor": "Anthropic",
+      "purpose": "training"
+    },
+    {
+      "pattern": "anthropic-ai",
+      "name": "anthropic-ai",
+      "vendor": "Anthropic",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Perplexity-User",
+      "name": "Perplexity-User",
+      "vendor": "Perplexity",
+      "purpose": "live"
+    },
+    {
+      "pattern": "PerplexityBot",
+      "name": "PerplexityBot",
+      "vendor": "Perplexity",
+      "purpose": "search"
+    },
+    {
+      "pattern": "Google-Extended",
+      "name": "Google-Extended",
+      "vendor": "Google",
+      "purpose": "training"
+    },
+    {
+      "pattern": "GoogleOther",
+      "name": "GoogleOther",
+      "vendor": "Google",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Googlebot",
+      "name": "Googlebot",
+      "vendor": "Google",
+      "purpose": "search"
+    },
+    {
+      "pattern": "BingPreview",
+      "name": "BingPreview",
+      "vendor": "Microsoft",
+      "purpose": "search"
+    },
+    {
+      "pattern": "bingbot",
+      "name": "bingbot",
+      "vendor": "Microsoft",
+      "purpose": "search"
+    },
+    {
+      "pattern": "DuckAssistBot",
+      "name": "DuckAssistBot",
+      "vendor": "DuckDuckGo",
+      "purpose": "live"
+    },
+    {
+      "pattern": "MistralAI-User",
+      "name": "MistralAI-User",
+      "vendor": "Mistral",
+      "purpose": "live"
+    },
+    {
+      "pattern": "YouBot",
+      "name": "YouBot",
+      "vendor": "You.com",
+      "purpose": "search"
+    },
+    {
+      "pattern": "Applebot-Extended",
+      "name": "Applebot-Extended",
+      "vendor": "Apple",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Applebot",
+      "name": "Applebot",
+      "vendor": "Apple",
+      "purpose": "search"
+    },
+    {
+      "pattern": "meta-externalagent",
+      "name": "meta-externalagent",
+      "vendor": "Meta",
+      "purpose": "training"
+    },
+    {
+      "pattern": "FacebookBot",
+      "name": "FacebookBot",
+      "vendor": "Meta",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Amazonbot",
+      "name": "Amazonbot",
+      "vendor": "Amazon",
+      "purpose": "search"
+    },
+    {
+      "pattern": "Bytespider",
+      "name": "Bytespider",
+      "vendor": "ByteDance",
+      "purpose": "training"
+    },
+    {
+      "pattern": "CCBot",
+      "name": "CCBot",
+      "vendor": "Common Crawl",
+      "purpose": "training"
+    },
+    {
+      "pattern": "cohere-ai|cohere-training-data-crawler",
+      "name": "cohere-ai",
+      "vendor": "Cohere",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Diffbot",
+      "name": "Diffbot",
+      "vendor": "Diffbot",
+      "purpose": "training"
+    },
+    {
+      "pattern": "ImagesiftBot",
+      "name": "ImagesiftBot",
+      "vendor": "Imagesift",
+      "purpose": "training"
+    },
+    {
+      "pattern": "Timpibot",
+      "name": "Timpibot",
+      "vendor": "Timpi",
+      "purpose": "training"
+    },
+    {
+      "pattern": "omgili",
+      "name": "Omgilibot",
+      "vendor": "Webz.io",
+      "purpose": "training"
+    },
+    {
+      "pattern": "DataForSeoBot",
+      "name": "DataForSeoBot",
+      "vendor": "DataForSEO",
+      "purpose": "search"
+    },
+    {
+      "pattern": "SemrushBot",
+      "name": "SemrushBot",
+      "vendor": "Semrush",
+      "purpose": "search"
+    },
+    {
+      "pattern": "AhrefsBot",
+      "name": "AhrefsBot",
+      "vendor": "Ahrefs",
+      "purpose": "search"
+    }
+  ]
+}

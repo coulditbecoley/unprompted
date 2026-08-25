@@ -73,6 +73,7 @@ or the tests.
 | `ADMIN_PASSWORD` | `/admin` | the admin surface is closed entirely, not left open |
 | `BUTTONDOWN_API_KEY` | the weekly email signup | signups fall back to the operator's inbox via Web3Forms |
 | `NEXT_PUBLIC_WEB3FORMS_KEY` | the contact form | the form says so rather than failing silently |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | audience counting, rate limiting | nothing is counted and the dashboard says so; rate limiting fails open |
 
 The Web3Forms key is public by design — the provider puts it in client HTML, so
 every visitor can read it, and it is inlined into the JavaScript bundle at build
@@ -202,6 +203,35 @@ Code is MIT. The data in `data/` is published under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — use it, cite it.
 
 ---
+
+## Who reads it
+
+`/admin` carries an Audience section. It counts two things separately because
+they answer different questions.
+
+**Agents come from the request itself**, in `proxy.ts`. That is the only place
+they are visible: GPTBot, ClaudeBot and PerplexityBot fetch the HTML and leave
+without running a line of script, so every client-side analytics product reports
+zero of them. The list of agents this build can name lives in
+[`agents.json`](agents.json), shared by the TypeScript that classifies a request
+and the Python that archives the counts.
+
+Within agents the split that matters is **why** the fetch happened.
+`ChatGPT-User`, `Claude-User` and `Perplexity-User` mean a person asked a
+question and this page was read to answer them; `GPTBot` and `CCBot` mean a
+crawler passed through. A combined "bot traffic" number would destroy both.
+
+**People come from a beacon** that runs after render. No cookie is set, no
+identifier is minted, no address is stored, and a referrer is reduced to a
+hostname server-side.
+
+Counters live in Upstash Redis and expire after ninety days, which is right for
+a cache and wrong for a record. `scripts/sync_analytics.py` copies each day into
+the Obsidian vault before it ages out — raw JSON as the source of truth, a
+readable note per day, and an index carrying all-time totals. It runs from the
+daily vault sync and again at the end of a weekly run, and is idempotent. A day
+that has aged out of Redis keeps whatever was archived while it was there; the
+archive only ever grows.
 
 ## Audits
 

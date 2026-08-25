@@ -17,7 +17,11 @@ import { TrimTop } from "@/components/ui";
  * different facts and a combined "bot traffic" number would destroy both.
  */
 
-const WINDOW_DAYS = 30;
+// Everything Redis still holds. It expires a day after ninety, so a shorter
+// window here would hide archived-but-live data for no reason. Anything older
+// than that lives in the Obsidian vault: scripts/sync_analytics.py copies each
+// day out before it ages away, and the index there carries all-time totals.
+const WINDOW_DAYS = 90;
 
 function pct(part: number, whole: number): string {
   if (!whole) return "0%";
@@ -71,7 +75,8 @@ export async function AdminAnalytics() {
           : "Who read this, and on whose behalf."}
       </h2>
       <p className="section-lead">
-        Last {WINDOW_DAYS} days. Agents are counted from the request itself,
+        Last {WINDOW_DAYS} days, which is everything the cache holds; the
+        Obsidian vault keeps the rest. Agents are counted from the request itself,
         which is the only place they appear: they do not run the script that
         counts humans. A user agent is self-declared and can be forged, so read
         these as what the client said it was, not as proof.

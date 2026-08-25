@@ -35,56 +35,21 @@ export type Agent = {
   purpose: AgentPurpose;
 };
 
+import registry from "@/agents.json";
+
 /**
- * Order is load-bearing: the first match wins, so a more specific token must
- * come before the prefix it extends. "Applebot-Extended" before "Applebot",
- * "Claude-SearchBot" before "ClaudeBot".
+ * The list lives in agents.json so the TypeScript that classifies a request and
+ * the Python that archives the counts read the same one. They were two copies
+ * for about an hour, which is an hour longer than two copies stay in step.
+ *
+ * Order is load-bearing and the file preserves it: the first match wins, so a
+ * more specific token must come before the prefix it extends —
+ * "Applebot-Extended" before "Applebot", "Claude-SearchBot" before "ClaudeBot".
  */
-const AGENTS: Array<[RegExp, Agent]> = [
-  // --- OpenAI ---
-  [/ChatGPT-User/i, { name: "ChatGPT-User", vendor: "OpenAI", purpose: "live" }],
-  [/OAI-SearchBot/i, { name: "OAI-SearchBot", vendor: "OpenAI", purpose: "search" }],
-  [/GPTBot/i, { name: "GPTBot", vendor: "OpenAI", purpose: "training" }],
-
-  // --- Anthropic ---
-  [/Claude-User/i, { name: "Claude-User", vendor: "Anthropic", purpose: "live" }],
-  [/Claude-SearchBot/i, { name: "Claude-SearchBot", vendor: "Anthropic", purpose: "search" }],
-  [/ClaudeBot/i, { name: "ClaudeBot", vendor: "Anthropic", purpose: "training" }],
-  [/anthropic-ai/i, { name: "anthropic-ai", vendor: "Anthropic", purpose: "training" }],
-
-  // --- Perplexity ---
-  [/Perplexity-User/i, { name: "Perplexity-User", vendor: "Perplexity", purpose: "live" }],
-  [/PerplexityBot/i, { name: "PerplexityBot", vendor: "Perplexity", purpose: "search" }],
-
-  // --- Google ---
-  [/Google-Extended/i, { name: "Google-Extended", vendor: "Google", purpose: "training" }],
-  [/GoogleOther/i, { name: "GoogleOther", vendor: "Google", purpose: "training" }],
-  [/Googlebot/i, { name: "Googlebot", vendor: "Google", purpose: "search" }],
-
-  // --- Microsoft ---
-  [/BingPreview/i, { name: "BingPreview", vendor: "Microsoft", purpose: "search" }],
-  [/bingbot/i, { name: "bingbot", vendor: "Microsoft", purpose: "search" }],
-
-  // --- everyone else ---
-  [/DuckAssistBot/i, { name: "DuckAssistBot", vendor: "DuckDuckGo", purpose: "live" }],
-  [/MistralAI-User/i, { name: "MistralAI-User", vendor: "Mistral", purpose: "live" }],
-  [/YouBot/i, { name: "YouBot", vendor: "You.com", purpose: "search" }],
-  [/Applebot-Extended/i, { name: "Applebot-Extended", vendor: "Apple", purpose: "training" }],
-  [/Applebot/i, { name: "Applebot", vendor: "Apple", purpose: "search" }],
-  [/meta-externalagent/i, { name: "meta-externalagent", vendor: "Meta", purpose: "training" }],
-  [/FacebookBot/i, { name: "FacebookBot", vendor: "Meta", purpose: "training" }],
-  [/Amazonbot/i, { name: "Amazonbot", vendor: "Amazon", purpose: "search" }],
-  [/Bytespider/i, { name: "Bytespider", vendor: "ByteDance", purpose: "training" }],
-  [/CCBot/i, { name: "CCBot", vendor: "Common Crawl", purpose: "training" }],
-  [/cohere-ai|cohere-training-data-crawler/i, { name: "cohere-ai", vendor: "Cohere", purpose: "training" }],
-  [/Diffbot/i, { name: "Diffbot", vendor: "Diffbot", purpose: "training" }],
-  [/ImagesiftBot/i, { name: "ImagesiftBot", vendor: "Imagesift", purpose: "training" }],
-  [/Timpibot/i, { name: "Timpibot", vendor: "Timpi", purpose: "training" }],
-  [/omgili/i, { name: "Omgilibot", vendor: "Webz.io", purpose: "training" }],
-  [/DataForSeoBot/i, { name: "DataForSeoBot", vendor: "DataForSEO", purpose: "search" }],
-  [/SemrushBot/i, { name: "SemrushBot", vendor: "Semrush", purpose: "search" }],
-  [/AhrefsBot/i, { name: "AhrefsBot", vendor: "Ahrefs", purpose: "search" }],
-];
+const AGENTS: Array<[RegExp, Agent]> = registry.agents.map((a) => [
+  new RegExp(a.pattern, "i"),
+  { name: a.name, vendor: a.vendor, purpose: a.purpose as AgentPurpose },
+]);
 
 /**
  * Generic automation that declares itself but is nobody's product: curl, wget,
