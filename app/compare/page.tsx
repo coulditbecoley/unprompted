@@ -5,6 +5,7 @@ import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
 import {
   allBrands,
   brandHistory,
+  brandTone,
   categoryLabel,
   latestRun,
   loadQuestionText,
@@ -13,7 +14,7 @@ import {
   standings,
   type BrandStanding,
 } from "@/lib/data";
-import { AwaitingFirstRun, TrimTop, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, ToneBar, TrimTop, brandHref } from "@/components/ui";
 
 type Params = { a?: string; b?: string; c?: string };
 
@@ -149,6 +150,15 @@ export default async function ComparePage({
                   <span>Weeks tracked</span>
                   <span>{history.length}</span>
                 </div>
+                {(() => {
+                  const tone = brandTone(run, brand);
+                  return tone ? (
+                    <div className="cmp-tone">
+                      <span className="label">Tone of mentions</span>
+                      <ToneBar tone={tone} />
+                    </div>
+                  ) : null;
+                })()}
               </>
             ) : (
               <p className="cmp-absent">

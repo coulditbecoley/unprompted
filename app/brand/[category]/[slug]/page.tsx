@@ -6,12 +6,13 @@ import {
   categoryLabel,
   allBrands,
   brandHistory,
+  brandTone,
   latestRun,
   loadHistory,
   slugify,
   standings,
 } from "@/lib/data";
-import { StatusBar, TrimTop } from "@/components/ui";
+import { StatusBar, ToneBar, TrimTop } from "@/components/ui";
 
 /**
  * Statically generated, one permanent page per brand.
@@ -64,6 +65,7 @@ export default async function BrandPage({
   const run = latestRun(category);
   const history = brandHistory(category, brand);
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
+  const tone = run ? brandTone(run, brand) : null;
   const runs = loadHistory(category);
 
   return (
@@ -124,6 +126,18 @@ export default async function BrandPage({
               <span>Weeks tracked</span>
               <span>{history.length}</span>
             </div>
+            {tone && (
+              <div style={{ marginTop: 14 }}>
+                <p className="label" style={{ margin: "0 0 7px" }}>
+                  How it is spoken about
+                </p>
+                <ToneBar tone={tone} />
+                <p className="tone-caveat">
+                  Read from the answers by the extraction model, not stated by the
+                  engines. Softer evidence than a name count, and reported as such.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="cmp-pick">

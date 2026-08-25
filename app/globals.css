@@ -665,3 +665,96 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   .cmp-vs { display: none; }
   .cmp-form .btn { width: 100%; }
 }
+
+/* --- consensus ----------------------------------------------------------- */
+/* Which engine names which brand first. The row is the argument: when the
+   picks differ, the names differ, and the eye finds it without a colour. */
+
+.cns-title { margin: 2px 0 6px; }
+.cns-lead { margin-top: 0; }
+
+.cns-summary {
+  display: grid; gap: 12px; margin: 22px 0 6px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.cns-stat {
+  background: var(--surface); border: var(--rule-w) solid var(--rule);
+  border-radius: var(--r); padding: 0 15px 14px; overflow: hidden;
+}
+.cns-stat .trim-top { margin: 0 -15px 13px; }
+.cns-stat-v { display: block; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
+.cns-stat-l { display: block; font-size: 12.5px; color: var(--fg-3); margin-top: 3px; }
+
+.cns { padding: 0 16px; }
+.cns-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(var(--engines, 3), minmax(96px, 132px)) 62px;
+  gap: 14px; align-items: baseline; padding: 11px 0;
+  border-bottom: var(--rule-w) solid var(--rule);
+}
+.cns-row:last-child { border-bottom: none; }
+.cns-head { align-items: end; padding: 12px 0 9px; }
+.cns-engine, .cns-verdict { text-align: right; }
+.cns-head .cns-engine { color: var(--fg-2); }
+.cns-q { font-size: 13.5px; color: var(--fg-2); min-width: 0; }
+
+.cns-pick {
+  font-family: var(--font-mono); font-size: 12.5px; text-align: right;
+  color: var(--fg-3); display: flex; flex-direction: column; gap: 2px; align-items: flex-end;
+}
+/* Weight marks a pick that breaks from the others. The board marks its leader
+   the same way, and it survives greyscale and a screenshot. */
+.cns-pick[data-differs="true"] { color: var(--fg); font-weight: 600; }
+.cns-share { font-size: 10.5px; color: var(--fg-3); font-style: normal; font-weight: 400; }
+
+.cns-verdict { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg); }
+.cns-verdict[data-settled="true"] { color: var(--fg-3); }
+
+.cns-div { padding: 6px 16px; }
+.cns-div-row {
+  display: grid; grid-template-columns: 110px minmax(0, 1fr) 54px;
+  gap: 14px; align-items: center; padding: 11px 0;
+  border-bottom: var(--rule-w) solid var(--rule);
+}
+.cns-div-row:last-child { border-bottom: none; }
+.cns-div-name { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cns-div-track { height: 6px; background: var(--surface-2); border-radius: 1px; overflow: hidden; }
+.cns-div-track i { display: block; height: 100%; background: var(--fg-3); }
+.cns-div-fig { font-size: 12px; color: var(--fg-2); text-align: right; }
+
+/* The question is the widest thing in the row, so on a phone it takes its own
+   line and the picks share the width beneath it. */
+@media (max-width: 760px) {
+  .cns-row {
+    grid-template-columns: repeat(var(--engines, 3), minmax(0, 1fr)) 56px;
+    gap: 6px 12px;
+  }
+  .cns-q { grid-column: 1 / -1; }
+  .cns-head .label:first-child { display: none; }
+  .cns-pick { align-items: flex-start; text-align: left; }
+  .cns-engine { text-align: left; }
+}
+@media (max-width: 460px) {
+  .cns-row { grid-template-columns: repeat(var(--engines, 3), minmax(0, 1fr)); }
+  .cns-verdict { grid-column: 1 / -1; text-align: left; margin-top: 2px; }
+  .cns-div-row { grid-template-columns: 92px minmax(0, 1fr) 48px; gap: 10px; }
+}
+
+/* --- tone ---------------------------------------------------------------- */
+/* Second-order evidence: the extractor's reading of an answer, not the engine's
+   own words. Shown as a plain split, never with the weight of a name count. */
+
+.tone { display: flex; height: 6px; border-radius: 1px; overflow: hidden; background: var(--surface-2); }
+.tone i { display: block; height: 100%; }
+.tone .is-pos { background: var(--fg-2); }
+.tone .is-neu { background: var(--rule-2); }
+.tone .is-neg { background: var(--fg-3); }
+.tone-key { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 7px; font-size: 11.5px; color: var(--fg-3); }
+.tone-key span { display: inline-flex; align-items: center; }
+.tone-key i { display: inline-block; width: 9px; height: 9px; border-radius: 1px; margin-right: 5px; }
+.tone-key .is-pos { background: var(--fg-2); }
+.tone-key .is-neu { background: var(--rule-2); }
+.tone-key .is-neg { background: var(--fg-3); }
+.tone-caveat { font-size: 11.5px; color: var(--fg-3); margin: 9px 0 0; line-height: 1.45; }
+.cmp-tone { margin-top: 14px; }
+.cmp-tone .label { display: block; margin-bottom: 7px; }

@@ -328,6 +328,156 @@ export function brandHistory(
   });
 }
 
+/* -- consensus ------------------------------------------------------------ */
+
+export type EnginePick = {
+  engine: string;
+  /** The brand this engine named first most often. Null if it named none. */
+  brand: string | null;
+  /** That brand's share of this engine's answers to this question. */
+  share: number;
+};
+
+export type QuestionConsensus = {
+  questionId: string;
+  text: string;
+  picks: EnginePick[];
+  /** The brand the most engines picked, null when nothing was named at all. */
+  majority: string | null;
+  /** How many engines picked the majority brand. */
+  agree: number;
+  /** Every engine picked the same brand. */
+  settled: boolean;
+};
+
+/**
+ * Which brand each engine puts first, question by question.
+ *
+ * The finding this surfaces is that the engines frequently disagree: asked what
+ * the best AI coding assistant is, one names Copilot, one names Claude Code and
+ * one names Cursor. A chart of "what AI recommends" is incomplete without
+ * saying *which* AI, and no competing tool publishes the split.
+ *
+ * An engine's pick is the brand it named first most often across its repeats,
+ * not across a single answer, because a single answer is noise: these systems
+ * do not give the same answer twice, which is why the method asks repeatedly.
+ */
+export function consensus(
+  run: RunRecord,
+  questionText: Record<string, string>,
+): QuestionConsensus[] {
+  const rows = answered(run);
+  const engines = [...new Set(rows.map((e) => e.engine))].sort();
+
+  return questionOrder(run).map((questionId) => {
+    const picks: EnginePick[] = engines.map((engine) => {
+      const forEngine = rows.filter(
+        (e) => e.question_id === questionId && e.engine === engine,
+      );
+      const firsts = new Map<string, number>();
+      for (const ex of forEngine) {
+        const first = ex.brands.find((b) => b.position === 1);
+        if (first) firsts.set(first.name, (firsts.get(first.name) ?? 0) + 1);
+      }
+      // Ties break alphabetically so the page is stable between builds rather
+      // than depending on Map insertion order.
+      const ranked = [...firsts.entries()].sort(
+        (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+      );
+      const [brand, count] = ranked[0] ?? [null, 0];
+      return {
+        engine,
+        brand,
+        share: forEngine.length ? count / forEngine.length : 0,
+      };
+    });
+
+    const votes = new Map<string, number>();
+    for (const p of picks) {
+      if (p.brand) votes.set(p.brand, (votes.get(p.brand) ?? 0) + 1);
+    }
+    const ranked = [...votes.entries()].sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    );
+    const [majority, agree] = ranked[0] ?? [null, 0];
+
+    return {
+      questionId,
+      text: questionText[questionId] ?? questionId,
+      picks,
+      majority,
+      agree,
+      // Settled means unanimous, and only counts when every engine actually
+      // named something: three engines naming nothing is not agreement.
+      settled: agree === picks.length && picks.every((p) => p.brand !== null),
+    };
+  });
+}
+
+/** Share of questions on which every engine named the same brand first. */
+export function consensusScore(rows: QuestionConsensus[]): {
+  settled: number;
+  total: number;
+  share: number;
+} {
+  const settled = rows.filter((r) => r.settled).length;
+  return { settled, total: rows.length, share: rows.length ? settled / rows.length : 0 };
+}
+
+/**
+ * How often each engine's pick differs from what the other engines chose.
+ *
+ * Reported per engine rather than as a single "odd one out", because on a
+ * three-engine panel the outlier changes from question to question and naming
+ * one engine the contrarian overall would be a claim the data does not support.
+ */
+export function engineDivergence(
+  rows: QuestionConsensus[],
+): Array<{ engine: string; differs: number; of: number }> {
+  const counts = new Map<string, { differs: number; of: number }>();
+  for (const row of rows) {
+    for (const pick of row.picks) {
+      const entry = counts.get(pick.engine) ?? { differs: 0, of: 0 };
+      entry.of += 1;
+      if (row.majority && pick.brand !== row.majority) entry.differs += 1;
+      counts.set(pick.engine, entry);
+    }
+  }
+  return [...counts.entries()]
+    .map(([engine, v]) => ({ engine, ...v }))
+    .sort((a, b) => b.differs - a.differs || a.engine.localeCompare(b.engine));
+}
+
+/* -- tone ----------------------------------------------------------------- */
+
+export type Tone = { positive: number; neutral: number; negative: number; total: number };
+
+/**
+ * How a brand is spoken about, not merely how often it is named.
+ *
+ * Recorded on every mention since the first run and never surfaced until now.
+ * Two brands can share a rotation figure and be treated completely differently:
+ * one recommended, the other listed and passed over.
+ *
+ * Second-order evidence, and labelled as such wherever it is shown. The
+ * sentiment is the extraction model's reading of the answer, not the engine's
+ * own statement, so it is softer than a name count and must never be presented
+ * with the same confidence.
+ */
+export function brandTone(run: RunRecord, brand: string): Tone | null {
+  const tone: Tone = { positive: 0, neutral: 0, negative: 0, total: 0 };
+  for (const ex of answered(run)) {
+    for (const mention of ex.brands) {
+      if (mention.name !== brand) continue;
+      tone.total += 1;
+      if (mention.sentiment === "positive") tone.positive += 1;
+      else if (mention.sentiment === "negative") tone.negative += 1;
+      else tone.neutral += 1;
+    }
+  }
+  return tone.total ? tone : null;
+}
+
 export function allBrands(category: string): string[] {
   const names = new Set<string>();
   for (const run of loadHistory(category)) {

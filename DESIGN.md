@@ -123,6 +123,26 @@ Each row carries five things, in this order of visual weight:
 5. **Movement**, carried by the glyph and the sign. Colour reinforces; it never
    carries the meaning alone, so the board is correct in greyscale.
 
+### The consensus row
+
+The board's sibling on `/consensus`, and the second place the system spends
+invention. One row per question, one column per engine, each cell naming the
+brand that engine put first.
+
+It carries no colour at all. When the engines agree the names are identical and
+the row reads as a calm repetition; when they split, the divergent pick is set
+in full weight and the eye lands on it without being pointed. The data does the
+work the styling would otherwise have to, which is the same reason the board
+marks its leader by weight.
+
+### Tone
+
+Sentiment is drawn in the neutral greys, never in `--up` and `--down`. Those two
+mean movement week over week and nothing else, and a warm mention is not an
+upward movement. Tone is also second-order evidence, read by the extraction
+model rather than stated by the engine, so it is always shown with the sentence
+that says so and never at the size of a name count.
+
 **Why steps and not a line.** A line shows *when*. Steps show *which questions a
 brand wins*, which is a dimension no competitor publishes and no line chart can
 carry. Trend lines arrive as history accrues; they join the board rather than
@@ -189,7 +209,7 @@ It must never show a mocked-up number.
 |---|---|
 | `app/globals.css` | Every token and every class. There is no second stylesheet. |
 | `app/layout.tsx` | Fonts, the no-flash theme script, the direction contract. |
-| `components/ui.tsx` | Board rows, status bars, chrome, the shared primitives. |
+| `components/ui.tsx` | Board rows, status bars, tone bars, chrome, the shared primitives. |
 | `components/logo.tsx` | The mark, and the social card's step rhythm. |
 
 The direction contract is emitted as a real HTML comment in the shipped markup,

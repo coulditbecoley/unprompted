@@ -224,3 +224,55 @@ export function AwaitingFirstRun() {
     </section>
   );
 }
+
+/* -- tone ------------------------------------------------------------------ */
+
+/**
+ * How a brand is spoken about, as a plain split.
+ *
+ * Deliberately drawn in the neutral greys rather than the up/down palette.
+ * Green and red on this site mean movement week over week and nothing else, and
+ * a positive mention is not an upward movement. It is also second-order
+ * evidence, read by the extraction model rather than stated by the engine, so
+ * it is never given the visual weight of a name count.
+ */
+export function ToneBar({
+  tone,
+  label = true,
+}: {
+  tone: { positive: number; neutral: number; negative: number; total: number };
+  label?: boolean;
+}) {
+  const pct = (n: number) => (tone.total ? (n / tone.total) * 100 : 0);
+  return (
+    <>
+      <span
+        className="tone"
+        role="img"
+        aria-label={`Of ${tone.total} mentions, ${tone.positive} positive, ${tone.neutral} neutral, ${tone.negative} negative.`}
+      >
+        <i className="is-pos" style={{ width: `${pct(tone.positive)}%` }} />
+        <i className="is-neu" style={{ width: `${pct(tone.neutral)}%` }} />
+        <i className="is-neg" style={{ width: `${pct(tone.negative)}%` }} />
+      </span>
+      {label && (
+        <span className="tone-key mono" aria-hidden="true">
+          <span>
+            <i className="is-pos" />
+            {Math.round(pct(tone.positive))}% positive
+          </span>
+          <span>
+            <i className="is-neu" />
+            {Math.round(pct(tone.neutral))}% neutral
+          </span>
+          {tone.negative > 0 && (
+            <span>
+              <i className="is-neg" />
+              {Math.round(pct(tone.negative))}% negative
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  );
+}

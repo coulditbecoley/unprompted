@@ -110,6 +110,18 @@ Where an engine declines to recommend anything, that is recorded as a refusal
 rather than dropped. How often the machines refuse to answer a buying question is
 itself worth knowing.
 
+**Agreement between engines is reported, not averaged away.** A single ranking
+hides the fact that the engines often name different brands first for the same
+question. `/consensus` reports each engine's pick per question, and the share of
+questions on which they all agree. It is derived from the same run records as
+the board and introduces no new measurement.
+
+**Sentiment is second-order and labelled as such.** Every brand mention carries
+positive, neutral or negative, but that reading is made by the extraction model
+from the engine's prose, not stated by the engine itself. It is weaker evidence
+than a name count, it is never used in Rotation or in any ranking, and every
+place it appears carries a sentence saying where it came from.
+
 ---
 
 ## Never break the series

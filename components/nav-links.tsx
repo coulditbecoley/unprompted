@@ -4,12 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * Knowing where you are is basic wayfinding, and a four-item nav with no active
- * state makes every page feel like the same page.
+ * Knowing where you are is basic wayfinding, and a nav with no active state
+ * makes every page feel like the same page.
+ *
+ * Five items is the ceiling: the header already wraps to two rows on a phone,
+ * and the wordmark has to keep its own line. A sixth section would have to
+ * replace one of these rather than join them.
  */
 const LINKS = [
   { href: "/categories", label: "Categories" },
   { href: "/compare", label: "Compare" },
+  { href: "/consensus", label: "Consensus" },
   { href: "/questions", label: "Questions" },
   { href: "/methodology", label: "Method" },
 ];
