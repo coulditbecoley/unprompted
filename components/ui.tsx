@@ -10,7 +10,9 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
-import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/data";
+// From lib/shared, not lib/data: this file is imported by a client component,
+// and lib/data reads the repository with node:fs.
+import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
 
 /* -- hairline trim -------------------------------------------------------- */
 
@@ -25,11 +27,16 @@ export function SequencerRow({
   rank,
   move,
   href,
+  activeStep = null,
+  onStep,
 }: {
   standing: BrandStanding;
   rank: number;
   move?: Movement;
   href?: string;
+  /** Which question column is being read, if any. See LiveBoard. */
+  activeStep?: number | null;
+  onStep?: (step: number | null) => void;
 }) {
   const name = href ? (
     <Link href={href} style={{ textDecoration: "none" }}>
@@ -61,15 +68,30 @@ export function SequencerRow({
         step sequencer's own idea, and it carries more: you can see which
         questions a brand actually wins.
       */}
+      {/*
+        One listener on the container rather than fifteen on the cells: the
+        index is read back off the target, which is the same information for a
+        fifteenth of the handlers.
+      */}
       <span
         className="seq-cells"
         role="img"
         aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs, across ${standing.steps.length} questions`}
+        data-focus={activeStep !== null}
+        onMouseMove={
+          onStep &&
+          ((e: React.MouseEvent<HTMLSpanElement>) => {
+            const i = (e.target as HTMLElement).dataset?.step;
+            if (i !== undefined) onStep(Number(i));
+          })
+        }
       >
         {standing.steps.map((v, i) => (
           <i
             key={i}
             className="seq-cell"
+            data-step={i}
+            data-active={i === activeStep}
             data-level={
               v >= 0.999 ? "4" : v >= 0.6 ? "3" : v >= 0.3 ? "2" : v > 0 ? "1" : "0"
             }

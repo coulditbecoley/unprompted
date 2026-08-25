@@ -123,6 +123,46 @@ Each row carries five things, in this order of visual weight:
 5. **Movement**, carried by the glyph and the sign. Colour reinforces; it never
    carries the meaning alone, so the board is correct in greyscale.
 
+### Reading one question down the board
+
+Every step is one question, which was true and invisible: a sighted reader had
+no way to ask *which*, while the row's `aria-label` carried the counts for
+everyone else. Hovering a step now dims the other columns so a single question
+can be read down the whole board, and a readout above it names the question and
+the brand that leads it.
+
+The readout is sticky, because the board is taller than a viewport and the
+answer was otherwise off screen at the moment it was wanted. It sticks inside
+the board's wrapper rather than to the page, so it leaves with the board instead
+of following the reader into the next section.
+
+**No colour is spent.** The active column simply stays as it was and the rest
+recede, so the effect survives greyscale and takes nothing from the ration that
+keeps green, red and blue meaningful. It is `filter: opacity()` rather than
+`opacity`, because `.seq-cell` runs its entrance animation with `fill-mode:
+both` and a filled animation keeps ownership of the property it animates.
+
+Below 720px there is no hover to drive it and the question text would wrap to
+three lines and push the board off screen, so the readout goes rather than
+degrading.
+
+This is the dimension the publication exists to report and no competitor
+publishes: not who wins overall, but who wins *this question*. Sourcegraph Cody
+is fifth on the coding board and wins "best for a large existing codebase"
+fourteen times out of fifteen.
+
+### Sorting, and the gap it exposes
+
+The three figure columns sort. The rank column keeps the first-named ordering
+whatever the sort is, because the gap between the two orderings is the finding:
+Cursor is named in more runs than anything else and is third on first mentions.
+That is the same argument the mark makes — four steps where the tallest is not
+the coloured one — and re-ranking on sort would hide it.
+
+Blue appears on the sort controls on hover and focus only, since it means "you
+can interact with this". The column currently sorted is marked by weight and a
+step up in foreground, never by hue, the same way the board marks its leader.
+
 ### The consensus row
 
 The board's sibling on `/consensus`, and the second place the system spends
@@ -167,7 +207,10 @@ Fast and few. `--fast: 120ms` for state, 380-560ms for entrance, all on
 
 Three animations exist in the whole system: board steps fade up on load, the
 rotation bar grows from its left edge, and the caret in the question buffer
-blinks. Everything else is a colour or border transition on hover.
+blinks. Everything else is a colour, filter or border transition on hover.
+
+The board's column dimming is a state, not an animation: it transitions at
+`--fast` and holds. Nothing on this site moves on its own except the caret.
 
 `prefers-reduced-motion: reduce` collapses every animation and transition to
 0.01ms globally, and the smooth scroll with it.
@@ -210,6 +253,8 @@ It must never show a mocked-up number.
 | `app/globals.css` | Every token and every class. There is no second stylesheet. |
 | `app/layout.tsx` | Fonts, the no-flash theme script, the direction contract. |
 | `components/ui.tsx` | Board rows, status bars, tone bars, chrome, the shared primitives. |
+| `components/board-live.tsx` | The board's own behaviour: the question readout and the sort. The only stateful thing on the chart. |
+| `lib/shared.ts` | The data layer's pure half, so a client component can import a constant without the bundler following it into `node:fs`. |
 | `components/logo.tsx` | The mark, and the social card's step rhythm. |
 
 The direction contract is emitted as a real HTML comment in the shipped markup,

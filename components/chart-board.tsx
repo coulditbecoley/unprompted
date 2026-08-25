@@ -1,21 +1,17 @@
 import Link from "next/link";
 
+import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import {
-  AwaitingFirstRun,
-  SequencerHead,
-  SequencerRow,
-  StatusBar,
-  TrimTop,
-  brandHref,
-} from "@/components/ui";
+import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import {
   latestRun,
   loadAffiliations,
   loadHistory,
+  loadQuestionText,
   movement,
+  questionOrder,
   selfPreference,
   sourceCounts,
   standings,
@@ -99,19 +95,17 @@ export function ChartBoard({
       />
       <Freshness runDate={run.run_date} />
 
-      <div className="seq-board" style={{ marginTop: 14 }}>
-        <TrimTop />
-        <SequencerHead />
-        {board.map((b, i) => (
-          <SequencerRow
-            key={b.brand}
-            standing={b}
-            rank={i + 1}
-            move={moveFor.get(b.brand)}
-            href={brandHref(category.slug, b.brand)}
-          />
-        ))}
-      </div>
+      <LiveBoard
+        questions={questionOrder(run).map(
+          (id) => loadQuestionText(category.slug)[id] ?? id,
+        )}
+        rows={board.map((b, i) => ({
+          standing: b,
+          rank: i + 1,
+          move: moveFor.get(b.brand),
+          href: brandHref(category.slug, b.brand),
+        }))}
+      />
 
       <ShareRow
         headline={

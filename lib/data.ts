@@ -486,10 +486,6 @@ export function allBrands(category: string): string[] {
   return [...names].sort();
 }
 
-export function slugify(brand: string): string {
-  return brand.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
@@ -505,12 +501,10 @@ export function categoryLabel(slug: string): string {
   return getCategoryFromRegistry(slug)?.label ?? slug;
 }
 
-/** Plain-text form, for places that cannot carry a link (feeds, meta tags). */
-export const DISCLOSURE =
-  "Operated by Skald Studio, which sells AI visibility work. No placement on this chart is for sale.";
-
-export const OPERATOR = "Skald Studio";
-export const OPERATOR_URL = "https://skaldstudio.io";
+// Pure helpers and constants live in lib/shared.ts so a client component can
+// import them without the bundler following this file into node:fs. Re-exported
+// here because every server caller already imports them from "@/lib/data".
+export { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "./shared";
 
 
 /**

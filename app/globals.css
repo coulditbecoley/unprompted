@@ -20,6 +20,11 @@
   --shell: 1080px;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --fast: 120ms;
+  /* The sticky header's height, so anything else that sticks can clear it.
+     Measured, not guessed: 85px at one row. The header becomes two rows below
+     620px, but the only thing using this is the board readout, which is hidden
+     below 720px because there is no hover to drive it. */
+  --header-h: 85px;
 
   /* --- LIGHT is the fallback theme ------------------------------------- */
   --bg: #ffffff;
@@ -758,3 +763,65 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .tone-caveat { font-size: 11.5px; color: var(--fg-3); margin: 9px 0 0; line-height: 1.45; }
 .cmp-tone { margin-top: 14px; }
 .cmp-tone .label { display: block; margin-bottom: 7px; }
+
+/* --- reading one question down the board --------------------------------- */
+/*
+   Every step is a question, which was true and invisible: a sighted reader had
+   no way to ask which. Hovering dims the other columns so one question can be
+   read down the whole board, and the readout below names it.
+
+   No colour is spent here. The active column simply stays as it was while the
+   rest recede, so this survives greyscale and takes nothing from the ration
+   that keeps green, red and blue meaningful.
+*/
+/* filter, not opacity: .seq-cell runs `cellIn` with fill-mode `both`, so its
+   final keyframe keeps ownership of opacity and a plain declaration here loses
+   the cascade to it silently. */
+.seq-cell { transition: filter var(--fast) var(--ease); }
+.seq-cells[data-focus="true"] .seq-cell:not([data-active="true"]) {
+  filter: opacity(0.25);
+}
+
+.board-wrap { position: relative; margin-top: 14px; }
+.board-read {
+  position: sticky; top: var(--header-h); z-index: 2;
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 9px 14px; min-height: 36px;
+  background: var(--surface-2);
+  border: var(--rule-w) solid var(--rule);
+  border-radius: var(--r) var(--r) 0 0;
+  border-bottom: none;
+  font-size: 13px; color: var(--fg-2);
+}
+/* The board tucks under the readout so the two read as one object. */
+.board-wrap .seq-board { border-radius: 0 0 var(--r) var(--r); margin-top: 0; }
+.board-read-idle { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-3); }
+.board-read-q { font-size: 11px; color: var(--fg-3); flex: none; }
+.board-read-text {
+  flex: 1 1 auto; min-width: 0; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board-read-lead { flex: none; font-size: 12px; color: var(--fg); font-weight: 500; }
+.board-read-lead i { font-style: normal; color: var(--fg-3); font-weight: 400; }
+
+/* The readout is a mouse affordance. Below the board's first breakpoint there
+   is no hover, and the question text would wrap to three lines and push the
+   board off screen, so it goes rather than degrading. */
+@media (max-width: 720px) {
+  .board-read { display: none; }
+}
+
+/* Sortable column heads.
+   Blue is the interactive colour and nothing else, so it appears on hover and
+   focus only. The column currently sorted is marked by weight and by the
+   foreground stepping up, the same way the board marks its leader: a reader in
+   greyscale, or one who cannot separate the hues, still sees which is active. */
+.seq-sort {
+  appearance: none; background: none; border: 0; padding: 0;
+  font: inherit; letter-spacing: inherit; text-transform: inherit;
+  color: var(--fg-3); cursor: pointer;
+  transition: color var(--fast) var(--ease);
+}
+.seq-sort:hover, .seq-sort:focus-visible { color: var(--accent); }
+.seq-sort[data-on="true"] { color: var(--fg); font-weight: 700; }
+.seq-sort.seq-rot, .seq-sort.seq-first, .seq-sort.seq-delta { text-align: right; }

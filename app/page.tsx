@@ -9,20 +9,16 @@ import {
   REPO_ROOT,
   latestRun,
   loadHistory,
+  loadQuestionText,
   movement,
+  questionOrder,
   standings,
   theSnub,
 } from "@/lib/data";
+import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import {
-  AwaitingFirstRun,
-  SequencerHead,
-  SequencerRow,
-  StatusBar,
-  TrimTop,
-  brandHref,
-} from "@/components/ui";
+import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -46,6 +42,13 @@ export default function Home() {
   const moveFor = new Map(moves.map((m) => [m.brand, m]));
   const snub = theSnub(moves);
   const leader = board[0];
+
+  // The board's steps are indexed by question order, so the text has to be put
+  // in the same order to be able to name the column a reader is pointing at.
+  const text = loadQuestionText(CATEGORY);
+  const questionsInBoardOrder = run
+    ? questionOrder(run).map((id) => text[id] ?? id)
+    : [];
 
   return (
     <>
@@ -116,19 +119,15 @@ export default function Home() {
               runsPerQuestion={run.runs_per_question}
             />
             <Freshness runDate={run.run_date} />
-            <div className="seq-board" style={{ marginTop: 14 }}>
-              <TrimTop />
-              <SequencerHead />
-              {board.map((b, i) => (
-                <SequencerRow
-                  key={b.brand}
-                  standing={b}
-                  rank={i + 1}
-                  move={moveFor.get(b.brand)}
-                  href={brandHref(CATEGORY, b.brand)}
-                />
-              ))}
-            </div>
+            <LiveBoard
+              questions={questionsInBoardOrder}
+              rows={board.map((b, i) => ({
+                standing: b,
+                rank: i + 1,
+                move: moveFor.get(b.brand),
+                href: brandHref(CATEGORY, b.brand),
+              }))}
+            />
 
             <ShareRow
               headline={
