@@ -14,6 +14,7 @@ import {
 } from "@/lib/data";
 import { CATEGORIES } from "@/lib/categories";
 import { TrimTop } from "@/components/ui";
+import { AdminAnalytics } from "@/components/admin-analytics";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
  * slower than an instant write and it is the entire point: "check my work" has
  * to be verifiable, not promised.
  */
-export default function AdminPage() {
+export default async function AdminPage() {
   const questionsPath = path.join(REPO_ROOT, "questions", `${CATEGORY}.yml`);
   const aliasesPath = path.join(REPO_ROOT, "aliases", `${CATEGORY}.yml`);
 
@@ -210,6 +211,13 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/*
+        Audience first among the reporting sections, because it is the question
+        the operator cannot answer from anywhere else. Everything below is also
+        visible by reading the repository; this is not.
+      */}
+      <AdminAnalytics />
 
       {/*
         Where the week runs, and what came out of it. Split out from State

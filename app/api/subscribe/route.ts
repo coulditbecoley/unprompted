@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { rateLimit } from "@/lib/rate-limit";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,16 @@ const ENDPOINT = "https://api.buttondown.com/v1/subscribers";
 const MAX_EMAIL = 254;
 
 export async function POST(request: Request) {
+  // Closes M-3 from the 2026-08-25 audit: this forwarded every request it was
+  // given, so it could be used to exhaust a provider's quota or to spam a
+  // stranger's inbox with confirmations. Cheap now that there is a Redis.
+  if (!(await rateLimit(request, "subscribe"))) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again in a minute." },
+      { status: 429 },
+    );
+  }
+
   const token = process.env.BUTTONDOWN_API_KEY;
 
   let payload: unknown;

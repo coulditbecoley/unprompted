@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 
 import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
+import { recordRequest } from "@/lib/analytics";
 
 /**
  * Gates the only non-public surface.
@@ -15,8 +16,33 @@ import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
  *
  * If ADMIN_PASSWORD is unset the admin surface is closed entirely rather than
  * open — an unconfigured deploy must never be an unlocked one.
+ *
+ * It also counts agent traffic, because this is the only place an agent is
+ * visible. GPTBot, ClaudeBot and PerplexityBot fetch the HTML and leave without
+ * running a line of script, so a client-side beacon reports none of them and
+ * neither does any hosted analytics product. Humans are counted by the beacon
+ * instead, which runs after render and can report a referrer; recording them
+ * here as well would double every number.
+ *
+ * The count never delays the response and never fails a request: it is handed
+ * to waitUntil where the runtime provides it, and swallowed where it does not.
  */
-export async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const path = request.nextUrl.pathname;
+
+  // Analytics runs for every route in the matcher; the admin gate below only
+  // applies to the admin ones. Ordered this way so a 401 is still counted.
+  //
+  // event.waitUntil is the documented way to keep background work alive past
+  // the response. Reading a waitUntil off the request and calling it unbound
+  // throws on `this`, which took the whole site to a 500 for every route until
+  // the second parameter was used properly.
+  event.waitUntil(recordRequest(path, request.headers.get("user-agent")));
+
+  if (!path.startsWith("/admin") && !path.startsWith("/api/admin")) {
+    return NextResponse.next();
+  }
+
   const secret = process.env.ADMIN_PASSWORD?.trim();
 
   if (!secret) {
@@ -66,6 +92,17 @@ export async function proxy(request: NextRequest) {
   });
 }
 
+/**
+ * Everything a reader or an agent can actually land on.
+ *
+ * Deliberately not `/:path*`. Static assets, the beacon endpoint and the
+ * Next.js internals would treble the request count while answering nothing: an
+ * agent that pulled a favicon did not read the chart. The excluded prefixes are
+ * matched here rather than filtered inside the handler so the middleware is
+ * never invoked for them at all.
+ */
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|api/track|favicon|icon|apple-icon|opengraph-image|robots.txt|sitemap.xml).*)",
+  ],
 };

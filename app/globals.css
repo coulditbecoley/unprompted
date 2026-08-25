@@ -855,3 +855,57 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 @media (max-width: 560px) {
   .contact-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* --- audience ------------------------------------------------------------
+   Admin-only, so it borrows the board's furniture rather than inventing its
+   own. Colour stays rationed: the one thing that gets marked is an agent that
+   read a page to answer a person, because that is the finding. */
+.an-head, .an-row { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.2fr) 60px 56px; }
+.an-row2 { grid-template-columns: minmax(0,1fr) minmax(0,1.1fr) auto; }
+.an-feed { grid-template-columns: 76px minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,0.8fr); }
+.an-head { background: var(--surface-2); }
+.an-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.an-dim { color: var(--fg-3); font-size: 12px; }
+.an-num { text-align: right; font-size: 12px; }
+.an-num em { font-style: normal; margin-left: 6px; }
+.an-path { font-size: 12px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-when, .an-ref { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-why { font-size: 12px; color: var(--fg-3); }
+.an-why[data-purpose="live"] { color: var(--fg); font-weight: 550; }
+
+.an-who { display: flex; align-items: baseline; gap: 7px; min-width: 0; font-size: 12.5px; }
+.an-who .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The single marked thing on this page: a person asked, and this answered. */
+.an-live {
+  flex: none; font-style: normal; font-family: var(--font-mono);
+  font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--up); border: var(--rule-w) solid var(--up);
+  border-radius: 2px; padding: 1px 4px;
+}
+
+.an-track { height: 3px; border-radius: 2px; background: var(--rule-2); align-self: center; }
+.an-track i { display: block; height: 100%; border-radius: 2px; background: var(--fg-3); }
+
+.an-grid { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.an-spark { display: flex; gap: 4px; align-items: flex-end; height: 84px; }
+.an-day {
+  flex: 1 1 0; min-width: 0; height: 100%;
+  display: flex; align-items: flex-end; gap: 2px; position: relative;
+}
+.an-day em {
+  position: absolute; bottom: -15px; left: 0; right: 0; text-align: center;
+  font-style: normal; font-family: var(--font-mono); font-size: 9px; color: var(--fg-3);
+}
+.an-bar { flex: 1 1 0; border-radius: 1px 1px 0 0; min-height: 1px; }
+.an-bar-agent { background: var(--cell-3); }
+.an-bar-human { background: var(--fg-3); }
+
+@media (max-width: 760px) {
+  .an-grid { grid-template-columns: minmax(0, 1fr); }
+  .an-head, .an-row { grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) 52px; }
+  .an-head span:nth-child(3), .an-row span:nth-child(3),
+  .an-head span:nth-child(5), .an-row span:nth-child(5) { display: none; }
+  .an-feed { grid-template-columns: 62px minmax(0,1fr) minmax(0,1.2fr); }
+  .an-feed span:nth-child(4) { display: none; }
+}

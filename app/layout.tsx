@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Beacon } from "@/components/beacon";
 import "./globals.css";
 import { SiteFooter, SiteHeader } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -78,6 +79,7 @@ the finish review, the verdict, and DESIGN.md
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
+        <Beacon />
       </body>
     </html>
   );
