@@ -16,11 +16,25 @@ canonical:
     - gh copilot
     - copilot workspace
     - github copilot workspace
+    # Surfaces of the same product. Tier and CLI suffixes fold automatically in
+    # normalize.py; a two-word surface like "code review" cannot, because
+    # "code" and "review" are load-bearing elsewhere ("Claude Code", and the
+    # dedicated review tools charted below).
+    - github copilot code review
+    - copilot code review
+    - github copilot coding agent
+    - copilot coding agent
+    - github copilot chat
+    - copilot chat
   Cursor:
     - cursor
     - cursor ai
     - cursor ide
     - cursor editor
+    # Cursor's own code-review bot, named as a Cursor feature rather than a
+    # rival product.
+    - cursor bugbot
+    - bugbot
   Codex:
     - codex
     - openai codex
@@ -50,8 +64,10 @@ canonical:
     - codewhisperer
   Gemini Code Assist:
     - gemini code assist
+    - google gemini code assist
     - google code assist
     - gemini cli
+    - google gemini cli
   Tabnine:
     - tabnine
   Replit Agent:
@@ -61,6 +77,11 @@ canonical:
   Devin:
     - devin
     - cognition devin
+    # Cognition is a one-product company here, and the engines write "Devin by
+    # Cognition" as often as "Devin". Aliased rather than excluded as a company
+    # name, because excluding it would silently drop a real Devin mention.
+    - cognition
+    - devin by cognition
   Sourcegraph Cody:
     - cody
     - sourcegraph cody
@@ -75,6 +96,38 @@ canonical:
     - qodo
     - codiumai
     - codium ai
+
+  # Added 2026-08-25. Each of these was named often enough to hold the week and
+  # was checked against the sentences it appeared in before being charted, not
+  # recognised from the name alone.
+  #
+  # Dedicated pull-request reviewers. A distinct job from an in-editor
+  # assistant, but the same question -- which tool does the engine name -- and
+  # the engines answer with these constantly.
+  CodeRabbit:
+    - coderabbit
+    - coderabbit ai
+  Greptile:
+    - greptile
+  # Open-source agents. Named as the self-hosted answer in almost every run.
+  OpenHands:
+    - openhands
+    - open hands
+    - opendevin
+    - open devin
+  OpenCode:
+    - opencode
+    - open code
+    - sst opencode
+  Roo Code:
+    - roo code
+    - roocode
+    - roo cline
+  # Browser-based app builder. Charted for consistency with Replit Agent, which
+  # is the same kind of product and already on the chart.
+  Playcode AI:
+    - playcode
+    - playcode ai
 
 # Which engine's own house each product belongs to.
 #
@@ -103,6 +156,11 @@ exclude:
   - claude opus
   - claude sonnet
   - claude 3.5 sonnet
+  # The model, not the tool. The note at the top of this file is the whole
+  # reason the category is answerable: "Claude" is what Claude Code runs on,
+  # and charting both would double-count Anthropic against itself.
+  - claude
+  - anthropic claude
   - gemini
   - gemini 2.5 pro
   - llama
@@ -117,6 +175,9 @@ exclude:
   - visual studio
   - intellij
   - pycharm
+  # The IDE family and the company. "JetBrains AI" is the charted product;
+  # bare "JetBrains" is always "if you live in JetBrains IDEs".
+  - jetbrains
   - neovim
   - vim
   - emacs
@@ -129,6 +190,13 @@ exclude:
   - microsoft
   - amazon
   - meta
+  # Local model runtimes. Named as how you run a model, not as the assistant
+  # itself: "DeepSeek-Coder-V2 via Ollama", "or run locally via Ollama".
+  - ollama
+  - lm studio
+  - llama.cpp
+  - vllm
+  - openrouter
   # Adjacent tooling
   - stack overflow
   - chatgpt

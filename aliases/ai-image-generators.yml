@@ -6,6 +6,10 @@ canonical:
     - mid journey
   DALL-E:
     - dall-e
+    - openai images
+    - openai image
+    - openai gpt image
+    - chatgpt gpt image
     - dalle
     - dall e
     - dall-e 3
@@ -25,6 +29,9 @@ canonical:
   Flux:
     - flux
     - black forest labs
+    - black forest labs flux
+    - bfl
+    - bfl flux
     - flux.1
   Ideogram:
     - ideogram
@@ -38,6 +45,11 @@ canonical:
     - gemini image
     - nano banana
     - nano banana pro
+    - google nano banana
+    - google nano banana pro
+    # Google's front end onto Imagen, not a separate generator.
+    - imagefx
+    - image fx
     - google gemini
     - gemini image generation
   Leonardo AI:
@@ -53,6 +65,7 @@ canonical:
   Canva:
     - canva
     - canva magic media
+    - canva magic studio magic media
     - canva ai
     - canva magic studio
   Playground AI:
@@ -83,6 +96,17 @@ canonical:
     - getimg
     - getimg ai
 
+  # Added 2026-08-25, both named often enough to be worth charting and both
+  # genuinely text-to-image rather than video or editing.
+  Reve:
+    - reve
+    - reve art
+  HunyuanImage:
+    - hunyuanimage
+    - hunyuan image
+    - tencent hunyuan
+    - tencent hunyuanimage
+
 # Only OpenAI competes here. Anthropic makes no image generator and neither
 # does Perplexity, so both act as genuinely neutral baselines — which is what
 # makes this the cleanest self-preference measurement in the publication.
@@ -102,6 +126,27 @@ exclude:
   - google
   - microsoft
   - stability
+  - bytedance
+  - tencent
+  # Cloud platforms and API surfaces. The generator is reached through them;
+  # they are not the thing a shopper chooses.
+  - vertex ai
+  - google vertex ai
+  - google cloud
+  - azure openai
+  - azure
+  - gemini api
+  - openai api
+  - diffusers
+  # Video, not images. A real answer to a different question.
+  - google flow
+  - flow
+  - ltx studio
+  - creatify
+  - sora
+  - runway
+  - premiere
+  - adobe premiere
   # Interfaces and runtimes rather than generators
   - comfyui
   - automatic1111
@@ -137,7 +182,16 @@ exclude:
   - illustrator
   - adobe illustrator
   - adobe express
+  - express
+  - creative cloud
+  - adobe creative cloud
   - luminar neo
+  # Upscalers and enhancers: they improve an image rather than make one.
+  - topaz photo ai
+  - topaz
+  - topaz labs
+  - apple photos
+  - apple intelligence
   - pixlr
   - adobe lightroom
   - lightroom
@@ -145,6 +199,7 @@ exclude:
   - google photos
   # Logo and brand-kit builders: a template business with generation attached.
   - looka
+  - fiverr logo maker
   - brandmark
   - tailor brands
   - logoai

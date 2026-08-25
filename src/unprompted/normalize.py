@@ -53,8 +53,29 @@ _VERSION = re.compile(r"^v?\d+(?:[._]\d+)*$")
 #
 # Safe only because this runs as a fallback: "Leonardo AI", "Krea AI" and
 # "Stability AI" are all exact entries that match before it is ever reached.
+# Commercial tiers and surfaces were added after a real count: on 2026-08-24
+# eleven of the twenty-one names that would have held ai-coding-assistants were
+# a charted brand wearing one of these. Enumerating every combination in YAML
+# instead would mean a new alias entry every time a vendor renames a plan.
+#
+# Safe for the same reason as the words above: exact aliases are tried first, so
+# "Codex CLI" and "Gemini CLI" still resolve by their own entries rather than
+# folding to "codex" and "gemini" (the latter is on an exclude list).
 _NOISE_WORDS = frozenset(
-    {"ai", "app", "apps", "pro", "plus", "max", "ultra", "premium", "edition"}
+    {
+        "ai", "app", "apps", "pro", "plus", "max", "ultra", "premium", "edition",
+        # subscription tiers
+        "free", "enterprise", "business", "team", "teams", "individual",
+        "starter", "basic", "standard",
+        # a surface the same brand is delivered through, not a different brand
+        "cli",
+        # The connector in "Adobe Firefly for Teams". Only ever removed once the
+        # tier after it has already gone, because tokens come off one at a time
+        # and the loop stops at the first word it does not recognise. No brand
+        # in any category ends in "for", and a single-token name is never
+        # reduced at all.
+        "for",
+    }
 )
 
 
@@ -71,15 +92,27 @@ def _key(name: str) -> str:
     return " ".join(parts)
 
 
-def _without_version(name: str) -> str:
-    """The key for `name` with trailing version and tier tokens removed.
+def _strippings(name: str) -> list[str]:
+    """Every progressively shorter reading of `name`, longest first.
 
-    Repeated, so "Recraft V4 Pro" loses both halves and lands on "recraft".
+    One token comes off at a time and each intermediate is kept, because a
+    charted brand can sit in the middle of the chain. "JetBrains AI Pro" strips
+    to "jetbrains ai", which is the product, and then to "jetbrains", which is
+    the company and is on an exclude list. Returning only the fully stripped
+    form skipped the product and deleted the mention.
     """
     parts = _key(name).split()
+    out: list[str] = []
     while len(parts) > 1 and (_VERSION.match(parts[-1]) or parts[-1] in _NOISE_WORDS):
-        parts.pop()
-    return " ".join(parts)
+        parts = parts[:-1]
+        out.append(" ".join(parts))
+    return out
+
+
+def _without_version(name: str) -> str:
+    """The shortest reading of `name`: every trailing version and tier gone."""
+    stripped = _strippings(name)
+    return stripped[-1] if stripped else _key(name)
 
 
 class AliasMap:
@@ -126,8 +159,11 @@ class AliasMap:
         "Stability AI" is an alias of Stable Diffusion, and folding it to
         "stability" would hit the exclude list and delete a charted brand.
         """
-        stripped = _without_version(name)
-        return bool(stripped) and stripped != _key(name) and stripped in self._excluded
+        # Any stripping, not only the shortest: "GitHub Copilot Business" is
+        # excluded via "github copilot" if that were excluded, and "ChatGPT
+        # Plus" via "chatgpt". resolve() has already had first refusal, so a
+        # charted brand in the chain has been claimed before this runs.
+        return any(k in self._excluded for k in _strippings(name))
 
     def _candidates(self, name: str) -> list[str]:
         """Every reading of `name` worth looking up, best first.
@@ -151,7 +187,11 @@ class AliasMap:
         # Exact readings first, every one of them, before any folded reading:
         # a spelling somebody wrote down beats a spelling we inferred.
         keys = [_key(f) for f in forms]
-        keys += [_without_version(f) for f in forms]
+        # Longest-first within each form, so the most specific reading that is
+        # actually a charted brand wins before a shorter one that might be a
+        # parent company on the exclude list.
+        for f in forms:
+            keys += _strippings(f)
 
         seen: set[str] = set()
         return [k for k in keys if k and not (k in seen or seen.add(k))]

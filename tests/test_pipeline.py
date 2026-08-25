@@ -1392,3 +1392,105 @@ def test_a_stale_file_for_one_category_does_not_abort_the_week(tmp_path, monkeyp
 
     # Still an ordinary Exception, so the per-category handler in main() sees it.
     assert issubclass(FileExistsError, Exception)
+
+
+def test_a_tier_strips_to_the_product_before_the_parent_company():
+    """The intermediate reading must not be skipped.
+
+    Stripping used to jump straight to the shortest form, so "JetBrains AI Pro"
+    went past "jetbrains ai" -- the charted product -- and landed on
+    "jetbrains", the company, which is excluded. A real mention of the product
+    was deleted rather than charted.
+    """
+    aliases = AliasMap(
+        {"JetBrains AI": ["jetbrains ai", "jetbrains ai assistant"]},
+        exclude=["jetbrains"],
+    )
+
+    assert aliases.resolve("JetBrains AI Pro") == "JetBrains AI"
+    assert aliases.resolve("JetBrains AI Assistant Enterprise") == "JetBrains AI"
+    # The company on its own is still excluded, which is the point of the pair.
+    assert aliases.is_excluded("JetBrains")
+    assert aliases.resolve("JetBrains") is None
+
+
+def test_a_commercial_tier_is_not_a_different_product():
+    """Eleven of the names that would have held 2026-08-24 were this."""
+    aliases = AliasMap(
+        {"GitHub Copilot": ["github copilot", "copilot"], "Windsurf": ["codeium"]},
+        exclude=["chatgpt"],
+    )
+
+    for raw in (
+        "GitHub Copilot Free",
+        "GitHub Copilot Enterprise",
+        "GitHub Copilot Business/Enterprise",
+        "GitHub Copilot CLI",
+        "Copilot Free",
+    ):
+        assert aliases.resolve(raw) == "GitHub Copilot", raw
+    assert aliases.resolve("Codeium Enterprise") == "Windsurf"
+    # And a tier on an excluded name stays excluded rather than quarantining.
+    assert aliases.is_excluded_loosely("ChatGPT Business")
+
+
+def test_an_exact_alias_still_beats_a_folded_reading():
+    """"Gemini CLI" is a real alias; folding it would hit the exclude list."""
+    aliases = AliasMap(
+        {"Gemini Code Assist": ["gemini code assist", "gemini cli"]},
+        exclude=["gemini"],
+    )
+
+    assert aliases.resolve("Gemini CLI") == "Gemini Code Assist"
+    assert aliases.is_excluded("Gemini")
+
+
+def test_every_shipped_alias_still_resolves_to_its_own_brand():
+    """The guard for every future alias edit.
+
+    Folding rules and exclude lists are edited far more often than this file,
+    and the failure they cause is silent: a charted brand starts resolving to
+    something else, or gets excluded by a parent company added later. Reading
+    the real alias maps rather than a fixture is the point -- a fixture cannot
+    catch "someone excluded 'jetbrains' and deleted JetBrains AI".
+    """
+    for path in sorted(Path(__file__).resolve().parents[1].joinpath("aliases").glob("*.yml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        aliases = AliasMap.load(path)
+        for brand, spellings in (data.get("canonical") or {}).items():
+            for spelling in [brand] + list(spellings or []):
+                assert not aliases.is_excluded(spelling), (
+                    f"{path.stem}: {spelling!r} is an alias of {brand!r} and is "
+                    f"also on the exclude list"
+                )
+                assert aliases.resolve(spelling) == brand, (
+                    f"{path.stem}: {spelling!r} should resolve to {brand!r}, "
+                    f"got {aliases.resolve(spelling)!r}"
+                )
+
+
+def test_no_excluded_name_swallows_a_charted_brand():
+    """An exclusion must never win against a brand that contains it.
+
+    "stability" is excluded and "Stability AI" is Stable Diffusion; "jetbrains"
+    is excluded and "JetBrains AI" is charted; "gemini" is excluded and "Gemini
+    CLI" is Gemini Code Assist. Each of those pairs has been broken at least
+    once by an ordering change.
+    """
+    for path in sorted(Path(__file__).resolve().parents[1].joinpath("aliases").glob("*.yml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        aliases = AliasMap.load(path)
+        for brand, spellings in (data.get("canonical") or {}).items():
+            for spelling in [brand] + list(spellings or []):
+                # The full normalize() order, not just one step of it.
+                if aliases.is_excluded(spelling):
+                    resolved = None
+                elif (found := aliases.resolve(spelling)) is not None:
+                    resolved = found
+                elif aliases.is_excluded_loosely(spelling):
+                    resolved = None
+                else:
+                    resolved = "QUARANTINED"
+                assert resolved == brand, (
+                    f"{path.stem}: {spelling!r} ends up as {resolved!r}, not {brand!r}"
+                )
