@@ -170,6 +170,15 @@ Code is MIT. The data in `data/` is published under
 
 ---
 
+## Audits
+
+[`AUDIT-REPORT.md`](AUDIT-REPORT.md) is an independent audit of the whole
+project — security, system quality, code quality — run by a separate agent
+against commit `4e39653` and published unedited, including the parts that are
+unflattering. Its header records what has been fixed since and what is still
+open. If you find something it missed, that is worth more to this project than
+a kind word.
+
 ## Adding a category
 
 Categories are grouped into sectors so a visitor sees the shape of the
