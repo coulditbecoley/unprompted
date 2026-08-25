@@ -62,6 +62,29 @@ python -m unprompted.run --category ai-coding-assistants --dry-run
 `--dry-run` executes the full pipeline and reports the checks without writing
 anything. Drop the flag to write a real run record.
 
+### The web app's own keys
+
+These are read from `.env.local`, which is gitignored, and must also be set in
+the Vercel project for production. None of them is needed to run the pipeline
+or the tests.
+
+| Variable | Used by | Missing means |
+|---|---|---|
+| `ADMIN_PASSWORD` | `/admin` | the admin surface is closed entirely, not left open |
+| `BUTTONDOWN_API_KEY` | the weekly email signup | the form answers "not configured yet" and points at the RSS feed |
+| `NEXT_PUBLIC_WEB3FORMS_KEY` | the contact form | the form says so rather than failing silently |
+
+The Web3Forms key is public by design — the provider puts it in client HTML, so
+every visitor can read it, and it is inlined into the JavaScript bundle at build
+time. It is kept out of the repository anyway: this repo is public, and a key in
+git history cannot be rotated by editing a file. Note that anyone who reads it
+can post to that endpoint, so treat it as a spam surface rather than a secret.
+
+`connect-src` in `vercel.json` must list any host a form or fetch talks to. The
+CSP is `form-action 'self'`, so a native form POST to an external endpoint is
+blocked outright; the contact form uses `fetch` for that reason and because a
+native submit would navigate the reader away to the provider's response page.
+
 Exit code `0` means the week is clear to publish. Exit code `2` means at least
 one category was held, and the reasons are printed.
 

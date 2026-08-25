@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { Contact } from "@/components/contact";
+
 /**
  * The return mechanism.
  *
@@ -98,6 +100,8 @@ export function Subscribe() {
           <a href="/feed.xml">Subscribe by RSS →</a> Same chart, no address
           needed.
         </p>
+
+        <Contact />
       </div>
     </section>
   );

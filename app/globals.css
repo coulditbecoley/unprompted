@@ -825,3 +825,33 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .seq-sort:hover, .seq-sort:focus-visible { color: var(--accent); }
 .seq-sort[data-on="true"] { color: var(--fg); font-weight: 700; }
 .seq-sort.seq-rot, .seq-sort.seq-first, .seq-sort.seq-delta { text-align: right; }
+
+/* --- contact -------------------------------------------------------------
+   Shares the subscribe panel's input and button styles rather than inventing
+   a second set: it is the same object asked a different question, and a form
+   that looked like its own world would read as a different site. */
+.contact {
+  margin-top: 22px; padding-top: 18px;
+  border-top: var(--rule-w) solid var(--rule);
+}
+.contact-head { font-size: 17px; margin: 6px 0 0; font-weight: 600; }
+.contact-form {
+  display: grid; gap: 10px; margin-top: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+.contact-pair { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.contact-pair-wide { grid-column: 1 / -1; }
+.contact-label {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-3);
+}
+/* The shared input is a flex child in the subscribe form and a grid child
+   here, so its flex-basis has to be neutralised or it refuses to shrink. */
+.contact-form .subscribe-input { flex: none; width: 100%; }
+.contact-textarea { resize: vertical; min-height: 84px; line-height: 1.55; }
+.contact-submit { grid-column: 1 / -1; justify-self: start; }
+
+@media (max-width: 560px) {
+  .contact-form { grid-template-columns: minmax(0, 1fr); }
+}
