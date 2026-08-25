@@ -15,9 +15,16 @@ export const dynamic = "force-dynamic";
  * feed on a schedule, which means the weekly digest needs no sending code here
  * at all. Swapping providers is a change to one fetch.
  *
- * With no key configured the route says so plainly rather than pretending to
- * have subscribed anyone. A form that silently drops addresses is worse than no
- * form.
+ * With no key configured the route returns 503 and says so. That status is
+ * load-bearing: while there is no provider, the form falls back to delivering
+ * the address to the operator's inbox, and it needs to be able to tell "no
+ * provider yet" apart from "the provider refused". The fallback runs in the
+ * browser rather than here, because Web3Forms rejects server-side calls on the
+ * free plan outright -- "use our API in client side" -- so a server-side
+ * forward would have failed every time while looking perfectly reasonable.
+ *
+ * Setting BUTTONDOWN_API_KEY switches this to the real provider, and the
+ * fallback stops firing on its own. Nothing else changes.
  */
 
 const ENDPOINT = "https://api.buttondown.com/v1/subscribers";
@@ -43,7 +50,7 @@ export async function POST(request: Request) {
 
   if (!token) {
     return NextResponse.json(
-      { error: "The email digest is not configured yet. The RSS feed works today." },
+      { error: "not_configured", inbox: true },
       { status: 503 },
     );
   }
@@ -73,3 +80,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not reach the email provider." }, { status: 502 });
   }
 }
+

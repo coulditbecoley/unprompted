@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Contact } from "@/components/contact";
+import { Contact, WEB3FORMS_ENDPOINT, WEB3FORMS_KEY } from "@/components/contact";
 
 /**
  * The return mechanism.
@@ -14,6 +14,34 @@ import { Contact } from "@/components/contact";
  * Nothing here gates anything. The chart is fully readable without it, which is
  * the whole strategy.
  */
+/**
+ * Deliver one address to the operator's inbox while there is no mailing list.
+ *
+ * Named so a mailbox rule can file signups apart from contact messages, and so
+ * exporting the list into a real provider later is a search rather than a
+ * trawl through everything the site has ever sent.
+ */
+async function sendToInbox(email: string): Promise<boolean> {
+  if (!WEB3FORMS_KEY) return false;
+  try {
+    const res = await fetch(WEB3FORMS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        access_key: WEB3FORMS_KEY,
+        subject: "Unprompted: new subscriber",
+        from_name: "Unprompted signup",
+        email,
+        message: `New weekly-chart subscriber: ${email}`,
+      }),
+    });
+    const body = (await res.json()) as { success?: boolean };
+    return Boolean(res.ok && body.success);
+  } catch {
+    return false;
+  }
+}
+
 export function Subscribe() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
@@ -32,7 +60,11 @@ export function Subscribe() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        inbox?: boolean;
+      };
 
       if (res.ok && data.ok) {
         setState("done");
@@ -40,8 +72,24 @@ export function Subscribe() {
         setEmail("");
         return;
       }
+
+      // 503 with `inbox` means there is no mailing provider yet, so the address
+      // goes to the operator instead. Sent from here rather than from the route
+      // because Web3Forms refuses server-side calls on the free plan; a server
+      // forward failed every time while looking entirely reasonable.
+      if (res.status === 503 && data.inbox && (await sendToInbox(email))) {
+        setState("done");
+        setMessage("Done. You will get the chart every Monday.");
+        setEmail("");
+        return;
+      }
+
       setState("error");
-      setMessage(data.error ?? "That did not work.");
+      setMessage(
+        data.error === "not_configured"
+          ? "The email digest is not set up yet. The RSS feed works today."
+          : (data.error ?? "That did not work."),
+      );
     } catch {
       setState("error");
       setMessage("Could not reach the server.");
@@ -58,7 +106,9 @@ export function Subscribe() {
         </h2>
         <p className="subscribe-lead">
           No account, no paywall, and nothing here is gated. Everything on this
-          site stays free to read whether you subscribe or not.
+          site stays free to read whether you subscribe or not. There is no
+          mailing provider behind this yet, so for now your address reaches a
+          person rather than a list, and a reply saying stop is all it takes.
         </p>
 
         <form onSubmit={submit} className="subscribe-form">

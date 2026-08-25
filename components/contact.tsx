@@ -22,8 +22,10 @@ import { useState } from "react";
  * out, and the audit checked that nothing tracked carries a credential.
  */
 
-const ENDPOINT = "https://api.web3forms.com/submit";
-const KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY;
+// Exported so the weekly signup can reuse them for its own inbox fallback
+// rather than carrying a second copy of the endpoint that would drift.
+export const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit";
+export const WEB3FORMS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY;
 const MAX_MESSAGE = 4000;
 
 type State = "idle" | "sending" | "done" | "error";
@@ -47,7 +49,7 @@ export function Contact() {
       return;
     }
 
-    if (!KEY) {
+    if (!WEB3FORMS_KEY) {
       setState("error");
       setNote(
         "This form is not configured: NEXT_PUBLIC_WEB3FORMS_KEY is unset. Email works in the meantime.",
@@ -57,11 +59,11 @@ export function Contact() {
 
     setState("sending");
     setNote("");
-    data.set("access_key", KEY);
+    data.set("access_key", WEB3FORMS_KEY);
     data.set("subject", `Unprompted: message from ${data.get("name") || "a reader"}`);
 
     try {
-      const res = await fetch(ENDPOINT, {
+      const res = await fetch(WEB3FORMS_ENDPOINT, {
         method: "POST",
         headers: { Accept: "application/json" },
         body: data,

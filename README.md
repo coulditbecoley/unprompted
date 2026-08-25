@@ -71,7 +71,7 @@ or the tests.
 | Variable | Used by | Missing means |
 |---|---|---|
 | `ADMIN_PASSWORD` | `/admin` | the admin surface is closed entirely, not left open |
-| `BUTTONDOWN_API_KEY` | the weekly email signup | the form answers "not configured yet" and points at the RSS feed |
+| `BUTTONDOWN_API_KEY` | the weekly email signup | signups fall back to the operator's inbox via Web3Forms |
 | `NEXT_PUBLIC_WEB3FORMS_KEY` | the contact form | the form says so rather than failing silently |
 
 The Web3Forms key is public by design — the provider puts it in client HTML, so
@@ -84,6 +84,16 @@ can post to that endpoint, so treat it as a spam surface rather than a secret.
 CSP is `form-action 'self'`, so a native form POST to an external endpoint is
 blocked outright; the contact form uses `fetch` for that reason and because a
 native submit would navigate the reader away to the provider's response page.
+
+**Web3Forms rejects server-side calls on the free plan** — "use our API in
+client side" — so both forms call it from the browser. A Next route forwarding
+to it fails every time while looking entirely reasonable, which is worth knowing
+before writing one.
+
+Until there is a mailing provider, the signup falls back to delivering the
+address to the operator's inbox, subject `Unprompted: new subscriber`, so it is
+filterable and exportable later. Setting `BUTTONDOWN_API_KEY` switches the route
+to the real provider and the fallback stops firing on its own — no code change.
 
 Exit code `0` means the week is clear to publish. Exit code `2` means at least
 one category was held, and the reasons are printed.
