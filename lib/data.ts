@@ -145,6 +145,35 @@ export function latestRun(category: string): RunRecord | null {
 }
 
 /**
+ * The question ids a run's `steps` arrays are indexed by, in board order.
+ *
+ * First appearance rather than alphabetical, so a step lines up with the
+ * published question bank. Exported because a step is meaningless without the
+ * question it belongs to, and the comparison page names them.
+ */
+export function questionOrder(run: RunRecord): string[] {
+  const order: string[] = [];
+  for (const ex of answered(run)) {
+    if (ex.question_id && !order.includes(ex.question_id)) order.push(ex.question_id);
+  }
+  return order;
+}
+
+/** Question id -> the exact wording asked, from the published question bank. */
+export function loadQuestionText(category: string): Record<string, string> {
+  const file = path.join(REPO_ROOT, "questions", `${category}.yml`);
+  if (!fs.existsSync(file)) return {};
+  const spec = loadYaml(fs.readFileSync(file, "utf-8")) as
+    | { questions?: Array<{ id?: string; text?: string }> }
+    | undefined;
+  const out: Record<string, string> = {};
+  for (const q of spec?.questions ?? []) {
+    if (typeof q?.id === "string" && typeof q?.text === "string") out[q.id] = q.text;
+  }
+  return out;
+}
+
+/**
  * Standings for one run.
  *
  * Ordered by first-named share ahead of rotation. In a field of five or six the
@@ -159,14 +188,7 @@ export function standings(run: RunRecord): BrandStanding[] {
   const names = new Set<string>();
   for (const ex of answers) for (const b of ex.brands) names.add(b.name);
 
-  // Question order follows first appearance, so steps line up with the
-  // published question bank rather than sorting alphabetically.
-  const questionOrder: string[] = [];
-  for (const ex of answers) {
-    if (ex.question_id && !questionOrder.includes(ex.question_id)) {
-      questionOrder.push(ex.question_id);
-    }
-  }
+  const order = questionOrder(run);
 
   const out: BrandStanding[] = [];
   for (const name of names) {
@@ -192,7 +214,7 @@ export function standings(run: RunRecord): BrandStanding[] {
         : (positions[mid - 1] + positions[mid]) / 2
       : null;
 
-    const steps = questionOrder.map((qid) => {
+    const steps = order.map((qid) => {
       const forQ = answers.filter((e) => e.question_id === qid);
       if (!forQ.length) return 0;
       const hits = forQ.filter((e) => e.brands.some((b) => b.name === name)).length;
