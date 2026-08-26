@@ -15,10 +15,15 @@ import { redis } from "./analytics";
  * protected here is a newsletter signup rather than anything dangerous. The
  * trade is deliberate and the direction is the important half.
  *
- * The caller is identified by IP, taken from the proxy headers Vercel sets. It
- * is used to build a key and is never stored: `@upstash/ratelimit` keeps a
- * counter under a hash of it that expires within the window, and nothing else
- * in this codebase writes an address anywhere.
+ * The caller is identified by IP, taken from the proxy headers Vercel sets,
+ * and the address itself never reaches Redis: it is hashed with a server-side
+ * secret first, so the key is a pseudonym that cannot be reversed into an
+ * address by anyone reading the store.
+ *
+ * That was not true when this was written. The claim in the README said no
+ * address is stored while `rl:track:<raw ip>` sat in Redis for the length of a
+ * window. Short-lived is not the same as absent, and a project whose whole
+ * pitch is that its claims can be checked does not get to round that off.
  */
 
 /**
@@ -58,10 +63,24 @@ function get(bucket: string): Ratelimit | null {
   return limiter;
 }
 
-function callerFor(request: Request): string {
+async function callerFor(request: Request): Promise<string> {
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  const address =
+    (forwarded ? forwarded.split(",")[0]!.trim() : null) ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+
+  // Keyed by a secret so the hash cannot be reversed by trying every address:
+  // there are only four billion of them and a bare digest is a lookup table.
+  // ADMIN_PASSWORD is reused as the key rather than adding a variable an
+  // operator has to know to set; it is already required for the site to run at
+  // all, and it never leaves the server.
+  const secret = process.env.ADMIN_PASSWORD ?? "unprompted";
+  const bytes = new TextEncoder().encode(`${secret}:${address}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest).slice(0, 8))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -81,7 +100,9 @@ export async function rateLimit(request: Request, bucket: string): Promise<boole
   if (!rl) return true;
   try {
     return await Promise.race([
-      rl.limit(callerFor(request)).then(({ success }) => success),
+      callerFor(request)
+        .then((caller) => rl.limit(caller))
+        .then(({ success }) => success),
       new Promise<boolean>((resolve) => setTimeout(() => resolve(true), BUDGET_MS)),
     ]);
   } catch {

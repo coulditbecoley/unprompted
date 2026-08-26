@@ -6,6 +6,7 @@ import { Subscribe } from "@/components/subscribe";
 import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import {
+  answeredPerQuestion,
   latestRun,
   loadAffiliations,
   loadHistory,
@@ -59,6 +60,11 @@ export function ChartBoard({
   const leader = board[0];
   const preference = selfPreference(run, loadAffiliations(category.slug));
 
+  // Read once. Called inside the map below, this re-read and re-parsed the
+  // whole question file for every question on the board.
+  const text = loadQuestionText(category.slug);
+  const questionText = questionOrder(run).map((id) => text[id] ?? id);
+
   return (
     <section className="shell section">
       <p className="label">
@@ -96,9 +102,8 @@ export function ChartBoard({
       <Freshness runDate={run.run_date} />
 
       <LiveBoard
-        questions={questionOrder(run).map(
-          (id) => loadQuestionText(category.slug)[id] ?? id,
-        )}
+        questions={questionText}
+        denominators={answeredPerQuestion(run)}
         rows={board.map((b, i) => ({
           standing: b,
           rank: i + 1,

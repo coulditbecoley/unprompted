@@ -222,8 +222,11 @@ question and this page was read to answer them; `GPTBot` and `CCBot` mean a
 crawler passed through. A combined "bot traffic" number would destroy both.
 
 **People come from a beacon** that runs after render. No cookie is set, no
-identifier is minted, no address is stored, and a referrer is reduced to a
-hostname server-side.
+identifier is minted, and a referrer is reduced to a hostname server-side. The
+one place an address is touched is the rate limiter, which hashes it with a
+server-side secret before it reaches Redis, so what is stored is a pseudonym
+that expires inside the window and cannot be reversed into an address. The
+operator's own `/admin` traffic is excluded on both sides.
 
 Beyond page views it counts the things only this site can answer:
 
@@ -235,7 +238,9 @@ Beyond page views it counts the things only this site can answer:
 - **Who arrived *from* an assistant.** A referrer of `chatgpt.com`,
   `perplexity.ai` or `claude.ai` means a person asked something, was answered
   with this site, and clicked through — the mirror of an agent hit, and the
-  better half of it.
+  better half of it. `bing.com` and `duckduckgo.com` are deliberately not on
+  that list: they serve an AI answer and ten blue links from one hostname, so a
+  referral proves only that somebody used a search engine.
 - **How often each agent comes back**, first and last seen. A hit count says how
   much an agent read; cadence says whether this site is still in its refresh
   cycle.
@@ -246,6 +251,10 @@ Beyond page views it counts the things only this site can answer:
 Brand look-ups are split by who did the looking: merged, "Cursor's page was read
 60 times" quietly mixes a crawler sweeping every page with a person choosing
 one, and the second is the fact worth having.
+
+`tests/analytics_contract.py` drives a running build and a real Redis and
+asserts the whole counter hash after a single event. Every fault it has caught
+lived in the seam between them, where a mock would have passed.
 
 **Cost.** A recorded event is five to eleven Redis commands, so the free tier's
 ten thousand a day is roughly a thousand agent hits, or about seventeen full
@@ -271,11 +280,12 @@ archive only ever grows.
 
 ## Audits
 
-[`AUDIT-REPORT.md`](AUDIT-REPORT.md) is an independent audit of the whole
-project — security, system quality, code quality — run by a separate agent
-against commit `4e39653` and published unedited, including the parts that are
-unflattering. Its header records what has been fixed since and what is still
-open. If you find something it missed, that is worth more to this project than
+[`AUDIT-REPORT.md`](AUDIT-REPORT.md) and
+[`AUDIT-REPORT-2.md`](AUDIT-REPORT-2.md) are independent audits of the whole
+project — security, system quality, code quality, dead code — each run by a
+separate agent with no involvement in writing it, and published unedited,
+including the parts that are unflattering. Each header records what was fixed in
+response and what is still open. If you find something it missed, that is worth more to this project than
 a kind word.
 
 ## Adding a category

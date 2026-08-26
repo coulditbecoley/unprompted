@@ -93,11 +93,22 @@ function labelFor(target: HTMLElement): string | null {
  */
 const QUERY_ROUTES = ["/compare", "/consensus"];
 
+/**
+ * Surfaces that are not the audience.
+ *
+ * The proxy already skips /admin, but the beacon runs in the browser and did
+ * not, so every time the operator opened the dashboard they were counted as a
+ * reader — and the dashboard they were reading is what reported it. The earlier
+ * test missed this because it used curl, which runs no script at all.
+ */
+const PRIVATE_ROUTES = ["/admin"];
+
 export function Beacon() {
   const pathname = usePathname();
   const params = useSearchParams();
 
   useEffect(() => {
+    if (PRIVATE_ROUTES.some((p) => pathname.startsWith(p))) return;
     const query = QUERY_ROUTES.includes(pathname) ? params.toString() : null;
     send({ path: pathname, query, referrer: document.referrer || null });
   }, [pathname, params]);
@@ -106,8 +117,10 @@ export function Beacon() {
     function onClick(event: MouseEvent) {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const path = window.location.pathname;
+      if (PRIVATE_ROUTES.some((p) => path.startsWith(p))) return;
       const label = labelFor(target);
-      if (label) send({ path: window.location.pathname, event: label });
+      if (label) send({ path, event: label });
     }
     // Capture phase: a handler that stops propagation, or a link that navigates
     // before bubbling completes, must not be able to lose the count.

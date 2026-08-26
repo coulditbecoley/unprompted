@@ -237,21 +237,28 @@ export async function recordRequest(
 const ASSISTANT_HOSTS = [
   "chatgpt.com",
   "chat.openai.com",
-  "openai.com",
   "perplexity.ai",
   "claude.ai",
   "gemini.google.com",
   "copilot.microsoft.com",
-  "bing.com",
   "you.com",
   "phind.com",
   "poe.com",
-  "duckduckgo.com",
   "mistral.ai",
   "chat.mistral.ai",
   "grok.com",
   "x.ai",
 ];
+
+/**
+ * Deliberately not on that list: bing.com, duckduckgo.com and openai.com.
+ *
+ * The first two serve an AI answer and ten blue links from the same hostname,
+ * so a referral proves only that somebody used a search engine. The third is a
+ * corporate website. Counting them made "an assistant cited this" mean "someone
+ * arrived from a company that also makes an assistant", which is a different
+ * and much weaker claim than the number is presented as.
+ */
 
 export function isAssistantHost(host: string): boolean {
   return ASSISTANT_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));

@@ -4,6 +4,7 @@ import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
 import {
+  answeredPerQuestion,
   CATEGORY,
   categoryLabel,
   REPO_ROOT,
@@ -121,6 +122,7 @@ export default function Home() {
             <Freshness runDate={run.run_date} />
             <LiveBoard
               questions={questionsInBoardOrder}
+              denominators={answeredPerQuestion(run)}
               rows={board.map((b, i) => ({
                 standing: b,
                 rank: i + 1,

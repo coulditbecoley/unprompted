@@ -85,21 +85,24 @@ function SortHead({
 export function LiveBoard({
   rows,
   questions,
+  denominators,
 }: {
   rows: BoardRow[];
   /** Question text in board order, aligned to every standing's `steps`. */
   questions: string[];
+  /**
+   * How many runs of each question answered, in the same order.
+   *
+   * Passed rather than derived. Dividing the answered total by the number of
+   * questions gives an average, and the readout published it as a count: the
+   * image board showed "13/13" for questions where fifteen runs had answered.
+   */
+  denominators: number[];
 }) {
   const [active, setActive] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("first");
 
   const steps = rows[0]?.standing.steps.length ?? 0;
-  // Each question is asked the same number of times, so the per-question
-  // denominator is the run total divided by the number of questions. Derived
-  // rather than passed: one fewer prop to keep in step with the data.
-  const perQuestion = rows[0]
-    ? Math.round(rows[0].standing.totalRuns / Math.max(steps, 1))
-    : 0;
 
   // The rank column keeps the first-named ordering whatever the sort, because
   // the gap between the two orderings is the finding. Cursor is named in more
@@ -112,8 +115,8 @@ export function LiveBoard({
     active === null
       ? null
       : rows.reduce<BoardRow | null>((best, row) => {
-          const v = row.standing.steps[active] ?? 0;
-          if (!best || v > (best.standing.steps[active] ?? 0))
+          const v = row.standing.stepNamed[active] ?? 0;
+          if (!best || v > (best.standing.stepNamed[active] ?? 0))
             return v > 0 ? row : best;
           return best;
         }, null);
@@ -141,10 +144,8 @@ export function LiveBoard({
                 <>
                   {lead.standing.brand}{" "}
                   <i>
-                    {Math.round(
-                      (lead.standing.steps[active] ?? 0) * perQuestion,
-                    )}
-                    /{perQuestion}
+                    {lead.standing.stepNamed[active] ?? 0}/
+                    {denominators[active] ?? 0}
                   </i>
                 </>
               ) : (

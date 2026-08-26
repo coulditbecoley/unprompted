@@ -75,7 +75,7 @@ export function GET() {
     <title>${esc(title)}</title>
     <link href="${SITE}/chart/${run.category}"/>
     <id>tag:unprompted.report,${run.run_date}:${run.category}</id>
-    <updated>${new Date(`${run.run_date}T13:00:00Z`).toISOString()}</updated>
+    <updated>${runInstant(run.run_date).toISOString()}</updated>
     <content type="html">${esc(body)}</content>
   </entry>`;
     })

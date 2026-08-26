@@ -87,6 +87,11 @@ export async function POST(request: Request) {
   const path = typeof body.path === "string" ? body.path.slice(0, MAX_PATH) : "";
   if (!path.startsWith("/")) return new NextResponse(null, { status: 204 });
 
+  // The operator is not the audience. The beacon already skips /admin, but a
+  // guard that lives only in the browser is one a stale bundle or a hand-made
+  // request walks straight past, and this is the number it would corrupt.
+  if (path.startsWith("/admin")) return new NextResponse(null, { status: 204 });
+
   // Something announcing itself as an agent while calling the browser beacon is
   // either a headless browser or a forgery. Either way it is not the human
   // signal this route exists to collect, and the proxy already counted it.

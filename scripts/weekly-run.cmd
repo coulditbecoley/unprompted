@@ -49,7 +49,12 @@ REM Written with labels rather than one parenthesised block on purpose: cmd
 REM expands %VAR% for a whole block when it parses it, so a variable set inside
 REM the block reads as empty and the SHA comparison below would silently never
 REM fire -- the exact class of bug this section exists to remove.
+REM Checked, because a failed stage is indistinguishable from a clean week
+REM once it has happened: `git diff --staged --quiet` then finds nothing staged,
+REM the branch below logs "No new data to commit", and the task exits zero
+REM having published nothing at all. Same class as the PUSHED line above.
 git add data reports >> "%TEMP%\unprompted-weekly.log" 2>&1
+if errorlevel 1 goto :stage_failed
 git diff --staged --quiet
 if errorlevel 1 goto :publish
 echo No new data to commit. >> "%TEMP%\unprompted-weekly.log"
@@ -70,6 +75,11 @@ for /f %%H in ('git rev-parse "@{upstream}"') do set REMOTE_SHA=%%H
 if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch
 echo PUSHED %LOCAL_SHA%, exit %RUN_EXIT% >> "%TEMP%\unprompted-weekly.log"
 goto :published
+
+:stage_failed
+echo FAILED: git add failed, so nothing could be committed. The week is >> "%TEMP%\unprompted-weekly.log"
+echo         measured and on this machine only. >> "%TEMP%\unprompted-weekly.log"
+exit /b 3
 
 :commit_failed
 echo FAILED: git commit failed. The week is measured but not committed. >> "%TEMP%\unprompted-weekly.log"
@@ -93,5 +103,6 @@ REM Mirror the week into the Obsidian vault while the data is fresh, and
 REM archive the audience counters with it.
 python scripts\sync_vault.py --no-pull >> "%TEMP%\unprompted-weekly.log" 2>&1
 python scripts\sync_analytics.py >> "%TEMP%\unprompted-weekly.log" 2>&1
+if errorlevel 1 echo WARNING: the audience archive did not complete; Redis prunes >> "%TEMP%\unprompted-weekly.log"
 
 exit /b %RUN_EXIT%

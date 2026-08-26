@@ -60,6 +60,18 @@ export type BrandStanding = {
    * reads at a glance and shows *which* questions a brand wins.
    */
   steps: number[];
+  /**
+   * The same steps as counts rather than shares: how many runs of that question
+   * named this brand.
+   *
+   * Kept beside the share rather than derived from it, because a share cannot
+   * be turned back into a count. The board's readout reconstructed one by
+   * dividing the answered total by the number of questions, which is an average
+   * and was wrong for every question on the published image run: it showed
+   * "13/13" where fifteen runs had answered. A published figure has to come
+   * from the thing it counts.
+   */
+  stepNamed: number[];
 };
 
 export type Movement = {
@@ -180,6 +192,22 @@ export function loadQuestionText(category: string): Record<string, string> {
  * leader's rotation pins near 100% and stops moving, so ordering on rotation
  * alone would freeze the board. First-named share keeps discriminating.
  */
+/**
+ * How many runs of each question produced an answer, in board order.
+ *
+ * A property of the run rather than of a brand: every brand on the board shares
+ * it, and it is not uniform across questions, because a question whose engine
+ * errored has a smaller denominator than one where every engine answered.
+ */
+export function answeredPerQuestion(run: RunRecord): number[] {
+  const answers = answered(run);
+  const counts = new Map<string, number>();
+  for (const ex of answers) {
+    counts.set(ex.question_id, (counts.get(ex.question_id) ?? 0) + 1);
+  }
+  return questionOrder(run).map((qid) => counts.get(qid) ?? 0);
+}
+
 export function standings(run: RunRecord): BrandStanding[] {
   const answers = answered(run);
   const total = answers.length;
@@ -189,6 +217,15 @@ export function standings(run: RunRecord): BrandStanding[] {
   for (const ex of answers) for (const b of ex.brands) names.add(b.name);
 
   const order = questionOrder(run);
+  // Indexed once. The per-question loop below used to re-filter every answer
+  // for every brand, which is answers x questions x brands and grows with the
+  // cube of a category.
+  const byQuestion = new Map<string, Extraction[]>();
+  for (const ex of answers) {
+    const bucket = byQuestion.get(ex.question_id);
+    if (bucket) bucket.push(ex);
+    else byQuestion.set(ex.question_id, [ex]);
+  }
 
   const out: BrandStanding[] = [];
   for (const name of names) {
@@ -214,11 +251,15 @@ export function standings(run: RunRecord): BrandStanding[] {
         : (positions[mid - 1] + positions[mid]) / 2
       : null;
 
-    const steps = order.map((qid) => {
-      const forQ = answers.filter((e) => e.question_id === qid);
-      if (!forQ.length) return 0;
-      const hits = forQ.filter((e) => e.brands.some((b) => b.name === name)).length;
-      return Math.round((hits / forQ.length) * 10000) / 10000;
+    const stepNamed = order.map((qid) => {
+      const forQ = byQuestion.get(qid);
+      if (!forQ?.length) return 0;
+      return forQ.filter((e) => e.brands.some((b) => b.name === name)).length;
+    });
+    const steps = order.map((qid, i) => {
+      const forQ = byQuestion.get(qid);
+      if (!forQ?.length) return 0;
+      return Math.round((stepNamed[i] / forQ.length) * 10000) / 10000;
     });
 
     out.push({
@@ -231,6 +272,7 @@ export function standings(run: RunRecord): BrandStanding[] {
       medianPosition,
       cells,
       steps,
+      stepNamed,
     });
   }
 
