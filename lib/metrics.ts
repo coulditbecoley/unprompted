@@ -20,6 +20,23 @@
 
 export type BrandMention = { name: string; position: number; sentiment: string };
 
+/**
+ * What a provider said it used answering one question, in its own words.
+ *
+ * Optional throughout: runs archived before usage was instrumented carry none
+ * of it, and the archive is append-only, so a missing measurement stays
+ * missing rather than being backfilled with a guess.
+ */
+export type Usage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  web_searches?: number;
+  requests?: number;
+  /** The extraction pass rides on the same record but is billed separately. */
+  extract_input_tokens?: number;
+  extract_output_tokens?: number;
+};
+
 export type Extraction = {
   engine: string;
   question_id: string;
@@ -28,6 +45,7 @@ export type Extraction = {
   sources: string[];
   refused: boolean;
   error: string | null;
+  usage?: Usage;
 };
 
 export type RunRecord = {
@@ -475,4 +493,137 @@ export function brandTone(run: RunRecord, brand: string): Tone | null {
     }
   }
   return tone.total ? tone : null;
+}
+
+
+/* -- what a run cost, and how its engines behaved -------------------------- */
+
+/**
+ * Rates as data/rates.json holds them. Passed in rather than imported so this
+ * file keeps its one rule -- no I/O, no relative imports -- which is what lets
+ * `node --experimental-strip-types` run it directly in the agreement test.
+ */
+export type Rates = {
+  batch_discount: number;
+  verified: string;
+  engines: Record<string, { input_per_m: number; output_per_m: number; per_search: number }>;
+};
+
+export type LineItem = {
+  label: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  searches: number;
+  dollars: number;
+};
+
+function price(
+  rates: Rates,
+  engine: string,
+  usage: { input_tokens?: number; output_tokens?: number; web_searches?: number; requests?: number },
+): number {
+  const rate = rates.engines[engine];
+  if (!rate) return 0;
+  const searches = usage.web_searches || usage.requests || 0;
+  return (
+    ((usage.input_tokens ?? 0) / 1_000_000) * rate.input_per_m +
+    ((usage.output_tokens ?? 0) / 1_000_000) * rate.output_per_m +
+    searches * rate.per_search
+  );
+}
+
+/**
+ * Per-engine line items plus the total, from reported usage only.
+ *
+ * The TypeScript half of src/unprompted/cost.py. Both read data/rates.json, and
+ * tests/agreement.test.mjs prices every archived run through both and refuses a
+ * disagreement, because a dashboard that quotes a different number than the
+ * terminal is worse than a dashboard with no number on it.
+ *
+ * A run recorded before usage was instrumented prices at zero rather than a
+ * guess. A missing measurement should look missing.
+ */
+export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; total: number } {
+  const buckets = new Map<string, LineItem>();
+  // "api" is the batch path; any other value is a local CLI, which reports no
+  // extraction tokens at all and so never reaches the discount.
+  const extractRate = run.extractor === "api" ? rates.batch_discount : 1;
+
+  const bucket = (key: string, label: string): LineItem => {
+    let item = buckets.get(key);
+    if (!item) {
+      item = { label, calls: 0, inputTokens: 0, outputTokens: 0, searches: 0, dollars: 0 };
+      buckets.set(key, item);
+    }
+    return item;
+  };
+
+  for (const ex of run.extractions) {
+    const engine = ex.engine || "unknown";
+    const usage = ex.usage ?? {};
+    const item = bucket(engine, engine);
+    item.calls += 1;
+    item.inputTokens += usage.input_tokens ?? 0;
+    item.outputTokens += usage.output_tokens ?? 0;
+    item.searches += usage.web_searches || usage.requests || 0;
+    item.dollars += price(rates, engine, usage);
+
+    const ein = usage.extract_input_tokens ?? 0;
+    const eout = usage.extract_output_tokens ?? 0;
+    if (ein || eout) {
+      const ei = bucket("_extract", "extract");
+      ei.calls += 1;
+      ei.inputTokens += ein;
+      ei.outputTokens += eout;
+      ei.dollars +=
+        extractRate * price(rates, "_extract", { input_tokens: ein, output_tokens: eout });
+    }
+  }
+
+  const items = [...buckets.values()].sort((a, b) => b.dollars - a.dollars);
+  const total = items.reduce((sum, i) => sum + i.dollars, 0);
+  // Four places, matching cost.py. Cents would hide a per-answer figure, which
+  // is the number that says whether a method change is affordable.
+  return { items, total: Math.round(total * 10_000) / 10_000 };
+}
+
+/**
+ * The share of an engine's calls that failed, per engine.
+ *
+ * Mirrors checks.py rule 5, which holds a whole week when any single engine is
+ * over the limit. The check only ever speaks up when it fires; this is the same
+ * measurement shown continuously, so an engine drifting from 8% toward 20% is
+ * visible before the Monday it costs.
+ */
+export const MAX_ENGINE_ERROR_RATE = 0.2;
+
+export type EngineHealth = {
+  engine: string;
+  calls: number;
+  errors: number;
+  rate: number;
+  /** Over the limit that holds a run rather than publishing it. */
+  over: boolean;
+};
+
+export function engineHealth(runs: RunRecord[]): EngineHealth[] {
+  const calls = new Map<string, number>();
+  const errors = new Map<string, number>();
+
+  for (const run of runs) {
+    for (const ex of run.extractions) {
+      const e = ex.engine || "unknown";
+      calls.set(e, (calls.get(e) ?? 0) + 1);
+      if (ex.error) errors.set(e, (errors.get(e) ?? 0) + 1);
+    }
+  }
+
+  return [...calls.entries()]
+    .map(([engine, n]) => {
+      const failed = errors.get(engine) ?? 0;
+      const rate = n ? failed / n : 0;
+      return { engine, calls: n, errors: failed, rate, over: rate > MAX_ENGINE_ERROR_RATE };
+    })
+    .sort((a, b) => b.rate - a.rate || a.engine.localeCompare(b.engine));
 }

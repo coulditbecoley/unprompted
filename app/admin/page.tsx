@@ -5,11 +5,16 @@ import { load as loadYaml } from "js-yaml";
 
 import {
   CATEGORY,
+  MAX_ENGINE_ERROR_RATE,
   REPO_ROOT,
+  costOfRun,
+  engineHealth,
   latestRun,
+  loadAllRuns,
   loadHeld,
   loadHistory,
   loadQuarantine,
+  loadRates,
   standings,
 } from "@/lib/data";
 import { CATEGORIES } from "@/lib/categories";
@@ -36,6 +41,9 @@ export const metadata: Metadata = {
  * slower than an instant write and it is the entire point: "check my work" has
  * to be verifiable, not promised.
  */
+const money = (n: number) =>
+  n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
+
 export default async function AdminPage() {
   const questionsPath = path.join(REPO_ROOT, "questions", `${CATEGORY}.yml`);
   const aliasesPath = path.join(REPO_ROOT, "aliases", `${CATEGORY}.yml`);
@@ -87,6 +95,56 @@ export default async function AdminPage() {
   // over the store instead of two.
   const audience = await totals(30);
 
+  /* -- the money ------------------------------------------------------------
+     Priced from usage the providers themselves reported, against data/rates.json,
+     by the same code the terminal uses -- tests/agreement.test.mjs prices every
+     archived run through both and refuses a disagreement.
+
+     This was computed on every run and then printed to a terminal and thrown
+     away, which meant the one question a spend limit makes urgent could only be
+     answered by logging into three provider dashboards. */
+  const rates = loadRates();
+  const allRuns = loadAllRuns();
+  const lastDate = allRuns.length ? allRuns[allRuns.length - 1].run_date : null;
+  const lastWeek = allRuns.filter((r) => r.run_date === lastDate);
+
+  const weekCost = lastWeek.reduce((sum, r) => sum + costOfRun(r, rates).total, 0);
+  const weekAnswers = lastWeek.reduce((sum, r) => sum + r.extractions.length, 0);
+  const archiveCost = allRuns.reduce((sum, r) => sum + costOfRun(r, rates).total, 0);
+
+  // Per engine, across every category measured that day, so one line item is
+  // one bill to reconcile rather than one file.
+  const weekLines = new Map<string, { calls: number; tokens: number; dollars: number }>();
+  for (const r of lastWeek) {
+    for (const i of costOfRun(r, rates).items) {
+      const at = weekLines.get(i.label) ?? { calls: 0, tokens: 0, dollars: 0 };
+      at.calls += i.calls;
+      at.tokens += i.inputTokens + i.outputTokens;
+      at.dollars += i.dollars;
+      weekLines.set(i.label, at);
+    }
+  }
+  const costLines = [...weekLines.entries()].sort((a, b) => b[1].dollars - a[1].dollars);
+  // Runs archived before usage was instrumented price at zero. Saying "$0.00"
+  // about a week that certainly cost something would be a lie the page tells
+  // confidently; "not recorded" is the honest reading.
+  const costRecorded = weekCost > 0;
+
+  /* -- how the engines behaved ---------------------------------------------
+     The same measurement checks.py rule 5 uses to hold a week, shown
+     continuously instead of only when it fires. */
+  const health = engineHealth(lastWeek);
+  const worst = health[0] ?? null;
+
+  /* -- did anybody sign up -------------------------------------------------
+     Counted at the moment the form confirms, from the browser, because the
+     inbox fallback never touches this server. `tried` is the click that started
+     it, kept separate so an attempt that failed does not round up. */
+  const clickCount = (name: string) =>
+    audience.clicks.find(([label]) => label === name)?.[1] ?? 0;
+  const signups = clickCount("signup:provider") + clickCount("signup:inbox");
+  const signupTries = clickCount("signup:tried");
+
   const lastRun = (() => {
     try {
       return JSON.parse(
@@ -133,20 +191,45 @@ export default async function AdminPage() {
     },
     nextRunTile(),
     {
+      // Reachable is not the same as behaving. An engine can answer every probe
+      // and still have failed a third of the week it was asked to measure --
+      // which is exactly what happened on 2026-08-24 -- so the tile carries both.
+      label: "Engines",
+      value: `${enginesReady}/${engines.length}`,
+      note:
+        enginesReady !== engines.length
+          ? "one cannot be queried"
+          : worst && worst.errors > 0
+            ? `${worst.engine} failed ${(worst.rate * 100).toFixed(0)}% last run`
+            : "all reachable, none failing",
+      attention: enginesReady !== engines.length || Boolean(worst?.over),
+    },
+    {
+      label: "Last run cost",
+      value: costRecorded ? money(weekCost) : "not recorded",
+      note: costRecorded
+        ? `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`
+        : "this run reported no usage",
+    },
+    {
       label: "Weeks recorded",
       value: String(history.length),
       note: `method v${spec.method_version}`,
     },
     {
-      label: "Engines",
-      value: `${enginesReady}/${engines.length}`,
-      note: enginesReady === engines.length ? "all reachable" : "one cannot be queried",
-      attention: enginesReady !== engines.length,
-    },
-    {
       label: "Read to answer",
       value: String(audience.purposes.live ?? 0),
       note: `${audience.agentHits} agent hits, 30d`,
+    },
+    {
+      label: "Signups",
+      value: String(signups),
+      note:
+        signupTries > signups
+          ? `${signupTries} tried, 30d`
+          : signups === 0
+            ? "none yet, 30d"
+            : "30 days",
     },
     {
       label: "Held last run",
@@ -375,6 +458,117 @@ export default async function AdminPage() {
         </p>
       </section>
 
+
+      {/*
+        The money, and the behaviour of the things that spent it, side by side,
+        because they are one question asked twice: what did this week cost, and
+        did it buy a measurement worth publishing.
+
+        Built from the same cmp-stat rows the panels above use rather than a new
+        table style. A dashboard with two ways of drawing a row of figures reads
+        as two dashboards.
+      */}
+      <div className="cmp-grid" style={{ marginBottom: 26 }}>
+        <div className="cmp-pick">
+          <TrimTop />
+          <h3 style={{ marginTop: 6 }}>
+            Cost{" "}
+            <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+              {lastDate ?? "NO RUNS"}
+            </small>
+          </h3>
+
+          {!costRecorded ? (
+            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
+              This run reported no usage, so it prices at nothing. That is a
+              missing measurement rather than a free week &mdash; runs archived
+              before usage was instrumented carry none, and the archive is
+              append-only, so they are never backfilled with a guess.
+            </p>
+          ) : (
+            <>
+              {costLines.map(([label, l]) => (
+                <div className="cmp-stat" key={label}>
+                  <span>
+                    {label}{" "}
+                    <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                      {l.calls} CALLS &middot; {(l.tokens / 1000).toFixed(0)}K TOKENS
+                    </small>
+                  </span>
+                  <span>{money(l.dollars)}</span>
+                </div>
+              ))}
+
+              <div className="cmp-stat">
+                <span>
+                  This run{" "}
+                  <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                    {money(weekCost / Math.max(weekAnswers, 1))} PER ANSWER
+                  </small>
+                </span>
+                <span>{money(weekCost)}</span>
+              </div>
+
+              <div className="cmp-stat">
+                <span style={{ color: "var(--fg-2)" }}>Every run ever recorded</span>
+                <span style={{ color: "var(--fg-3)" }}>{money(archiveCost)}</span>
+              </div>
+
+              <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
+                Priced from usage the providers reported, against published rates
+                verified {rates.verified}. An accurate reading of our usage, not
+                of an invoice &mdash; reconcile against a real bill monthly.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="cmp-pick">
+          <TrimTop />
+          <h3 style={{ marginTop: 6 }}>Engine health</h3>
+
+          {health.length === 0 ? (
+            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>No run to read.</p>
+          ) : (
+            <>
+              {health.map((h) => (
+                <div className="cmp-stat" key={h.engine}>
+                  <span>
+                    {h.engine}{" "}
+                    <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                      {h.calls - h.errors} ANSWERED &middot; {h.errors} FAILED
+                    </small>
+                  </span>
+                  <span className={h.over ? "pending" : undefined}>
+                    {(h.rate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+
+              <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
+                {worst?.over ? (
+                  <>
+                    <strong style={{ color: "var(--warn)" }}>
+                      {worst.engine} was over the{" "}
+                      {(MAX_ENGINE_ERROR_RATE * 100).toFixed(0)}% limit on {lastDate}.
+                    </strong>{" "}
+                    A run that fails this check is meant to be held rather than
+                    published, so this one is worth a decision: it stands on the
+                    other engines, or it comes down.
+                  </>
+                ) : (
+                  <>
+                    A run is held rather than published when any single engine
+                    fails more than {(MAX_ENGINE_ERROR_RATE * 100).toFixed(0)}% of
+                    its calls. Shown continuously, so an engine drifting toward
+                    that line is visible before the Monday it costs.
+                  </>
+                )}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
 
       {/*
         Its own zone. It is the largest thing on this page and the only part an

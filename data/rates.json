@@ -1,0 +1,32 @@
+{
+  "note": "Dollars per million tokens, and dollars per billable search or request. The single place to correct when a provider changes price. Read by src/unprompted/cost.py and lib/cost.ts, so the terminal and the dashboard can never disagree about what a week cost. Past runs were billed at the rates of their own week; correcting a rate here restates history, which is why the verified date is recorded.",
+  "verified": "2026-08-22",
+  "batch_discount": 0.5,
+  "batch_discount_note": "The weekly extraction pass goes through the Batch API at half list price. A multiplier rather than a second rate, because a re-read of a handful of answers still goes out as live calls and is billed in full.",
+  "engines": {
+    "claude": {
+      "prices": "claude-opus-5",
+      "input_per_m": 5.0,
+      "output_per_m": 25.0,
+      "per_search": 0.01
+    },
+    "chatgpt": {
+      "prices": "gpt-5",
+      "input_per_m": 1.25,
+      "output_per_m": 10.0,
+      "per_search": 0.01
+    },
+    "perplexity": {
+      "prices": "sonar",
+      "input_per_m": 1.0,
+      "output_per_m": 1.0,
+      "per_search": 0.005
+    },
+    "_extract": {
+      "prices": "the extraction pass, billed as ordinary Anthropic tokens",
+      "input_per_m": 5.0,
+      "output_per_m": 25.0,
+      "per_search": 0.0
+    }
+  }
+}

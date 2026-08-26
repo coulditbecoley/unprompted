@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Contact, WEB3FORMS_ENDPOINT, WEB3FORMS_KEY } from "@/components/contact";
+import { send } from "@/components/beacon";
 
 /**
  * The return mechanism.
@@ -47,6 +48,26 @@ export function Subscribe() {
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
+  /**
+   * One place for "it worked", because there are two ways for it to work and
+   * they must be indistinguishable to the visitor and countable to the
+   * operator. Counted here rather than in the route: the fallback path never
+   * reaches the server, so a server-side count would have reported zero
+   * signups for exactly as long as there is no mailing provider -- which is
+   * the entire period the number is being watched.
+   *
+   * The label says which path delivered it and nothing else. No address is
+   * sent, and the click that started this is counted separately, so an attempt
+   * that failed stays visible rather than being quietly rounded up into a
+   * success.
+   */
+  function succeed(via: "provider" | "inbox") {
+    setState("done");
+    setMessage("Done. You will get the chart every Monday.");
+    setEmail("");
+    send({ path: window.location.pathname, event: `signup:${via}` });
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!email.trim()) return;
@@ -67,9 +88,7 @@ export function Subscribe() {
       };
 
       if (res.ok && data.ok) {
-        setState("done");
-        setMessage("Done. You will get the chart every Monday.");
-        setEmail("");
+        succeed("provider");
         return;
       }
 
@@ -78,9 +97,7 @@ export function Subscribe() {
       // because Web3Forms refuses server-side calls on the free plan; a server
       // forward failed every time while looking entirely reasonable.
       if (res.status === 503 && data.inbox && (await sendToInbox(email))) {
-        setState("done");
-        setMessage("Done. You will get the chart every Monday.");
-        setEmail("");
+        succeed("inbox");
         return;
       }
 

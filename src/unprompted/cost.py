@@ -1,8 +1,10 @@
 """What a run actually cost.
 
-Rates live here and nowhere else, so there is exactly one place to correct when
-a provider changes price. Every figure is computed from usage the providers
-reported, not from an estimate of how many tokens we think we sent.
+Rates live in data/rates.json and nowhere else, so there is exactly one place
+to correct when a provider changes price -- and the dashboard prices a run from
+that same file rather than a second copy that drifts. Every figure is computed
+from usage the providers reported, not from an estimate of how many tokens we
+think we sent.
 
 The one number this cannot see is a provider's own dashboard. Treat the output
 as an accurate reading of *our* usage against *published* rates, and reconcile
@@ -11,42 +13,23 @@ against a real invoice once a month.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
-# Dollars per million tokens, and dollars per billable search or request.
-# Verified 2026-08-22. Correct these here when a provider changes price, and
-# note the date, because past runs were billed at the rates of their own week.
+ROOT = Path(__file__).resolve().parents[2]
+
+# Rates moved out to data/rates.json so the dashboard can price a run from the
+# same numbers this does. Two copies of a price list is two answers to "what did
+# the week cost", and the wrong one is always the one being read.
+_RATES_FILE = json.loads((ROOT / "data" / "rates.json").read_text(encoding="utf-8"))
+
 RATES: dict[str, dict[str, float]] = {
-    "claude": {
-        "input_per_m": 5.00,      # claude-opus-5
-        "output_per_m": 25.00,
-        "per_search": 0.010,      # server-side web search, per search
-    },
-    "chatgpt": {
-        "input_per_m": 1.25,      # gpt-5
-        "output_per_m": 10.00,
-        "per_search": 0.010,      # web search tool, per call
-    },
-    "perplexity": {
-        "input_per_m": 1.00,      # sonar
-        "output_per_m": 1.00,
-        "per_search": 0.005,      # per-request search fee
-    },
-    # The extraction pass, billed as ordinary Anthropic tokens. List price; the
-    # batch discount below is applied on top when the run actually used batch.
-    "_extract": {
-        "input_per_m": 5.00,
-        "output_per_m": 25.00,
-        "per_search": 0.0,
-    },
+    name: {k: v for k, v in rate.items() if isinstance(v, (int, float))}
+    for name, rate in _RATES_FILE["engines"].items()
 }
-
-# The weekly extraction pass goes through the Batch API at half list price.
-# Applied as a multiplier rather than baked into the rates above, because a
-# re-read of a handful of answers still goes out as live calls and is billed in
-# full. A run records which extractor read it, so this is read off the run
-# rather than assumed.
-BATCH_DISCOUNT = 0.5
+BATCH_DISCOUNT: float = _RATES_FILE["batch_discount"]
+RATES_VERIFIED: str = _RATES_FILE["verified"]
 
 
 @dataclass

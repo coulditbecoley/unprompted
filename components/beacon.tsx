@@ -21,7 +21,7 @@ import { useEffect } from "react";
  * stored, because it should not be the browser's job to be trusted with that.
  */
 
-function send(body: Record<string, unknown>) {
+export function send(body: Record<string, unknown>) {
   const payload = JSON.stringify(body);
   try {
     // sendBeacon returns false when it could not queue the request -- the queue
@@ -52,6 +52,14 @@ function labelFor(target: HTMLElement): string | null {
 
   const sort = target.closest<HTMLElement>(".seq-sort");
   if (sort) return `sort:${(sort.textContent ?? "").trim().slice(0, 20)}`;
+
+  // Before the share branch, because both submit buttons on this site are
+  // styled as `share-btn` and were therefore being counted as shares to X. The
+  // signup and contact numbers were landing in the wrong row entirely.
+  const submit = target.closest<HTMLElement>(".subscribe-submit");
+  if (submit) {
+    return submit.classList.contains("contact-submit") ? "contact:tried" : "signup:tried";
+  }
 
   // Share and copy. DESIGN.md says the growth engine is somebody screenshotting
   // a number into an argument, and this was the one control on the site that

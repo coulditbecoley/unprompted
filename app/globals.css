@@ -943,7 +943,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    not read as a different site. */
 .mast {
   display: grid; gap: 1px; margin: 4px 0 26px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   background: var(--rule); border: var(--rule-w) solid var(--rule);
   border-radius: var(--r); overflow: hidden;
 }

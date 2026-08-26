@@ -41,8 +41,15 @@ const MAX_QUERY = 300;
  */
 const SAFE_PATH = /^\/[A-Za-z0-9\-._~/%]*$/;
 
-/** Label prefixes the beacon actually emits. Anything else is not ours. */
-const EVENT_PREFIXES = ["tab:", "sort:", "share:", "nav:", "out:"];
+/**
+ * Label prefixes the beacon actually emits. Anything else is not ours.
+ *
+ * `signup:` and `contact:` carry no address and never could: the beacon sends a
+ * fixed label, and the address itself goes to the mail provider from the form.
+ * What is counted is that somebody finished, which is the whole question the
+ * email capture exists to answer and the one thing this site could not see.
+ */
+const EVENT_PREFIXES = ["tab:", "sort:", "share:", "nav:", "out:", "signup:", "contact:"];
 
 /**
  * Only the keys the comparison pages address themselves with.
@@ -121,9 +128,10 @@ export async function POST(request: Request) {
     typeof body.event === "string" && body.event
       ? body.event.slice(0, MAX_EVENT).replace(/[^\w:./ -]/g, "")
       : null;
-  // An allowlist rather than a filter. The beacon emits five prefixes; a label
-  // that is none of them did not come from this site's own controls, and a
-  // counter nobody can explain is worse than one that is missing.
+  // An allowlist rather than a filter. The beacon emits these prefixes and no
+  // others; a label that is none of them did not come from this site's own
+  // controls, and a counter nobody can explain is worse than one that is
+  // missing.
   const event =
     rawEvent && EVENT_PREFIXES.some((p) => rawEvent.startsWith(p)) ? rawEvent : null;
   if (rawEvent && !event) return new NextResponse(null, { status: 204 });

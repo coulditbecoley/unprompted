@@ -21,6 +21,7 @@ import {
   type BrandStanding,
   type Extraction,
   type RunRecord,
+  type Rates,
 } from "./metrics";
 
 export * from "./metrics";
@@ -79,6 +80,39 @@ export function loadHistory(category: string): RunRecord[] {
       );
     }
     runs.push(parsed);
+  }
+  return runs;
+}
+
+/**
+ * Every run ever archived, newest date last, whatever category it belongs to.
+ *
+ * Deliberately a directory scan rather than a walk of CATEGORIES: a category
+ * that has been retired still cost money and still exercised the engines, and
+ * both of those are things the operator is accounting for. Filtering to the
+ * live list would quietly under-report the bill.
+ *
+ * Malformed files are skipped rather than thrown on, which is the opposite of
+ * loadHistory. The difference is what depends on it: a missing week there
+ * changes a published number, while here it makes an operator's total slightly
+ * low. Refusing to render the whole dashboard over one bad file would be the
+ * worse trade.
+ */
+export function loadAllRuns(): RunRecord[] {
+  if (!fs.existsSync(RUNS_DIR)) return [];
+  const runs: RunRecord[] = [];
+
+  for (const date of fs.readdirSync(RUNS_DIR).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort()) {
+    const dir = path.join(RUNS_DIR, date);
+    if (!fs.statSync(dir).isDirectory()) continue;
+    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+      try {
+        const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, file), "utf-8"));
+        if (isRunRecord(parsed)) runs.push(parsed);
+      } catch {
+        // Counted as not present. See above.
+      }
+    }
   }
   return runs;
 }
@@ -285,6 +319,19 @@ export function loadHeld(): HeldRun[] {
     }
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * The price list, read from the same file src/unprompted/cost.py reads.
+ *
+ * Not cached. It is one small file read on an admin request that is already
+ * touching the whole run archive, and a stale price after an edit would be a
+ * silently wrong money figure -- the one kind of wrong this page cannot afford.
+ */
+export function loadRates(): Rates {
+  return JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, "data", "rates.json"), "utf-8"),
+  ) as Rates;
 }
 
 export type QuarantineEntry = { name: string; count: number };

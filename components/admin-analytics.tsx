@@ -69,6 +69,15 @@ export async function AdminAnalytics() {
     cadence(),
   ]);
 
+  /*
+    Signups and contact submissions ride the same event channel as clicks, and
+    the masthead already counts them. Left in here they would be the same number
+    in two places, which is how a dashboard starts disagreeing with itself.
+  */
+  const clicks = t.clicks.filter(
+    ([label]) => !label.startsWith("signup:") && !label.startsWith("contact:"),
+  );
+
   const live = t.purposes.live ?? 0;
   const cited = t.fromAssistants.reduce((sum, [, n]) => sum + n, 0);
   const peak = Math.max(1, ...days.map((d) => d.human + d.agent));
@@ -224,10 +233,10 @@ export async function AdminAnalytics() {
       <div className="an-grid">
         <div>
           <p className="label an-cap">Clicks</p>
-          {t.clicks.length === 0 ? (
+          {clicks.length === 0 ? (
             <Empty what="No click recorded yet." />
           ) : (
-            <TwoCol rows={t.clicks.slice(0, 12)} />
+            <TwoCol rows={clicks.slice(0, 12)} />
           )}
         </div>
         <div>

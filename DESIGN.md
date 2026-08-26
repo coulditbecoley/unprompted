@@ -186,6 +186,26 @@ decision", because alias curation since that run already covers most of it and
 the count only moves when the next Monday is measured. A dashboard that invents
 urgency gets ignored at exactly the moment it is right.
 
+Three things the page could not answer, and now can. What the week cost, which
+was computed on every run and printed to a terminal and thrown away -- the one
+question a spend limit makes urgent, and it needed three provider dashboards to
+answer. Whether anybody signed up, which is the entire reason the email capture
+exists and was visible only by logging into the form provider. And how each
+engine behaved, which the checks measure but only ever mention on the Monday
+they stop a run.
+
+The money is priced against `data/rates.json`, which is now the only copy of the
+price list: the terminal and the dashboard read the same file, and the agreement
+test prices every archived run through both implementations and refuses a
+disagreement. A dashboard quoting a different figure than the run that produced
+it is worse than a dashboard with no figure at all.
+
+Engine health is the same measurement `checks.py` rule 5 uses to hold a week,
+shown continuously rather than only when it fires. The first thing it said was
+that the run of 2026-08-24 published with one engine at 32% -- over the limit
+that is supposed to hold a week, because the per-engine rule did not exist yet
+when it ran.
+
 ### The consensus row
 
 The board's sibling on `/consensus`, and the second place the system spends

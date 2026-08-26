@@ -27,7 +27,13 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { exceedsNoise, marginOfError, standings } from "../lib/metrics.ts";
+import {
+  MAX_ENGINE_ERROR_RATE,
+  costOfRun,
+  exceedsNoise,
+  marginOfError,
+  standings,
+} from "../lib/metrics.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, "..");
@@ -84,17 +90,24 @@ function publishedRuns() {
  * of meaning, which is a check that cries wolf until somebody deletes it.
  */
 const RATIO_DP = 4;
+/** The line separator for a script assembled as an array of source lines. */
+const NEWLINE = String.fromCharCode(10);
 const ratio = (n) => Number(n.toFixed(RATIO_DP));
-function pythonStandings(file) {
+function pythonRun(file) {
   const script = [
     "import json, sys",
     SRC_PATH_LINE,
     "from unprompted.aggregate import brand_week",
+    "from unprompted.cost import cost_of_run",
     "run = json.load(open(sys.argv[1], encoding='utf-8'))",
-    "print(json.dumps([[b.brand, b.named, b.total_runs, b.first_named,",
-    `                   round(b.rotation, ${RATIO_DP}), round(b.first_share, ${RATIO_DP}),`,
-    `                   [round(s, ${RATIO_DP}) for s in b.steps]] for b in brand_week(run)]))`,
-  ].join("\n");
+    "board = [[b.brand, b.named, b.total_runs, b.first_named,",
+    `          round(b.rotation, ${RATIO_DP}), round(b.first_share, ${RATIO_DP}),`,
+    `          [round(s, ${RATIO_DP}) for s in b.steps]] for b in brand_week(run)]`,
+    "items, total = cost_of_run(run)",
+    "cost = [[i.label, i.calls, i.input_tokens, i.output_tokens, i.searches,",
+    "         round(i.dollars, 6)] for i in items]",
+    "print(json.dumps({'board': board, 'cost': cost, 'total': total}))",
+  ].join(NEWLINE);
   return JSON.parse(
     execFileSync(PYTHON, ["-c", script, file], { encoding: "utf-8" }),
   );
@@ -145,6 +158,11 @@ test("Python and TypeScript agree on what counts as movement", () => {
 
 const runs = publishedRuns();
 
+/** The one price list. A second copy here would defeat the point of the check. */
+const rates = JSON.parse(
+  fs.readFileSync(path.join(REPO, "data", "rates.json"), "utf-8"),
+);
+
 test("there is something to compare", () => {
   assert.ok(PYTHON, "no python interpreter found, so nothing was compared");
   assert.ok(runs.length > 0, "no published runs found in data/runs");
@@ -164,13 +182,51 @@ for (const { label, file } of runs) {
       b.steps.map(ratio),
     ]);
 
-    const theirs = pythonStandings(file);
+    const theirs = pythonRun(file);
 
     // Ordering is part of the metric: the board's rank comes from this sort.
     assert.deepEqual(
       ours,
-      theirs,
+      theirs.board,
       `standings differ between lib/metrics.ts and unprompted.aggregate for ${label}`,
     );
+
+    // The money, through both implementations, from one file of rates. A
+    // dashboard quoting a different figure than the terminal is the kind of
+    // wrong that is otherwise only found by reconciling against an invoice.
+    const priced = costOfRun(record, rates);
+    assert.deepEqual(
+      priced.items.map((i) => [
+        i.label,
+        i.calls,
+        i.inputTokens,
+        i.outputTokens,
+        i.searches,
+        Number(i.dollars.toFixed(6)),
+      ]),
+      theirs.cost,
+      `cost differs between lib/metrics.ts and unprompted.cost for ${label}`,
+    );
+    assert.equal(priced.total, theirs.total, `total cost differs for ${label}`);
   });
 }
+
+/**
+ * The limit that holds a week, in both languages.
+ *
+ * checks.py stops a run when one engine fails more than this share of its
+ * calls; the dashboard draws the same line so an engine drifting toward it is
+ * visible before the Monday it costs. Two different limits would mean a
+ * dashboard saying "fine" about a run the checks are about to refuse.
+ */
+test("Python and TypeScript agree on the engine error limit", () => {
+  assert.ok(PYTHON, "no python interpreter found");
+  const script = [
+    "import sys",
+    SRC_PATH_LINE,
+    "from unprompted.checks import MAX_ENGINE_ERROR_RATE",
+    "print(MAX_ENGINE_ERROR_RATE)",
+  ].join(NEWLINE);
+  const theirs = Number(execFileSync(PYTHON, ["-c", script], { encoding: "utf-8" }).trim());
+  assert.equal(MAX_ENGINE_ERROR_RATE, theirs, "the engine error limit has drifted");
+});
