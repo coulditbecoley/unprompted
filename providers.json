@@ -22,8 +22,9 @@
       "label": "Gemini",
       "kind": "api",
       "role": "engine",
-      "enabled": true,
-      "env": "GEMINI_API_KEY"
+      "enabled": false,
+      "env": "GEMINI_API_KEY",
+      "note": "Adapter works and is tested; the models do not. Measured 2026-08-26: gemini-3.5-flash failed 31% of a full week with 503 UNAVAILABLE (and 5 of 8 sequentially, so it is Google's overload, not our concurrency). gemini-3.6-flash answers reliably but chooses to search on roughly a fifth of calls, which measures what the model remembers rather than what it retrieves. Grounding cannot be forced: google_search_retrieval returns 400 and tool_config ANY times out. The whole 2.5 line is 404 for new keys. Re-enable when a stable, reliably-grounded model exists, and bump method_version in the same change."
     },
     {
       "id": "perplexity",

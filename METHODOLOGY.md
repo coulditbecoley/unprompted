@@ -65,6 +65,35 @@ against a thinner sample. See the checks below.
 
 "Named in 8 of 10 runs" is a measurement. "Was named" is a coin flip written down.
 
+### Why an engine has to search
+
+Every hosted engine on this chart looks things up before answering: across the
+archive, Perplexity and Claude cite sources on 100% of answers and ChatGPT on
+95%. That is not incidental. A model answering from memory reports which brands
+it absorbed in training; a model that searches reports which brands are findable
+today. Both are real questions and they are not the same one, and a chart that
+mixed them would answer neither.
+
+Gemini was evaluated as a fourth engine on 2026-08-26 and is not included, for
+reasons worth recording because they are not obvious from the outside:
+
+- `gemini-3.5-flash` grounds every answer it gives, and failed **31%** of a full
+  week with `503 UNAVAILABLE` — five of eight even when called one at a time, so
+  the overload is Google's rather than our request rate. Past the 20% rule above,
+  that engine holds every week it takes part in.
+- `gemini-3.6-flash` answers reliably and chooses to search on roughly a fifth of
+  calls. It would look healthy on every dashboard while measuring the other
+  question.
+- Grounding cannot be required. `google_search_retrieval` with a zero dynamic
+  threshold returns `400 not supported`, and `tool_config` in `ANY` mode times
+  out. Whether a Gemini model searches is the model's decision, per call.
+- The entire 2.5 line — `2.5-pro`, `2.5-flash`, `2.5-flash-lite` — answers `404`
+  for a key issued now: "no longer available to new users."
+
+The adapter is written, tested and kept, disabled in `providers.json` with that
+note attached. This is a fact about Gemini's current API, not a permanent
+judgement, and it should be re-measured rather than assumed.
+
 ## How much of a change is real
 
 Fifteen questions asked five times is a small sample, and a share drawn from a
