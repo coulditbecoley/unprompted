@@ -19,7 +19,7 @@ record stamps the version it ran under.
    published number can be re-derived from the text it came from.
 4. Brand names are normalised against `aliases/<category>.yml`. Anything
    unrecognised is quarantined and **never appears on the chart**.
-5. Six sanity checks run, **before anything is written**.
+5. Seven sanity checks run, **before anything is written**.
 6. A run that passes is appended to `data/runs/` and the site republishes. A run
    that fails is written to `data/held/` instead, where it is kept in full for
    review and is not read by the site. Nothing in either directory is ever
@@ -61,7 +61,10 @@ every run record, so the denominator can always be checked.
 
 Because that exclusion could hide a broken engine, no engine is allowed to fail
 more than 20% of its own calls: past that the week is held rather than published
-against a thinner sample. See the checks below.
+against a thinner sample. And because an engine can answer everything while
+looking nothing up, an engine that is supposed to search must cite sources on at
+least 60% of its answers, or the week is held for that too. See the checks
+below.
 
 "Named in 8 of 10 runs" is a measurement. "Was named" is a coin flip written down.
 

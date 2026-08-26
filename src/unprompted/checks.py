@@ -1,4 +1,4 @@
-"""The six sanity rules that stand between a run and the public site.
+"""The seven sanity rules that stand between a run and the public site.
 
 Fail safe, never fail open: if any rule trips, nothing publishes and a human
 looks at it. An embarrassing published chart costs more than a missed week.
@@ -18,6 +18,14 @@ MAX_ERROR_RATE = 0.20        # share of engine calls allowed to fail
 # A global rate cannot see a single broken engine: with five engines, one that
 # answers once and fails its other 74 calls is 19.7% of the run and passes.
 MAX_ENGINE_ERROR_RATE = 0.20
+# The share of a searching engine's answers that must actually cite something.
+#
+# Deliberately far below what healthy engines do -- the archive's worst hosted
+# engine is ChatGPT at 95% -- because this is not a quality bar, it is a
+# tripwire for an engine that has quietly stopped looking things up. Set close
+# to real behaviour it would hold weeks over ordinary variation; set here it
+# fires only on a change of kind. gemini-3.6-flash measured 17%.
+MIN_GROUNDED_RATE = 0.60
 # Measured against the first real run: 24 distinct companies appeared, but the
 # long tail was named once or twice out of 225. Counting raw distinct names
 # would hold the week forever on a perfectly healthy result, so the bound
@@ -47,6 +55,7 @@ def run_checks(
     last_week: list[BrandWeek],
     max_brands: int = MAX_BRANDS,
     previous: dict | None = None,
+    grounding_engines: set[str] | None = None,
 ) -> CheckResult:
     """Return pass/fail plus every human-readable reason it failed."""
     reasons: list[str] = []
@@ -175,6 +184,46 @@ def run_checks(
                 f"{len(run.get('engines', []))} engines of which one barely "
                 f"answered. Fix that engine, or drop it from providers.json and "
                 f"bump method_version."
+            )
+
+    # 7. A searching engine that has stopped searching.
+    #
+    #    Rule 5 catches an engine that fails. Nothing caught an engine that
+    #    answers perfectly well without looking anything up, and that is the
+    #    more dangerous failure because it is invisible: every dashboard reads
+    #    healthy, the answers are fluent, and the chart quietly changes from
+    #    "which brands are findable today" to "which brands this model absorbed
+    #    in training". Those are different questions, and the site claims the
+    #    first one.
+    #
+    #    Found by evaluating Gemini on 2026-08-26: gemini-3.6-flash answered six
+    #    of six and searched on one of them. Nothing in this file would have
+    #    said a word.
+    #
+    #    Which engines are supposed to search is passed in rather than looked
+    #    up here, because a run record cannot tell "stopped citing" apart from
+    #    "never cites", and the local CLI harnesses genuinely never cite --
+    #    applying this to them would hold every week forever. Absent, the rule
+    #    is skipped: a hand-built record is not evidence of anything.
+    for engine in sorted(grounding_engines or ()):
+        got = [
+            e
+            for e in extractions
+            if e.get("engine") == engine and not e.get("error") and not e.get("refused")
+        ]
+        if not got:
+            continue
+        cited = sum(1 for e in got if e.get("sources"))
+        rate = cited / len(got)
+        if rate < MIN_GROUNDED_RATE:
+            reasons.append(
+                f"{engine} cited sources on only {cited} of its {len(got)} "
+                f"answers ({rate:.0%}), under the {MIN_GROUNDED_RATE:.0%} floor "
+                f"for an engine that is supposed to search. An engine answering "
+                f"from memory measures which brands it was trained on rather "
+                f"than which are findable now, and the two are not "
+                f"interchangeable. Check whether the provider changed the model "
+                f"or its tool behaviour."
             )
 
     return CheckResult(passed=not reasons, reasons=reasons)

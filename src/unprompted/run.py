@@ -227,6 +227,11 @@ def run_category(
         last_week,
         max_brands=int(spec.get("max_brands", 15)),
         previous=history[-1] if history else None,
+        # Which engines are supposed to have searched. Taken from the live
+        # engine objects rather than from the record, because a run record
+        # cannot tell an engine that stopped citing apart from one that never
+        # cites, and the local harnesses never do.
+        grounding_engines={name for name, e in engines.items() if e.grounds},
     )
 
     if not dry_run:

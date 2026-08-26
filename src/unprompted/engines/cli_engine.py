@@ -39,6 +39,11 @@ class CliEngine(Engine):
     """Ask a local CLI harness a shopper's question."""
 
     key_names: tuple[str, ...] = ()
+    # A local harness answers from the model plus whatever tools it has, and
+    # reports no citations at all: across the archive claude-code and codex are
+    # 0 of 130. That is a property of the product, not a fault, so the grounding
+    # rule must not be applied to them -- it would hold every week forever.
+    grounds: bool = False
 
     def __init__(self, provider: CliProvider) -> None:
         self.provider = provider

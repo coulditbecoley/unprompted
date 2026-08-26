@@ -22,6 +22,7 @@ from datetime import date
 from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
+from .engines import all_engines
 from .extract import extract_run
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
@@ -161,6 +162,13 @@ def main() -> int:
         brand_week(history[-1]) if history else [],
         max_brands=int(spec.get("max_brands", 15)),
         previous=history[-1] if history else None,
+        # Re-extraction re-reads stored answers and never re-queries an engine,
+        # so the sources in the record are the ones the engine gave on the day.
+        # The grounding rule applies exactly as it did then, and reading the
+        # flag off the live engines keeps one definition of who searches.
+        grounding_engines={
+            name for name, e in all_engines().items() if e.grounds
+        },
     )
 
     # Same gate as a live run: a re-extraction that still fails its checks is

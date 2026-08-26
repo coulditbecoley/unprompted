@@ -1927,3 +1927,92 @@ def test_budget_allows_when_no_ceiling_is_set(monkeypatch):
     verdict = budget.check("alpha", 1000, date(2026, 8, 26))
     assert verdict.ok
     assert "no monthly ceiling" in verdict.message
+
+
+# --- rule 7: an engine that stopped searching -------------------------------
+#
+# Rule 5 catches an engine that fails. Nothing caught one that answers fluently
+# without looking anything up, which is worse because every dashboard reads
+# healthy while the chart quietly changes what it is measuring. Found by
+# evaluating gemini-3.6-flash on 2026-08-26: six answers of six, one search.
+
+def _grounded_run(engine, answers, with_sources, category="alpha"):
+    return {
+        "category": category,
+        "run_date": "2026-08-31",
+        "method_version": 2,
+        "engines": [engine],
+        "quarantined": [],
+        "extractions": [
+            {
+                "engine": engine,
+                "question_id": f"q{i}",
+                "run_index": 0,
+                "error": None,
+                "refused": False,
+                "brands": [{"name": "Acme", "position": 1, "sentiment": "positive"}],
+                "sources": ["https://example.com"] if i < with_sources else [],
+            }
+            for i in range(answers)
+        ],
+    }
+
+
+def _reasons(run, grounding):
+    week = brand_week(run)
+    return run_checks(run, week, [], grounding_engines=grounding).reasons
+
+
+def test_an_engine_that_stopped_searching_holds_the_week():
+    """The gemini-3.6-flash case: fluent answers, almost no retrieval."""
+    run = _grounded_run("gemini", answers=60, with_sources=10)  # 17%
+
+    reasons = _reasons(run, {"gemini"})
+
+    assert any("cited sources on only" in r for r in reasons)
+    assert any("10 of its 60" in r for r in reasons)
+
+
+def test_a_searching_engine_that_still_searches_is_left_alone():
+    """ChatGPT's real archive rate is 95%; the floor must not fire on that."""
+    run = _grounded_run("chatgpt", answers=100, with_sources=95)
+
+    assert not any("cited sources" in r for r in _reasons(run, {"chatgpt"}))
+
+
+def test_a_local_harness_that_never_cites_is_not_a_failure():
+    """claude-code and codex are 0 of 130 across the archive, by design.
+
+    Applying the rule to them would hold every week forever, which is the way
+    this check would get deleted rather than fixed.
+    """
+    run = _grounded_run("codex", answers=75, with_sources=0)
+
+    # Not in the grounding set, so the rule does not look at it at all.
+    assert not any("cited sources" in r for r in _reasons(run, {"chatgpt"}))
+    # And it does fire if someone wrongly declares it a searching engine.
+    assert any("cited sources" in r for r in _reasons(run, {"codex"}))
+
+
+def test_the_grounding_rule_is_skipped_without_a_declared_set():
+    """A hand-built record is not evidence that an engine stopped searching."""
+    run = _grounded_run("gemini", answers=60, with_sources=0)
+
+    assert not any("cited sources" in r for r in _reasons(run, None))
+
+
+def test_errored_and_refused_calls_are_not_counted_against_grounding():
+    """A call that never returned cannot have cited anything.
+
+    Counting failures as ungrounded would make rule 7 fire for rule 5's reason
+    and report the wrong cause, which is worse than not firing.
+    """
+    run = _grounded_run("gemini", answers=20, with_sources=20)
+    for e in run["extractions"][:15]:
+        e["error"] = "boom"
+        e["sources"] = []
+
+    # 5 answers, all cited: grounded, even though the engine mostly failed.
+    reasons = _reasons(run, {"gemini"})
+    assert not any("cited sources" in r for r in reasons)
+    assert any("failed 15 of its own 20" in r for r in reasons)

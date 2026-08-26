@@ -39,6 +39,20 @@ class Engine:
 
     name: str = "engine"
     key_names: tuple[str, ...] = ()
+    # Does this engine look things up before answering?
+    #
+    # True for every hosted assistant: across the archive Perplexity and Claude
+    # cite sources on 100% of answers and ChatGPT on 95%, and that is the whole
+    # premise -- a model answering from memory reports which brands it absorbed
+    # in training, not which are findable today.
+    #
+    # Declared rather than inferred because the check that enforces it has to
+    # tell "this engine stopped searching" apart from "this engine never
+    # searched", and those look identical in a run record. A Gemini model
+    # evaluated on 2026-08-26 answered reliably and chose to search on a fifth
+    # of calls, which is invisible on every dashboard and changes what the
+    # number means.
+    grounds: bool = True
     # Why this engine could not answer, in words that fit how it is configured.
     # Overridden by CliEngine, whose problem is never a missing key.
     unavailable_reason: str = "not configured: no API key present"
