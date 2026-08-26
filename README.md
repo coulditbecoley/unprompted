@@ -288,6 +288,26 @@ it must not have. A day
 that has aged out of Redis keeps whatever was archived while it was there; the
 archive only ever grows.
 
+## One metric, two implementations
+
+Rotation is computed in Python for the checks that decide whether a week
+publishes, and in TypeScript for the site that renders it. Two implementations
+of one number drift silently, and a chart that disagrees with its own gate is
+the failure this project can least afford.
+
+`lib/metrics.ts` is the whole TypeScript half — arithmetic over a run object and
+nothing that reads a file — so `tests/agreement.test.mjs` can import it and run
+the same code the site does, against the same Python the weekly checks use, over
+every run in `data/runs`. Node strips the types; nothing needs building first.
+
+It could not do that before. The check carried a *third* copy of `standings()`
+and asserted that copy against a fixture, which is a test of the copy. Its
+comment claimed the fixture would catch divergence from `lib/data.ts`; nothing
+in it ever imported that module. Both audits flagged the three implementations.
+
+Ratios are compared at four decimal places, because that is where Python stores
+them. The counts they come from are compared exactly.
+
 ## Audits
 
 [`AUDIT-REPORT.md`](AUDIT-REPORT.md) and
