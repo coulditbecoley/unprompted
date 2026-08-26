@@ -222,6 +222,31 @@ anybody was billed. "201 answers" rather than 225 attempts, because the panel
 beside it calls the same 24 rows failed. A dashboard whose numbers disagree
 with each other teaches the person reading it to trust none of them.
 
+### A week that was not a full week
+
+The chart says "5 runs each across 3 engines". For the week of 2026-08-24 that
+was not true: Claude hit a provider spend cap partway through and answered 51 of
+its 75 calls. The page kept claiming three engines anyway, and the comment above
+that sentence says it has to match what the board draws.
+
+The week stays published. No figure on it was ever inflated -- `standings()`
+divides by the calls that were answered, so a call that failed is left out
+rather than counted as "this brand was not named" -- and the archive is
+append-only, so quietly pulling a week after the fact is exactly the kind of
+rewrite this project exists to make impossible. Retracting a chart is a thing to
+do in public, and there was nothing here to retract: the numbers are right, the
+sample was smaller than the sentence admitted.
+
+So the sentence admits it. A line under the lead names the engine, the count and
+what happened to the missing calls. It is computed from the run rather than
+written by hand, so it appears on any week it applies to and is absent on every
+week it does not -- a caveat that shows up unconditionally is furniture, and
+gets read as decoration within two weeks.
+
+The rule that should have stopped it exists now: rule 5 is per engine, and a run
+where one engine fails more than 20% of a category's calls is held rather than
+published. That week predates the rule. This is the record of it.
+
 ### The consensus row
 
 The board's sibling on `/consensus`, and the second place the system spends

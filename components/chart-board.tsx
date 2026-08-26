@@ -5,6 +5,7 @@ import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
 import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
+import { loadProviders } from "@/lib/providers";
 import {
   answeredPerQuestion,
   latestRun,
@@ -14,6 +15,7 @@ import {
   movement,
   questionOrder,
   selfPreference,
+  shortfall,
   sourceCounts,
   standings,
   theSnub,
@@ -50,6 +52,21 @@ export function ChartBoard({
       </section>
     );
   }
+
+  /*
+    Engines that did not answer everything they were asked this week. Empty on a
+    normal week, which is when the sentence above is true as written.
+
+    Named from the registry so this reads as prose rather than as ids -- and
+    falling back to the id, because an engine retired from providers.json still
+    appears in the weeks it measured, and a week's record must not lose the name
+    of the thing that produced it.
+  */
+  const engineLabels = new Map(loadProviders().map((p) => [p.id, p.label]));
+  const missed = shortfall(run).map((c) => ({
+    ...c,
+    label: engineLabels.get(c.engine) ?? c.engine,
+  }));
 
   const board = standings(run);
   const prev = history.length > 1 ? standings(history[history.length - 2]) : [];
@@ -92,6 +109,32 @@ export function ChartBoard({
         {run.engines.length === 1 ? "" : "s"}. A taller step means the brand was
         named more often for that question.
       </p>
+
+      {/*
+        And when it does not match, say so here rather than leaving the sentence
+        above to overstate the week. An engine that fell short is a smaller
+        sample, not a wrong one: every percentage on this page divides by the
+        calls that were answered, so a call that failed is left out rather than
+        counted as "this brand was not named".
+
+        Computed from the run, so it appears on any week it applies to and
+        disappears on any week it does not.
+      */}
+      {missed.length > 0 && (
+        <p className="section-lead coverage-note">
+          <strong>Not a full week.</strong>{" "}
+          {missed.map((c, i) => (
+            <span key={c.engine}>
+              {i > 0 ? ", and " : ""}
+              {c.label} answered {c.answered} of {c.attempted}
+            </span>
+          ))}
+          . The {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)} calls
+          that did not come back are excluded from every figure below rather than
+          counted against a brand, so the percentages are read from a smaller
+          sample than the line above describes.
+        </p>
+      )}
 
       <StatusBar
         runDate={run.run_date}

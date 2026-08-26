@@ -971,6 +971,18 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    coloured is a board where colour has stopped carrying information. */
 .mast-tile[data-attention="true"] .mast-value { color: var(--warn); }
 
+/* A week where an engine did not answer everything it was asked.
+   Amber, because DESIGN.md rations it to "a human should know this" -- and it
+   is a caveat about the sample, not an error and not movement. Bordered rather
+   than filled so it reads as a footnote to the sentence above it, which is what
+   it is: the chart is still correct, it is just drawn from less. */
+.coverage-note {
+  border-left: 2px solid var(--warn);
+  padding: 2px 0 2px 12px;
+  margin-top: -6px;
+}
+.coverage-note strong { color: var(--warn); }
+
 /* Zone headings. Three of these replace nineteen flat h3s, so the page has a
    shape a reader can hold rather than a list they have to scan. --fg-2 for the
    same contrast reason as the tiles above: these are the page's structure, and

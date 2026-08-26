@@ -690,3 +690,58 @@ export function engineHealth(runs: RunRecord[]): EngineHealth[] {
     })
     .sort((a, b) => b.rate - a.rate || a.engine.localeCompare(b.engine));
 }
+
+
+/* -- what a week actually covered ------------------------------------------ */
+
+export type EngineCoverage = {
+  engine: string;
+  /** Calls that produced an answer the board could read. */
+  answered: number;
+  /** Calls made. Errors and refusals are the difference. */
+  attempted: number;
+  short: boolean;
+};
+
+/**
+ * How much of a week each engine actually answered.
+ *
+ * The chart says "N runs each across M engines", and for most weeks that is
+ * true. For the week of 2026-08-24 it was not: Claude hit a provider spend cap
+ * partway through and answered 51 of its 75 calls, and the page went on
+ * claiming three engines at five runs a question. The comment above that
+ * sentence in chart-board.tsx says it has to match what the board draws, and it
+ * had stopped matching.
+ *
+ * No percentage on the site was wrong -- `standings()` divides by `answered()`,
+ * so a call that failed is excluded rather than counted as "this brand was not
+ * named". The claim about the sample was wrong, which on a site whose entire
+ * proposition is "check my work" is the more serious of the two.
+ *
+ * Computed rather than annotated, so it is right for every future week without
+ * anybody remembering to write a note.
+ */
+export function coverage(run: RunRecord): EngineCoverage[] {
+  const attempted = new Map<string, number>();
+  const ok = new Map<string, number>();
+
+  for (const ex of run.extractions) {
+    const engine = ex.engine || "unknown";
+    attempted.set(engine, (attempted.get(engine) ?? 0) + 1);
+    if (!ex.error && !ex.refused) ok.set(engine, (ok.get(engine) ?? 0) + 1);
+  }
+
+  return [...attempted.entries()]
+    .map(([engine, n]) => ({
+      engine,
+      answered: ok.get(engine) ?? 0,
+      attempted: n,
+      short: (ok.get(engine) ?? 0) < n,
+    }))
+    .sort((a, b) => a.answered - b.answered || a.engine.localeCompare(b.engine));
+}
+
+/** The engines that did not answer everything they were asked, worst first. */
+export function shortfall(run: RunRecord): EngineCoverage[] {
+  return coverage(run).filter((c) => c.short);
+}

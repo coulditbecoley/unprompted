@@ -32,6 +32,7 @@ import {
   batchBilled,
   costOfRun,
   engineHealth,
+  shortfall,
   exceedsNoise,
   marginOfError,
   standings,
@@ -294,6 +295,29 @@ test("Python and TypeScript round an exact half the same way", () => {
   // Half away from zero, stated outright so the shared rule is asserted rather
   // than merely shared.
   assert.equal(ours, 0.0313);
+});
+
+/**
+ * The published week that says so.
+ *
+ * 2026-08-24 went out claiming "5 runs each across 3 engines" while Claude had
+ * answered 51 of its 75. The chart now says which engine fell short and by how
+ * much, and this asserts it against the archived file rather than against a
+ * note somebody remembered to write -- and asserts that a complete week stays
+ * silent, because a caveat that appears on every week is furniture.
+ */
+test("a short week is declared, and a full one is not", () => {
+  const read = (p) => JSON.parse(fs.readFileSync(path.join(RUNS, p), "utf-8"));
+
+  const short = shortfall(read("2026-08-24/ai-image-generators.json"));
+  assert.equal(short.length, 1, "one engine fell short that week");
+  assert.equal(short[0].engine, "claude");
+  assert.equal(short[0].answered, 51);
+  assert.equal(short[0].attempted, 75);
+
+  for (const week of ["2026-08-22/ai-coding-assistants.json", "2026-08-22/ai-writing-tools.json"]) {
+    assert.deepEqual(shortfall(read(week)), [], `${week} answered everything`);
+  }
 });
 
 /**
