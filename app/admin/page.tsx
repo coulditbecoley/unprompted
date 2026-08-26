@@ -7,6 +7,7 @@ import {
   CATEGORY,
   MAX_ENGINE_ERROR_RATE,
   REPO_ROOT,
+  answered,
   costOfRun,
   engineHealth,
   latestRun,
@@ -23,7 +24,6 @@ import { AdminAnalytics } from "@/components/admin-analytics";
 import { RunStatus } from "@/components/run-status";
 import { AdminMasthead, nextRunTile, type Tile } from "@/components/admin-masthead";
 import { totals } from "@/lib/analytics";
-import fsSync from "node:fs";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
@@ -104,19 +104,33 @@ export default async function AdminPage() {
      away, which meant the one question a spend limit makes urgent could only be
      answered by logging into three provider dashboards. */
   const rates = loadRates();
-  const allRuns = loadAllRuns();
-  const lastDate = allRuns.length ? allRuns[allRuns.length - 1].run_date : null;
-  const lastWeek = allRuns.filter((r) => r.run_date === lastDate);
+  const { runs: allRuns, errors: archiveErrors } = loadAllRuns();
 
-  const weekCost = lastWeek.reduce((sum, r) => sum + costOfRun(r, rates).total, 0);
-  const weekAnswers = lastWeek.reduce((sum, r) => sum + r.extractions.length, 0);
-  const archiveCost = allRuns.reduce((sum, r) => sum + costOfRun(r, rates).total, 0);
+  // Priced once. Each run was previously parsed by loadAllRuns and then priced
+  // three separate times -- weekly total, archive total, weekly line items --
+  // over an archive that grows every Monday and is already several megabytes.
+  const priced = allRuns.map((run) => ({ run, cost: costOfRun(run, rates) }));
+
+  const lastDate = allRuns.length ? allRuns[allRuns.length - 1].run_date : null;
+  const lastWeek = priced.filter((p) => p.run.run_date === lastDate);
+
+  const weekCost = lastWeek.reduce((sum, p) => sum + p.cost.total, 0);
+  const archiveCost = priced.reduce((sum, p) => sum + p.cost.total, 0);
+
+  /*
+    Answers, not attempts. This summed `extractions.length`, which counts the
+    errored and refused rows too -- so the masthead said "225 answers" for a run
+    the health panel beside it correctly called 201 answered and 24 failed. Two
+    numbers for one thing, on one screen, and the cost-per-answer derived from
+    the wrong one.
+  */
+  const weekAnswers = lastWeek.reduce((sum, p) => sum + answered(p.run).length, 0);
 
   // Per engine, across every category measured that day, so one line item is
   // one bill to reconcile rather than one file.
   const weekLines = new Map<string, { calls: number; tokens: number; dollars: number }>();
-  for (const r of lastWeek) {
-    for (const i of costOfRun(r, rates).items) {
+  for (const p of lastWeek) {
+    for (const i of p.cost.items) {
       const at = weekLines.get(i.label) ?? { calls: 0, tokens: 0, dollars: 0 };
       at.calls += i.calls;
       at.tokens += i.inputTokens + i.outputTokens;
@@ -133,7 +147,7 @@ export default async function AdminPage() {
   /* -- how the engines behaved ---------------------------------------------
      The same measurement checks.py rule 5 uses to hold a week, shown
      continuously instead of only when it fires. */
-  const health = engineHealth(lastWeek);
+  const health = engineHealth(lastWeek.map((p) => p.run));
   const worst = health[0] ?? null;
 
   /* -- did anybody sign up -------------------------------------------------
@@ -148,32 +162,35 @@ export default async function AdminPage() {
   const lastRun = (() => {
     try {
       return JSON.parse(
-        fsSync.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
+        fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
       ) as { status: string; at: string };
     } catch {
       return null;
     }
   })();
 
-  // Names frequent enough to have held the run they came from.
-  //
-  // Three thresholds were tried here and two were wrong. The raw 549 reads as an
-  // emergency and is mostly a tail of things named once. An arbitrary "three or
-  // more" invents its own urgency. This uses the floor the checks actually use,
-  // 2% of a run's answered calls, which is the only number that ever stopped a
-  // Monday.
-  //
-  // It is still a reading of the past, and the label says so. Quarantine files
-  // are written when a run happens, so they reflect the alias map of that
-  // moment; curating aliases afterwards does not rewrite them, and the count
-  // only falls when the next run is measured against the corrected map. Showing
-  // this as outstanding work would be wrong -- most of it is already fixed.
-  const MATERIAL = 0.02;
-  const answeredRuns = board[0]?.totalRuns ?? 0;
-  const floor = Math.max(2, Math.ceil(answeredRuns * MATERIAL));
-  const materialQuarantine = quarantine.filter((q) => q.count >= floor).length;
+  /*
+    Names frequent enough to have held the run they came from.
+
+    Three thresholds were tried here and all three were wrong. The raw 549 reads
+    as an emergency and is mostly a tail of things named once. An arbitrary
+    "three or more" invents its own urgency. And applying the checks' real 2%
+    floor -- but taking the denominator from the flagship category's latest
+    published run and applying it to counts pooled from every category -- gave
+    33 where the rule gives 24, because a 279-answer run's floor is six and this
+    was testing against five.
+
+    loadQuarantine decides it now, per run, because it is the only place that
+    still knows which run each count came from.
+
+    It is still a reading of the past, and the label says so. Quarantine files
+    are written when a run happens, so they reflect the alias map of that
+    moment; curating aliases afterwards does not rewrite them, and the count only
+    falls when the next run is measured against the corrected map. Showing this
+    as outstanding work would be wrong -- most of it is already fixed.
+  */
+  const materialQuarantine = quarantine.filter((q) => q.material).length;
   const enginesReady = engines.filter((e) => e.ready).length;
-  const staleCategories = perCategory.filter((c) => !c.date).length;
 
   const tiles: Tile[] = [
     {
@@ -200,16 +217,21 @@ export default async function AdminPage() {
         enginesReady !== engines.length
           ? "one cannot be queried"
           : worst && worst.errors > 0
-            ? `${worst.engine} failed ${(worst.rate * 100).toFixed(0)}% last run`
+            ? `${worst.engine} failed ${(worst.rate * 100).toFixed(0)}% in ${worst.worstCategory ?? "a category"}`
             : "all reachable, none failing",
       attention: enginesReady !== engines.length || Boolean(worst?.over),
     },
     {
       label: "Last run cost",
       value: costRecorded ? money(weekCost) : "not recorded",
-      note: costRecorded
-        ? `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`
-        : "this run reported no usage",
+      note: archiveErrors.length
+        ? `${archiveErrors.length} file${archiveErrors.length === 1 ? "" : "s"} unreadable`
+        : costRecorded
+          ? `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`
+          : "this run reported no usage",
+      // An incomplete total presented as complete is the one thing a money tile
+      // must never do.
+      attention: archiveErrors.length > 0,
     },
     {
       label: "Weeks recorded",
@@ -222,7 +244,12 @@ export default async function AdminPage() {
       note: `${audience.agentHits} agent hits, 30d`,
     },
     {
-      label: "Signups",
+      // "Signups" claimed more than it can prove. The count is a browser
+      // reporting its own success through an unauthenticated endpoint: good
+      // enough to answer "is anyone signing up", not good enough to be called a
+      // subscriber count. It becomes authoritative when a mailing provider's
+      // webhook is the thing incrementing it.
+      label: "Confirmed signups",
       value: String(signups),
       note:
         signupTries > signups
@@ -251,12 +278,17 @@ export default async function AdminPage() {
       <AdminMasthead tiles={tiles} />
 
       {/*
-        No h1 and no standing paragraph. The most valuable space on a dashboard
-        is its first screen, and this spent it on the word "Admin" at 40px over
-        a note about commit behaviour -- neither of which is why anybody opens
-        the page. The note now lives beside the editors that actually do the
-        committing, which is where it is read.
+        The visible h1 is gone: the most valuable space on a dashboard is its
+        first screen, and this spent it on the word "Admin" at 40px over a note
+        about commit behaviour, neither of which is why anybody opens the page.
+        The note now lives beside the editors that do the committing.
+
+        The heading itself stays, unstyled and off-screen. Removing it outright
+        left the document starting at h2 and cost anyone navigating by headings
+        the name of the page -- a visual decision should not take a structural
+        one with it.
       */}
+      <h1 className="sr-only">Admin dashboard</h1>
       <h2 className="zone">Operations</h2>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
@@ -510,14 +542,30 @@ export default async function AdminPage() {
               </div>
 
               <div className="cmp-stat">
-                <span style={{ color: "var(--fg-2)" }}>Every run ever recorded</span>
+                <span style={{ color: "var(--fg-2)" }}>
+                  Every recorded run{" "}
+                  <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                    AT TODAY&rsquo;S RATES
+                  </small>
+                </span>
                 <span style={{ color: "var(--fg-3)" }}>{money(archiveCost)}</span>
               </div>
 
+              {archiveErrors.length > 0 && (
+                <p style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 12 }}>
+                  {archiveErrors.length} archived file
+                  {archiveErrors.length === 1 ? "" : "s"} could not be read, so
+                  these totals are low by an unknown amount:{" "}
+                  <span className="mono">{archiveErrors.join("; ")}</span>
+                </p>
+              )}
+
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-                Priced from usage the providers reported, against published rates
-                verified {rates.verified}. An accurate reading of our usage, not
-                of an invoice &mdash; reconcile against a real bill monthly.
+                Priced from usage the providers reported, against rates verified{" "}
+                {rates.verified}. Every run is priced at those rates, including
+                old ones, so this is what the archive would cost today rather
+                than what it was billed &mdash; an accurate reading of our usage,
+                not of an invoice. Reconcile against a real bill monthly.
               </p>
             </>
           )}
@@ -537,6 +585,7 @@ export default async function AdminPage() {
                     {h.engine}{" "}
                     <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
                       {h.calls - h.errors} ANSWERED &middot; {h.errors} FAILED
+                      {h.errors > 0 && h.worstCategory ? ` \u00b7 WORST IN ${h.worstCategory}` : ""}
                     </small>
                   </span>
                   <span className={h.over ? "pending" : undefined}>
@@ -550,7 +599,8 @@ export default async function AdminPage() {
                   <>
                     <strong style={{ color: "var(--warn)" }}>
                       {worst.engine} was over the{" "}
-                      {(MAX_ENGINE_ERROR_RATE * 100).toFixed(0)}% limit on {lastDate}.
+                      {(MAX_ENGINE_ERROR_RATE * 100).toFixed(0)}% limit in{" "}
+                      {worst.worstCategory ?? "a category"} on {lastDate}.
                     </strong>{" "}
                     A run that fails this check is meant to be held rather than
                     published, so this one is worth a decision: it stands on the
@@ -560,8 +610,9 @@ export default async function AdminPage() {
                   <>
                     A run is held rather than published when any single engine
                     fails more than {(MAX_ENGINE_ERROR_RATE * 100).toFixed(0)}% of
-                    its calls. Shown continuously, so an engine drifting toward
-                    that line is visible before the Monday it costs.
+                    its calls in any one category. The rate above is the worst
+                    category&rsquo;s, not an average across them, because an
+                    average hides the breach that would hold the week.
                   </>
                 )}
               </p>

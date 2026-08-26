@@ -1,8 +1,12 @@
 {
-  "note": "Dollars per million tokens, and dollars per billable search or request. The single place to correct when a provider changes price. Read by src/unprompted/cost.py and lib/cost.ts, so the terminal and the dashboard can never disagree about what a week cost. Past runs were billed at the rates of their own week; correcting a rate here restates history, which is why the verified date is recorded.",
+  "note": "Dollars per million tokens, and dollars per billable search or request. The single place to correct when a provider changes price. Read by src/unprompted/cost.py and lib/metrics.ts, so the terminal and the dashboard can never disagree about what a week cost. Past runs were billed at the rates of their own week; correcting a rate here restates history, which is why the verified date is recorded and why the dashboard says 'at current rates'.",
   "verified": "2026-08-22",
   "batch_discount": 0.5,
   "batch_discount_note": "The weekly extraction pass goes through the Batch API at half list price. A multiplier rather than a second rate, because a re-read of a handful of answers still goes out as live calls and is billed in full.",
+  "batch_billed_extractors": [
+    "claude-api-extract"
+  ],
+  "batch_billed_extractors_note": "Run records name the registry id of the extractor that read them. This is the set of ids billed through the Batch API, and it is the ONLY thing that earns the discount. Both implementations previously tested for the literal string 'api', which the pipeline stopped writing when it began recording real provenance -- so every hosted run would have priced its extraction at double. Adding a hosted extractor to providers.json means adding its id here.",
   "engines": {
     "claude": {
       "prices": "claude-opus-5",

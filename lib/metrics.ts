@@ -505,9 +505,29 @@ export function brandTone(run: RunRecord, brand: string): Tone | null {
  */
 export type Rates = {
   batch_discount: number;
+  /** Registry ids whose extraction is billed through the Batch API, at half price. */
+  batch_billed_extractors: string[];
   verified: string;
   engines: Record<string, { input_per_m: number; output_per_m: number; per_search: number }>;
 };
+
+/**
+ * Did this run's extraction go through the Batch API, and so at half price?
+ *
+ * A run names the registry id of the extractor that read it. Both this and
+ * cost.py tested the literal string "api" until 2026-08-26, which the pipeline
+ * stopped writing when it began recording real provenance. The failure was
+ * silent and in the expensive direction: every hosted run would have priced its
+ * extraction at double, on a dashboard built to answer what a week cost.
+ *
+ * No archived run has ever used the hosted path, so no test executed this
+ * branch. The agreement suite now carries a synthetic run that does, and asserts
+ * the half-price figure rather than only that the two languages match -- two
+ * implementations of one wrong rule agree perfectly.
+ */
+export function batchBilled(extractor: string | undefined, rates: Rates): boolean {
+  return Boolean(extractor) && rates.batch_billed_extractors.includes(extractor as string);
+}
 
 export type LineItem = {
   label: string;
@@ -546,9 +566,7 @@ function price(
  */
 export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; total: number } {
   const buckets = new Map<string, LineItem>();
-  // "api" is the batch path; any other value is a local CLI, which reports no
-  // extraction tokens at all and so never reaches the discount.
-  const extractRate = run.extractor === "api" ? rates.batch_discount : 1;
+  const extractRate = batchBilled(run.extractor, rates) ? rates.batch_discount : 1;
 
   const bucket = (key: string, label: string): LineItem => {
     let item = buckets.get(key);
@@ -583,47 +601,92 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
 
   const items = [...buckets.values()].sort((a, b) => b.dollars - a.dollars);
   const total = items.reduce((sum, i) => sum + i.dollars, 0);
-  // Four places, matching cost.py. Cents would hide a per-answer figure, which
-  // is the number that says whether a method change is affordable.
+  /*
+    Four places -- cents would hide the per-answer figure, which is the number
+    that says whether a method change is affordable.
+
+    cost.py spells this as floor(x + 0.5), which is exactly what Math.round does
+    here, because Python's round() takes halves to even and this one takes them
+    up: $0.03125 came to $0.0312 in the terminal and $0.0313 on the dashboard.
+    No archived run lands on a tie, so the agreement suite passed while the two
+    rules differed. It carries a tie fixture now.
+  */
   return { items, total: Math.round(total * 10_000) / 10_000 };
 }
 
 /**
- * The share of an engine's calls that failed, per engine.
+ * How each engine behaved, measured the way the rule that holds a week measures.
  *
- * Mirrors checks.py rule 5, which holds a whole week when any single engine is
- * over the limit. The check only ever speaks up when it fires; this is the same
- * measurement shown continuously, so an engine drifting from 8% toward 20% is
- * visible before the Monday it costs.
+ * checks.py rule 5 evaluates every category independently and stops the whole
+ * run when any single engine is over the limit in any single category. This was
+ * pooling every category of a run date before dividing, which is a different
+ * measurement wearing the same name: an engine failing 25% in one category and
+ * 0% in an equally sized other reported 12.5% and looked fine, while the check
+ * would have refused to publish. Averaging a breach away is the exact failure
+ * this panel exists to prevent, so the rate shown is the worst category's, and
+ * the category is named alongside it.
+ *
+ * Totals stay pooled -- answered and failed are real counts across the run, and
+ * the operator is reconciling a whole week. Only the rate and the verdict come
+ * from the worst category, because those are the numbers that decide something.
  */
 export const MAX_ENGINE_ERROR_RATE = 0.2;
 
 export type EngineHealth = {
   engine: string;
+  /** Calls and failures across every category measured, for the week's totals. */
   calls: number;
   errors: number;
+  /** The worst single category's failure rate -- the one the check would judge. */
   rate: number;
-  /** Over the limit that holds a run rather than publishing it. */
+  /** Which category that rate came from, so the number can be chased. */
+  worstCategory: string | null;
+  /** Over the limit in at least one category, and so a run the check would hold. */
   over: boolean;
 };
 
 export function engineHealth(runs: RunRecord[]): EngineHealth[] {
-  const calls = new Map<string, number>();
-  const errors = new Map<string, number>();
+  type Tally = { calls: number; errors: number; byCategory: Map<string, [number, number]> };
+  const tallies = new Map<string, Tally>();
 
   for (const run of runs) {
     for (const ex of run.extractions) {
-      const e = ex.engine || "unknown";
-      calls.set(e, (calls.get(e) ?? 0) + 1);
-      if (ex.error) errors.set(e, (errors.get(e) ?? 0) + 1);
+      const engine = ex.engine || "unknown";
+      let t = tallies.get(engine);
+      if (!t) {
+        t = { calls: 0, errors: 0, byCategory: new Map() };
+        tallies.set(engine, t);
+      }
+      t.calls += 1;
+      if (ex.error) t.errors += 1;
+
+      const cat = run.category || "unknown";
+      const pair = t.byCategory.get(cat) ?? [0, 0];
+      pair[0] += 1;
+      if (ex.error) pair[1] += 1;
+      t.byCategory.set(cat, pair);
     }
   }
 
-  return [...calls.entries()]
-    .map(([engine, n]) => {
-      const failed = errors.get(engine) ?? 0;
-      const rate = n ? failed / n : 0;
-      return { engine, calls: n, errors: failed, rate, over: rate > MAX_ENGINE_ERROR_RATE };
+  return [...tallies.entries()]
+    .map(([engine, t]) => {
+      let rate = 0;
+      let worstCategory: string | null = null;
+      for (const [cat, [calls, errors]] of t.byCategory) {
+        const r = calls ? errors / calls : 0;
+        if (worstCategory === null || r > rate) {
+          rate = r;
+          worstCategory = cat;
+        }
+      }
+      return {
+        engine,
+        calls: t.calls,
+        errors: t.errors,
+        rate,
+        worstCategory,
+        over: rate > MAX_ENGINE_ERROR_RATE,
+      };
     })
     .sort((a, b) => b.rate - a.rate || a.engine.localeCompare(b.engine));
 }

@@ -84,37 +84,67 @@ export function loadHistory(category: string): RunRecord[] {
   return runs;
 }
 
+export type ArchiveScan = {
+  runs: RunRecord[];
+  /** Files that could not be trusted, by path, with why. Empty is the normal case. */
+  errors: string[];
+};
+
 /**
  * Every run ever archived, newest date last, whatever category it belongs to.
  *
  * Deliberately a directory scan rather than a walk of CATEGORIES: a category
  * that has been retired still cost money and still exercised the engines, and
- * both of those are things the operator is accounting for. Filtering to the
- * live list would quietly under-report the bill.
+ * both of those are things the operator is accounting for. Filtering to the live
+ * list would quietly under-report the bill.
  *
- * Malformed files are skipped rather than thrown on, which is the opposite of
+ * Malformed files are collected rather than thrown on, which is the opposite of
  * loadHistory. The difference is what depends on it: a missing week there
- * changes a published number, while here it makes an operator's total slightly
- * low. Refusing to render the whole dashboard over one bad file would be the
- * worse trade.
+ * changes a published number, while refusing to render the whole dashboard over
+ * one bad file is the worse trade for an operator trying to find out what is
+ * wrong. But they are *returned*, not swallowed -- a total that quietly omits a
+ * file while the page calls it "every run ever recorded" is a confident lie, and
+ * the caller marks the affected figures incomplete.
+ *
+ * The path-identity check is loadHistory's, for the same reason: a file whose
+ * declared date disagrees with the directory it sits in can silently move which
+ * run counts as the latest, and the latest run is what the whole page is about.
  */
-export function loadAllRuns(): RunRecord[] {
-  if (!fs.existsSync(RUNS_DIR)) return [];
+export function loadAllRuns(): ArchiveScan {
   const runs: RunRecord[] = [];
+  const errors: string[] = [];
+  if (!fs.existsSync(RUNS_DIR)) return { runs, errors };
 
-  for (const date of fs.readdirSync(RUNS_DIR).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort()) {
+  const dates = fs
+    .readdirSync(RUNS_DIR)
+    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort();
+
+  for (const date of dates) {
     const dir = path.join(RUNS_DIR, date);
     if (!fs.statSync(dir).isDirectory()) continue;
+
     for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+      const where = `${date}/${file}`;
+      let parsed: unknown;
       try {
-        const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, file), "utf-8"));
-        if (isRunRecord(parsed)) runs.push(parsed);
+        parsed = JSON.parse(fs.readFileSync(path.join(dir, file), "utf-8"));
       } catch {
-        // Counted as not present. See above.
+        errors.push(`${where}: unreadable or not valid JSON`);
+        continue;
       }
+      if (!isRunRecord(parsed)) {
+        errors.push(`${where}: not a well-formed run record`);
+        continue;
+      }
+      if (parsed.run_date !== date || `${parsed.category}.json` !== file) {
+        errors.push(`${where}: declares ${parsed.category}/${parsed.run_date}`);
+        continue;
+      }
+      runs.push(parsed);
     }
   }
-  return runs;
+  return { runs, errors };
 }
 
 export function latestRun(category: string): RunRecord | null {
@@ -334,7 +364,27 @@ export function loadRates(): Rates {
   ) as Rates;
 }
 
-export type QuarantineEntry = { name: string; count: number };
+export type QuarantineEntry = {
+  name: string;
+  count: number;
+  /** Where it was seen. A name can appear in more than one category. */
+  categories: string[];
+  /**
+   * Seen often enough, in at least one run, to have held that run.
+   *
+   * Decided here rather than by the page, because it is the only place that
+   * still knows which run each count came from. The page applied one threshold
+   * derived from the flagship category's latest published run to counts pooled
+   * from every category -- so a name seen five times in a 279-answer run counted
+   * as material against a floor of five, when its own run's floor is six. That
+   * read 33 where the rule gives 24, and nine of the nine extras were the same
+   * off-by-one.
+   */
+  material: boolean;
+};
+
+/** The share of a run's answered calls a name must reach to have held it. */
+const QUARANTINE_MATERIAL = 0.02;
 
 /**
  * Unrecognised names from the most recent run of each live category.
@@ -353,7 +403,7 @@ export function loadQuarantine(): QuarantineEntry[] {
   if (!fs.existsSync(dir)) return [];
 
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
-  const counts = new Map<string, number>();
+  const found = new Map<string, { count: number; categories: Set<string>; material: boolean }>();
 
   for (const category of CATEGORIES) {
     // File names are `<date>-<category>.json`, so the newest sorts last.
@@ -363,19 +413,72 @@ export function loadQuarantine(): QuarantineEntry[] {
       .pop();
     if (!latest) continue;
 
+    const date = latest.slice(0, 10);
+
+    /*
+      The denominator belongs to the run this file came from, which may be one
+      the checks held rather than published -- a held run still produced these
+      names, and holding it is often why they are worth looking at.
+    */
+    const answered = answeredCount(category.slug, date);
+    // The same floor checks.py uses, and never below two: one sighting of a
+    // thing is not evidence of anything at any sample size.
+    const floor = answered ? Math.max(2, Math.ceil(answered * QUARANTINE_MATERIAL)) : Infinity;
+
+    let names: unknown;
     try {
-      const names = JSON.parse(fs.readFileSync(path.join(dir, latest), "utf-8"));
-      if (!Array.isArray(names)) continue;
-      for (const raw of names) {
-        if (typeof raw !== "string" || !raw.trim()) continue;
-        counts.set(raw, (counts.get(raw) ?? 0) + 1);
-      }
+      names = JSON.parse(fs.readFileSync(path.join(dir, latest), "utf-8"));
     } catch {
-      // A corrupt file must not take the dashboard down.
+      continue; // A corrupt file must not take the dashboard down.
+    }
+    if (!Array.isArray(names)) continue;
+
+    const here = new Map<string, number>();
+    for (const raw of names) {
+      if (typeof raw !== "string" || !raw.trim()) continue;
+      here.set(raw, (here.get(raw) ?? 0) + 1);
+    }
+
+    for (const [name, count] of here) {
+      const at = found.get(name) ?? { count: 0, categories: new Set<string>(), material: false };
+      at.count += count;
+      at.categories.add(category.slug);
+      // Material where it was actually seen that often, not where the pooled
+      // total happens to cross a floor borrowed from somewhere else.
+      if (count >= floor) at.material = true;
+      found.set(name, at);
     }
   }
 
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
+  return [...found.entries()]
+    .map(([name, at]) => ({
+      name,
+      count: at.count,
+      categories: [...at.categories].sort(),
+      material: at.material,
+    }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/**
+ * How many calls a given run actually answered, published or held.
+ *
+ * Held runs live in a separate directory and are exactly the ones whose
+ * quarantine is most worth reading, so both are checked. Returns 0 when the run
+ * cannot be found, which the caller reads as "no denominator" rather than as a
+ * denominator of zero.
+ */
+function answeredCount(category: string, date: string): number {
+  for (const base of ["runs", "held"]) {
+    const file = path.join(REPO_ROOT, "data", base, date, `${category}.json`);
+    if (!fs.existsSync(file)) continue;
+    try {
+      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf-8"));
+      if (!isRunRecord(parsed)) continue;
+      return parsed.extractions.filter((e) => !e.error).length;
+    } catch {
+      return 0;
+    }
+  }
+  return 0;
 }

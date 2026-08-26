@@ -14,6 +14,7 @@ against a real invoice once a month.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,7 +30,7 @@ RATES: dict[str, dict[str, float]] = {
     for name, rate in _RATES_FILE["engines"].items()
 }
 BATCH_DISCOUNT: float = _RATES_FILE["batch_discount"]
-RATES_VERIFIED: str = _RATES_FILE["verified"]
+BATCH_BILLED: frozenset[str] = frozenset(_RATES_FILE["batch_billed_extractors"])
 
 
 @dataclass
@@ -44,6 +45,41 @@ class LineItem:
     @property
     def per_call(self) -> float:
         return self.dollars / self.calls if self.calls else 0.0
+
+
+def _to_cents(total: float) -> float:
+    """Four decimal places, rounding a half away from zero.
+
+    Not `round()`. Python rounds halves to even and JavaScript rounds them up,
+    so the two implementations disagreed on an exact tie: $0.03125 -- 25,000
+    ChatGPT input tokens at the checked-in rate -- came to $0.0312 in the
+    terminal and $0.0313 on the dashboard. No archived run happens to land on a
+    tie, so the agreement suite passed while the rule differed.
+
+    Written as floor(x + 0.5) because that is precisely what JavaScript's
+    Math.round does, on the same IEEE-754 doubles, so the two are the same
+    arithmetic rather than two roundings that usually agree.
+    """
+    return math.floor(total * 10_000 + 0.5) / 10_000
+
+
+def batch_billed(extractor: str | None) -> bool:
+    """Did this run's extraction go through the Batch API, and so at half price?
+
+    A run names the registry id of the extractor that read it. This tested the
+    literal string "api" until 2026-08-26, which the pipeline stopped writing
+    when it started recording real provenance -- see run.py, which says so in a
+    comment directly above the field. The result was silent and expensive in the
+    wrong direction: every hosted run would have priced its extraction at double,
+    on a dashboard built to answer "what did this cost".
+
+    Nothing caught it because no archived run has ever used the hosted path, so
+    the discount branch was never executed by any test. There is a synthetic one
+    now, and it asserts the half-price figure rather than only that the two
+    implementations agree -- two implementations of the same wrong rule agree
+    perfectly.
+    """
+    return bool(extractor) and extractor in BATCH_BILLED
 
 
 def _price(engine: str, usage: dict[str, int]) -> float:
@@ -65,9 +101,7 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
     guess. A missing measurement should look missing.
     """
     buckets: dict[str, LineItem] = {}
-    # "api" is the batch path; any other value is a local CLI, which reports no
-    # extraction tokens at all and so never reaches the discount.
-    extract_rate = BATCH_DISCOUNT if run.get("extractor") == "api" else 1.0
+    extract_rate = BATCH_DISCOUNT if batch_billed(run.get("extractor")) else 1.0
 
     for ex in run.get("extractions", []):
         engine = ex.get("engine", "unknown")
@@ -97,7 +131,7 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
             )
 
     items = sorted(buckets.values(), key=lambda i: -i.dollars)
-    return items, round(sum(i.dollars for i in items), 4)
+    return items, _to_cents(sum(i.dollars for i in items))
 
 
 def format_report(run: dict) -> str:

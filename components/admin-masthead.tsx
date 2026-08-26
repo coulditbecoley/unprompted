@@ -1,7 +1,8 @@
 import { nextRun } from "@/lib/schedule";
 
 /**
- * The six figures that answer "is this healthy, and what happened".
+ * The eight figures that answer "is this healthy, what happened, and is
+ * anybody reading it".
  *
  * A dashboard's most valuable space is its first screen, and this one spent it
  * on the word "Admin" set at 40px followed by a paragraph about commit

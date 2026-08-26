@@ -29,7 +29,9 @@ import { fileURLToPath } from "node:url";
 
 import {
   MAX_ENGINE_ERROR_RATE,
+  batchBilled,
   costOfRun,
+  engineHealth,
   exceedsNoise,
   marginOfError,
   standings,
@@ -154,6 +156,188 @@ test("Python and TypeScript agree on what counts as movement", () => {
     marginOfError(p1, n1),
   ]);
   assert.deepEqual(ours, theirs, "the significance rule has drifted");
+});
+
+
+/**
+ * The Batch discount, on a run the archive does not contain.
+ *
+ * Every check above is a cross-language comparison, which is exactly the shape
+ * that cannot catch a rule both languages get wrong the same way -- and one did.
+ * The discount was keyed to `extractor === "api"`, a string the pipeline stopped
+ * writing when it began recording the real registry id, so a hosted run would
+ * have priced its extraction at double. Both implementations agreed perfectly
+ * about it, and no archived run has ever taken the hosted path, so seven passing
+ * tests said nothing at all.
+ *
+ * This asserts the arithmetic against a figure worked out by hand, which is the
+ * only kind of check that would have failed.
+ */
+test("a Batch-billed run prices its extraction at half", () => {
+  const M = 1_000_000;
+  const run = {
+    category: "synthetic",
+    run_date: "2026-01-01",
+    method_version: 1,
+    runs_per_question: 1,
+    engines: ["claude"],
+    extractor: rates.batch_billed_extractors[0],
+    quarantined: [],
+    extractions: [
+      {
+        engine: "claude",
+        question_id: "q1",
+        run_index: 0,
+        brands: [],
+        sources: [],
+        refused: false,
+        error: null,
+        usage: { extract_input_tokens: M, extract_output_tokens: M },
+      },
+    ],
+  };
+
+  // One million in and one million out, at the checked-in extraction rates,
+  // halved. Written as the sum rather than a constant so correcting a rate
+  // corrects the expectation with it -- but the halving is asserted outright.
+  const list = rates.engines._extract.input_per_m + rates.engines._extract.output_per_m;
+  const priced = costOfRun(run, rates);
+  assert.equal(priced.total, Number((list * rates.batch_discount).toFixed(4)));
+
+  const local = costOfRun({ ...run, extractor: "claude-cli" }, rates);
+  assert.equal(local.total, Number(list.toFixed(4)));
+  assert.equal(local.total, priced.total * 2, "the discount did not apply");
+
+  // The exact string that used to earn the discount must no longer earn it.
+  assert.equal(batchBilled("api", rates), false);
+  assert.equal(batchBilled(rates.batch_billed_extractors[0], rates), true);
+  assert.equal(batchBilled(undefined, rates), false);
+});
+
+/**
+ * The same rule, in Python, against the same hand-worked figure.
+ *
+ * Asserting it in one language would leave the other free to drift back, and
+ * this is the branch that had already drifted once.
+ */
+test("Python prices a Batch-billed run at half too", () => {
+  assert.ok(PYTHON, "no python interpreter found");
+  const script = [
+    "import json, sys",
+    SRC_PATH_LINE,
+    "from unprompted.cost import cost_of_run, batch_billed",
+    "run = json.loads(sys.argv[1])",
+    "local = dict(run, extractor='claude-cli')",
+    "print(json.dumps([cost_of_run(run)[1], cost_of_run(local)[1],",
+    "                  batch_billed('api'), batch_billed(run['extractor'])]))",
+  ].join(NEWLINE);
+  const run = {
+    extractor: rates.batch_billed_extractors[0],
+    extractions: [
+      { engine: "claude", usage: { extract_input_tokens: 1_000_000, extract_output_tokens: 1_000_000 } },
+    ],
+  };
+  const [batch, local, legacy, current] = JSON.parse(
+    execFileSync(PYTHON, ["-c", script, JSON.stringify(run)], { encoding: "utf-8" }),
+  );
+  const list = rates.engines._extract.input_per_m + rates.engines._extract.output_per_m;
+  assert.equal(batch, Number((list * rates.batch_discount).toFixed(4)));
+  assert.equal(local, Number(list.toFixed(4)));
+  assert.equal(legacy, false, '"api" must no longer earn the discount');
+  assert.equal(current, true);
+});
+
+/**
+ * An exact half, which the archive does not contain and the two languages used
+ * to round in opposite directions.
+ *
+ * 25,000 ChatGPT input tokens at $1.25/M is $0.03125 exactly. Python's round()
+ * took it to $0.0312 and JavaScript's Math.round to $0.0313, and every check
+ * here passed because no real run has ever landed on a tie. A rule that agrees
+ * except at the boundary is not a shared rule.
+ */
+test("Python and TypeScript round an exact half the same way", () => {
+  assert.ok(PYTHON, "no python interpreter found");
+  const run = {
+    category: "synthetic",
+    run_date: "2026-01-01",
+    method_version: 1,
+    runs_per_question: 1,
+    engines: ["chatgpt"],
+    quarantined: [],
+    extractions: [
+      {
+        engine: "chatgpt",
+        question_id: "q1",
+        run_index: 0,
+        brands: [],
+        sources: [],
+        refused: false,
+        error: null,
+        usage: { input_tokens: 25_000, output_tokens: 0 },
+      },
+    ],
+  };
+
+  const script = [
+    "import json, sys",
+    SRC_PATH_LINE,
+    "from unprompted.cost import cost_of_run",
+    "print(json.dumps(cost_of_run(json.loads(sys.argv[1]))[1]))",
+  ].join(NEWLINE);
+  const theirs = JSON.parse(
+    execFileSync(PYTHON, ["-c", script, JSON.stringify(run)], { encoding: "utf-8" }),
+  );
+  const ours = costOfRun(run, rates).total;
+
+  assert.equal(ours, theirs, "the two languages round a tie differently");
+  // Half away from zero, stated outright so the shared rule is asserted rather
+  // than merely shared.
+  assert.equal(ours, 0.0313);
+});
+
+/**
+ * Engine health, on the case the dashboard aggregation used to hide.
+ *
+ * The check that holds a week runs per category. Merging two categories before
+ * measuring lets a breach in one be averaged away by a clean one, which is the
+ * precise failure the panel exists to prevent, so it is worth a fixture rather
+ * than trust.
+ */
+test("engine health does not average a breach away", () => {
+  const mk = (category, errors, total) => ({
+    category,
+    run_date: "2026-01-01",
+    method_version: 1,
+    runs_per_question: 1,
+    engines: ["claude"],
+    quarantined: [],
+    extractions: Array.from({ length: total }, (_, i) => ({
+      engine: "claude",
+      question_id: `q${i}`,
+      run_index: 0,
+      brands: [],
+      sources: [],
+      refused: false,
+      error: i < errors ? "boom" : null,
+    })),
+  });
+
+  // 25% in one category, 0% in another of the same size: 12.5% merged, which
+  // reads as healthy while the first category is over the line that holds a run.
+  const bad = mk("a", 25, 100);
+  const good = mk("b", 0, 100);
+
+  const merged = engineHealth([bad, good]);
+  assert.equal(merged.length, 1, "one engine across both");
+  assert.ok(merged[0].over, "a breach in one category must not be averaged away");
+  assert.equal(merged[0].worstCategory, "a");
+  assert.equal(Number(merged[0].rate.toFixed(4)), 0.25, "the rate shown is the worst category's");
+
+  // And a genuinely clean pair stays clean.
+  const clean = engineHealth([mk("a", 0, 100), mk("b", 0, 100)]);
+  assert.equal(clean[0].over, false);
+  assert.equal(clean[0].rate, 0);
 });
 
 const runs = publishedRuns();

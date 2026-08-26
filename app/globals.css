@@ -941,6 +941,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    Six figures, equal weight, tabular. The board's own tile treatment rather
    than a new one: this is the same object as the consensus summary and should
    not read as a different site. */
+/* Eight tiles, so four across reads as two clean rows rather than six and a
+   stranded pair. */
 .mast {
   display: grid; gap: 1px; margin: 4px 0 26px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -951,13 +953,18 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   background: var(--surface); padding: 12px 14px 13px;
   display: flex; flex-direction: column; gap: 3px; min-width: 0;
 }
-.mast-label { color: var(--fg-3); }
+/* --fg-2, not --fg-3. These labels name each figure and the notes carry the
+   caveats -- which category failed, whether a total is incomplete, what the
+   money is priced at. --fg-3 measures about 3.3:1 on this surface, under the
+   4.5:1 AA needs, and at 10.5-12px that is not a subtle problem. --fg-2 clears
+   7:1 on both themes. Dimmer than the value is the point; unreadable is not. */
+.mast-label { color: var(--fg-2); }
 .mast-value {
   font-size: 21px; font-weight: 550; letter-spacing: -0.02em; color: var(--fg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .mast-note {
-  font-size: 11.5px; color: var(--fg-3);
+  font-size: 11.5px; color: var(--fg-2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* Marked only when a person has to do something. A board where every tile is
@@ -965,10 +972,12 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .mast-tile[data-attention="true"] .mast-value { color: var(--warn); }
 
 /* Zone headings. Three of these replace nineteen flat h3s, so the page has a
-   shape a reader can hold rather than a list they have to scan. */
+   shape a reader can hold rather than a list they have to scan. --fg-2 for the
+   same contrast reason as the tiles above: these are the page's structure, and
+   uppercase 12px at 3.3:1 is not readable structure. */
 .zone {
   font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--fg-3); margin: 34px 0 12px;
+  color: var(--fg-2); margin: 34px 0 12px;
   padding-bottom: 7px; border-bottom: var(--rule-w) solid var(--rule);
 }
 .zone:first-of-type { margin-top: 0; }

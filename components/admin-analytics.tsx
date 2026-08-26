@@ -363,15 +363,6 @@ const AGENT_META: Record<string, { vendor: string; purpose: string }> = Object.f
   ).map(([name, vendor, purpose]) => [name, { vendor, purpose }]),
 );
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="cns-stat">
-      <TrimTop />
-      <span className="mono cns-stat-v">{value}</span>
-      <span className="cns-stat-l">{label}</span>
-    </div>
-  );
-}
 
 function Empty({ what }: { what: string }) {
   return (

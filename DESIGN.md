@@ -168,10 +168,11 @@ step up in foreground, never by hue, the same way the board marks its leader.
 Not a public surface, and the one place the system reports on itself rather than
 on the market. It follows the same rules and one more: **status by exception**.
 
-Six tiles carry the whole health picture -- last run, next run, weeks recorded,
-engines reachable, assistants that read a page to answer somebody, and what the
-last run held. A tile is marked amber only when a person has to do something.
-Everything below is the detail for when one of them reads wrong.
+Eight tiles carry the whole health picture -- last run, next run, engines,
+what the run cost, weeks recorded, assistants that read a page to answer
+somebody, confirmed signups, and what the last run held. A tile is marked amber
+only when a person has to do something. Everything below is the detail for when
+one of them reads wrong.
 
 That space used to hold the word "Admin" at 40px above a paragraph about commit
 behaviour, and the page below it was nineteen headings in a flat list. Neither
@@ -205,6 +206,21 @@ shown continuously rather than only when it fires. The first thing it said was
 that the run of 2026-08-24 published with one engine at 32% -- over the limit
 that is supposed to hold a week, because the per-engine rule did not exist yet
 when it ran.
+
+Rule 5 judges each category separately, so this does too. Pooling a run date's
+categories before dividing let a 25% breach in one be averaged against a clean
+one and reported as 12.5%, which is a different measurement wearing the same
+name. The rate shown is the worst category's and the category is named beside
+it, because a number an operator cannot chase is a number they will learn to
+ignore.
+
+Every figure on this page is labelled as what it is rather than as what would
+be most impressive. "Confirmed signups", because a browser reporting its own
+success is not a verified subscriber list. "At today's rates", because the
+archive is repriced whenever the rate file is corrected and that is not what
+anybody was billed. "201 answers" rather than 225 attempts, because the panel
+beside it calls the same 24 rows failed. A dashboard whose numbers disagree
+with each other teaches the person reading it to trust none of them.
 
 ### The consensus row
 
