@@ -936,3 +936,60 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 /* A change the sample cannot support. Deliberately colourless: green and red
    mean movement, and this is the site declining to call it one. */
 .seq-delta.is-noise { color: var(--fg-3); }
+
+/* --- the operator's masthead ----------------------------------------------
+   Six figures, equal weight, tabular. The board's own tile treatment rather
+   than a new one: this is the same object as the consensus summary and should
+   not read as a different site. */
+.mast {
+  display: grid; gap: 1px; margin: 4px 0 26px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  background: var(--rule); border: var(--rule-w) solid var(--rule);
+  border-radius: var(--r); overflow: hidden;
+}
+.mast-tile {
+  background: var(--surface); padding: 12px 14px 13px;
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+.mast-label { color: var(--fg-3); }
+.mast-value {
+  font-size: 21px; font-weight: 550; letter-spacing: -0.02em; color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mast-note {
+  font-size: 11.5px; color: var(--fg-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Marked only when a person has to do something. A board where every tile is
+   coloured is a board where colour has stopped carrying information. */
+.mast-tile[data-attention="true"] .mast-value { color: var(--warn); }
+
+/* Zone headings. Three of these replace nineteen flat h3s, so the page has a
+   shape a reader can hold rather than a list they have to scan. */
+.zone {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--fg-3); margin: 34px 0 12px;
+  padding-bottom: 7px; border-bottom: var(--rule-w) solid var(--rule);
+}
+.zone:first-of-type { margin-top: 0; }
+
+@media (max-width: 900px) { .mast { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .mast { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* --- audience groups -------------------------------------------------------
+   Eleven headings became three groups and a set of captions. The tables did not
+   change; what changed is that a reader can now see the shape of the section
+   without scrolling it, which is the whole difference between a report and a
+   dashboard. */
+.an-group {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg-2); margin: 30px 0 10px;
+}
+.an-cap {
+  color: var(--fg-3); margin: 16px 0 6px;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.an-cap small {
+  font-family: var(--font); font-size: 11px; letter-spacing: 0;
+  text-transform: none; color: var(--fg-3); font-weight: 400;
+}

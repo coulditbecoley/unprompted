@@ -16,6 +16,9 @@ import { CATEGORIES } from "@/lib/categories";
 import { TrimTop } from "@/components/ui";
 import { AdminAnalytics } from "@/components/admin-analytics";
 import { RunStatus } from "@/components/run-status";
+import { AdminMasthead, nextRunTile, type Tile } from "@/components/admin-masthead";
+import { totals } from "@/lib/analytics";
+import fsSync from "node:fs";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
@@ -80,20 +83,98 @@ export default async function AdminPage() {
     };
   });
 
+  // Read here rather than inside the masthead so the whole page makes one pass
+  // over the store instead of two.
+  const audience = await totals(30);
+
+  const lastRun = (() => {
+    try {
+      return JSON.parse(
+        fsSync.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
+      ) as { status: string; at: string };
+    } catch {
+      return null;
+    }
+  })();
+
+  // Names frequent enough to have held the run they came from.
+  //
+  // Three thresholds were tried here and two were wrong. The raw 549 reads as an
+  // emergency and is mostly a tail of things named once. An arbitrary "three or
+  // more" invents its own urgency. This uses the floor the checks actually use,
+  // 2% of a run's answered calls, which is the only number that ever stopped a
+  // Monday.
+  //
+  // It is still a reading of the past, and the label says so. Quarantine files
+  // are written when a run happens, so they reflect the alias map of that
+  // moment; curating aliases afterwards does not rewrite them, and the count
+  // only falls when the next run is measured against the corrected map. Showing
+  // this as outstanding work would be wrong -- most of it is already fixed.
+  const MATERIAL = 0.02;
+  const answeredRuns = board[0]?.totalRuns ?? 0;
+  const floor = Math.max(2, Math.ceil(answeredRuns * MATERIAL));
+  const materialQuarantine = quarantine.filter((q) => q.count >= floor).length;
+  const enginesReady = engines.filter((e) => e.ready).length;
+  const staleCategories = perCategory.filter((c) => !c.date).length;
+
+  const tiles: Tile[] = [
+    {
+      label: "Last run",
+      value:
+        lastRun?.status === "published"
+          ? "clean"
+          : lastRun?.status === "held"
+            ? "held"
+            : lastRun?.status === "failed"
+              ? "failed"
+              : "none yet",
+      note: run ? run.run_date : "no data",
+      attention: lastRun?.status === "failed" || lastRun?.status === "held",
+    },
+    nextRunTile(),
+    {
+      label: "Weeks recorded",
+      value: String(history.length),
+      note: `method v${spec.method_version}`,
+    },
+    {
+      label: "Engines",
+      value: `${enginesReady}/${engines.length}`,
+      note: enginesReady === engines.length ? "all reachable" : "one cannot be queried",
+      attention: enginesReady !== engines.length,
+    },
+    {
+      label: "Read to answer",
+      value: String(audience.purposes.live ?? 0),
+      note: `${audience.agentHits} agent hits, 30d`,
+    },
+    {
+      label: "Held last run",
+      value: String(materialQuarantine),
+      note:
+        materialQuarantine === 0
+          ? "nothing material"
+          : `of ${quarantine.length} names, at the map of that day`,
+      // Not marked. These are a record of the last run, not a queue: alias
+      // edits since then already cover most of them and the count only moves
+      // when the next Monday is measured.
+      attention: false,
+    },
+  ];
+
   return (
     <section className="shell section">
       <RunStatus />
+      <AdminMasthead tiles={tiles} />
 
-      <p className="label">Operator</p>
-      <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
-        Admin
-      </h1>
-      <p className="section-lead">
-        Every change here becomes a commit on the public repository. Editing
-        questions, run count or the engine list changes what the numbers mean, so
-        each of those bumps the method version &mdash; and a run whose engine list
-        moved without one is held rather than published.
-      </p>
+      {/*
+        No h1 and no standing paragraph. The most valuable space on a dashboard
+        is its first screen, and this spent it on the word "Admin" at 40px over
+        a note about commit behaviour -- neither of which is why anybody opens
+        the page. The note now lives beside the editors that actually do the
+        committing, which is where it is read.
+      */}
+      <h2 className="zone">Operations</h2>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
@@ -108,61 +189,59 @@ export default async function AdminPage() {
 
         <div className="cmp-pick">
           <TrimTop />
-          <h3 style={{ marginTop: 6 }}>Engines ({engines.length})</h3>
-          {engines.map(({ p, ready, detail }) => (
-            <div className="cmp-stat" key={p.id}>
-              <span>
-                {p.label}{" "}
-                <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                  {p.kind === "cli" ? "LOCAL" : "API"}
-                </small>
-              </span>
-              <span className={ready ? "" : "pending"}>{detail}</span>
-            </div>
-          ))}
+          <h3 style={{ marginTop: 6 }}>Providers</h3>
 
-          <h3 style={{ marginTop: 18 }}>Extractors</h3>
-          {extractors.map(({ p, ready, detail }) => (
-            <div className="cmp-stat" key={p.id}>
-              <span>
-                {p.label}{" "}
-                <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                  {p.kind === "cli" ? "LOCAL" : "API"}
-                </small>
-                {p.id === activeExtractor?.p.id && (
-                  <small className="mono" style={{ fontSize: 10.5, marginLeft: 6, fontWeight: 700 }}>
-                    RUNS
-                  </small>
-                )}
-              </span>
-              <span className={ready ? "" : "pending"}>{detail}</span>
-            </div>
-          ))}
+          {/*
+            Status by exception. Eight rows that all said READY told an operator
+            nothing they could not get from one, and buried the row that
+            mattered on the day one of them stopped. Everything healthy collapses
+            to a count; anything that is not gets named.
+          */}
+          <div className="cmp-stat">
+            <span>
+              Engines{" "}
+              <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                {engines.length} ENABLED
+              </small>
+            </span>
+            <span className={enginesReady === engines.length ? "" : "pending"}>
+              {enginesReady === engines.length
+                ? "ALL REACHABLE"
+                : `${engines.length - enginesReady} UNREACHABLE`}
+            </span>
+          </div>
+
+          {engines
+            .filter(({ ready }) => !ready)
+            .map(({ p, detail }) => (
+              <div className="cmp-stat" key={p.id}>
+                <span style={{ paddingLeft: 12, color: "var(--fg-2)" }}>{p.label}</span>
+                <span className="pending">{detail}</span>
+              </div>
+            ))}
+
+          <div className="cmp-stat">
+            <span>
+              Reads the week{" "}
+              <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                {activeExtractor?.p.kind === "api" ? "API" : "LOCAL"}
+              </small>
+            </span>
+            <span>{activeExtractor?.p.label ?? "NONE AVAILABLE"}</span>
+          </div>
+
+          <div className="cmp-stat">
+            <span style={{ color: "var(--fg-2)" }}>Fallbacks</span>
+            <span style={{ color: "var(--fg-3)" }}>
+              {extractors.filter(({ p }) => p.id !== activeExtractor?.p.id).length} configured
+            </span>
+          </div>
 
           <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-            API keys are read from the environment and never stored in the repo.
-            Local harnesses are found on this machine&rsquo;s PATH, so they read
-            NOT INSTALLED anywhere they are not signed in.
-          </p>
-          <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 8 }}>
-            Only the one marked RUNS reads the week: the first enabled extractor
-            that this machine can actually reach, in registry order. The rest are
-            fallbacks and cost nothing until it is unavailable.{" "}
-            {activeExtractor?.p.kind === "api" ? (
-              <>
-                The API extractor reads a whole run as one Batch API job, at half
-                the live rate and roughly $7 a week, and spends no subscription
-                tokens at all. A local harness carries about 48k tokens of its own
-                context per answer, which is where a run&rsquo;s allowance goes.
-              </>
-            ) : (
-              <>
-                A local harness carries about 48k tokens of its own context per
-                answer, so a full week costs roughly 55M subscription tokens.
-                Enabling the API extractor above moves that onto metered billing
-                for about $7 a week.
-              </>
-            )}
+            Only the extractor named above reads the week: the first enabled one
+            this machine can reach, in registry order. The rest cost nothing
+            until it is unavailable. Keys are read from the environment and never
+            stored in the repo.
           </p>
         </div>
 
@@ -175,9 +254,20 @@ export default async function AdminPage() {
             </p>
           ) : (
             <>
+              {/*
+                The material count first. Leading with 549 made a tail of names
+                seen once look like a crisis, beside the number that actually
+                decides whether a Monday publishes. Both are a record of the run
+                that wrote them: aliases curated since are not reflected until
+                the next run is measured.
+              */}
               <div className="cmp-stat">
-                <span>Unrecognised names</span>
-                <span>{quarantine.length}</span>
+                <span>Material at the last run</span>
+                <span>{materialQuarantine}</span>
+              </div>
+              <div className="cmp-stat">
+                <span style={{ color: "var(--fg-2)" }}>Seen at all</span>
+                <span style={{ color: "var(--fg-3)" }}>{quarantine.length}</span>
               </div>
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
                 Latest run of each category, most frequent first. A name seen
@@ -215,20 +305,7 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/*
-        Audience first among the reporting sections, because it is the question
-        the operator cannot answer from anywhere else. Everything below is also
-        visible by reading the repository; this is not.
-      */}
-      <AdminAnalytics />
-
-      {/*
-        Where the week runs, and what came out of it. Split out from State
-        because "is the automatic flow actually working" is a different question
-        from "what is the method", and it is the one asked most often.
-      */}
       <section style={{ marginBottom: 26 }}>
-        <p className="label">Measurement</p>
         <div className="seq-board">
           <TrimTop />
           <div className="seq-row" style={{ gridTemplateColumns: "1fr auto" }}>
@@ -297,6 +374,29 @@ export default async function AdminPage() {
           once the cause is fixed, without paying to ask anything again.
         </p>
       </section>
+
+
+      {/*
+        Its own zone. It is the largest thing on this page and the only part an
+        operator cannot get by reading the repository, so it earns the space --
+        but it was previously eleven headings deep in a flat list, which made
+        the operational status above it hard to find at all.
+      */}
+      <h2 className="zone">Audience</h2>
+      <AdminAnalytics />
+
+      {/*
+        Where the week runs, and what came out of it. Split out from State
+        because "is the automatic flow actually working" is a different question
+        from "what is the method", and it is the one asked most often.
+      */}
+      <h2 className="zone">Curation</h2>
+      <p className="section-lead" style={{ marginTop: -4 }}>
+        Every change below becomes a commit on the public repository. Editing the
+        questions, the run count or the engine list changes what the numbers
+        mean, so each of those bumps the method version &mdash; and a run whose
+        engine list moved without one is held rather than published.
+      </p>
 
       <ProviderManager initial={providers} />
 

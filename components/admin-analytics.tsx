@@ -75,15 +75,7 @@ export async function AdminAnalytics() {
 
   return (
     <>
-      <p className="label" style={{ marginTop: 44 }}>
-        Audience
-      </p>
-      <h2 style={{ fontSize: 22, margin: "6px 0 6px" }}>
-        {live > 0
-          ? `An assistant read this ${live} time${live === 1 ? "" : "s"} to answer somebody.`
-          : "Who read this, and on whose behalf."}
-      </h2>
-      <p className="section-lead">
+      <p className="section-lead" style={{ marginTop: -4 }}>
         Last {WINDOW_DAYS} days, which is everything the cache holds; the
         Obsidian vault keeps the rest. Agents are counted from the request itself,
         which is the only place they appear: they do not run the script that
@@ -91,19 +83,10 @@ export async function AdminAnalytics() {
         these as what the client said it was, not as proof.
       </p>
 
-      <div className="cns-summary" style={{ marginTop: 16 }}>
-        <Stat value={String(live)} label="read to answer a person" />
-        <Stat value={String(cited)} label="arrived from an assistant" />
-        <Stat value={String(t.agentHits)} label="agent hits" />
-        <Stat value={String(t.humanHits)} label="human views" />
-      </div>
-
       {/* -- the shape of a fortnight ------------------------------------- */}
       {days.some((d) => d.human + d.agent > 0) && (
         <>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            Fourteen days
-          </h3>
+          <p className="label an-cap">Fourteen days</p>
           <div className="an-spark" role="img" aria-label="Daily hits, humans and agents">
             {days.map((d) => (
               <span className="an-day" key={d.date} title={`${d.date}: ${d.human} human, ${d.agent} agent`}>
@@ -120,9 +103,8 @@ export async function AdminAnalytics() {
       )}
 
       {/* -- agents -------------------------------------------------------- */}
-      <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-        Which assistants
-      </h3>
+      <h3 className="an-group">Assistants</h3>
+      <p className="label an-cap">Which ones</p>
       {t.agents.length === 0 ? (
         <Empty what="No agent has identified itself yet." />
       ) : (
@@ -154,9 +136,7 @@ export async function AdminAnalytics() {
 
       {t.agentPaths.length > 0 && (
         <>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            What they read
-          </h3>
+          <p className="label an-cap">What they read</p>
           <div className="seq-board">
             <TrimTop />
             {t.agentPaths.slice(0, 14).map(([pair, count]) => {
@@ -176,12 +156,9 @@ export async function AdminAnalytics() {
       {/* -- cadence: a different question from volume --------------------- */}
       {seen.length > 0 && (
         <>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            How often each one comes back
-          </h3>
-          <p className="cmp-note">
-            First and last seen, ever. A hit count says how much an agent read;
-            this says whether this site is still in its refresh cycle.
+          <p className="label an-cap">
+            How often they return
+            <small> first and last seen, ever</small>
           </p>
           <div className="seq-board">
             <TrimTop />
@@ -198,12 +175,11 @@ export async function AdminAnalytics() {
         </>
       )}
 
-      {/* -- the two questions only this site can answer -------------------- */}
+      {/* -- people --------------------------------------------------------- */}
+      <h3 className="an-group">People</h3>
       <div className="an-grid">
         <div>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            Brands looked up
-          </h3>
+          <p className="label an-cap">Brands looked up</p>
           {t.brands.length === 0 && t.brandsByAgents.length === 0 ? (
             <Empty what="No brand page read yet." />
           ) : (
@@ -223,9 +199,7 @@ export async function AdminAnalytics() {
           )}
         </div>
         <div>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            Compared against each other
-          </h3>
+          <p className="label an-cap">Compared against each other</p>
           {t.comparisons.length === 0 ? (
             <Empty what="No comparison made yet." />
           ) : (
@@ -240,8 +214,7 @@ export async function AdminAnalytics() {
         side a reader typed first is not a fact about the brands.
       </p>
 
-      {/* -- humans -------------------------------------------------------- */}
-      <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Pages people read</h3>
+      <p className="label an-cap">Pages read</p>
       {t.views.length === 0 ? (
         <Empty what="No human page view recorded yet." />
       ) : (
@@ -250,7 +223,7 @@ export async function AdminAnalytics() {
 
       <div className="an-grid">
         <div>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Clicks</h3>
+          <p className="label an-cap">Clicks</p>
           {t.clicks.length === 0 ? (
             <Empty what="No click recorded yet." />
           ) : (
@@ -258,7 +231,7 @@ export async function AdminAnalytics() {
           )}
         </div>
         <div>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Came from</h3>
+          <p className="label an-cap">Came from</p>
           {t.referrers.length === 0 ? (
             <Empty what="Every visit so far was direct." />
           ) : (
@@ -270,9 +243,7 @@ export async function AdminAnalytics() {
       {/* The mirror of agent traffic, and the better half of it. */}
       {t.fromAssistants.length > 0 && (
         <>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            Arrived from an assistant
-          </h3>
+          <p className="label an-cap">Arrived from an assistant</p>
           <p className="cmp-note">
             A person asked an assistant something, it answered with this site,
             and they clicked through. Agent hits say the chart was read; these
@@ -284,9 +255,7 @@ export async function AdminAnalytics() {
 
       {t.missing.length > 0 && (
         <>
-          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
-            Asked for, and not here
-          </h3>
+          <p className="label an-cap">Asked for, and not here</p>
           <p className="cmp-note">
             Paths that resolved to nothing. From a person this is a typo; from an
             agent it is what it expected this site to have.
@@ -296,7 +265,7 @@ export async function AdminAnalytics() {
       )}
 
       {/* -- the live feed -------------------------------------------------- */}
-      <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Latest</h3>
+      <h3 className="an-group">Latest</h3>
       {entries.length === 0 ? (
         <Empty what="Nothing yet." />
       ) : (

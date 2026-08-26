@@ -245,6 +245,12 @@ export async function recordRequest(
   userAgent: string | null,
   missing = false,
 ): Promise<void> {
+  // The operator's console is not the publication. The beacon already skips it
+  // and the proxy did not, so the operator's own tooling appeared in "what the
+  // assistants read" -- and a crawler probing a gated route would have counted
+  // as having read the chart, which it cannot: it gets a 401.
+  if (path.startsWith("/admin")) return;
+
   const agent = identifyAgent(userAgent);
   // Humans are recorded by the beacon instead, which runs after the page loads
   // and can therefore also report the referrer. Recording them here as well

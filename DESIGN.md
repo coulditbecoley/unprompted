@@ -163,6 +163,29 @@ Blue appears on the sort controls on hover and focus only, since it means "you
 can interact with this". The column currently sorted is marked by weight and a
 step up in foreground, never by hue, the same way the board marks its leader.
 
+### The operator's dashboard
+
+Not a public surface, and the one place the system reports on itself rather than
+on the market. It follows the same rules and one more: **status by exception**.
+
+Six tiles carry the whole health picture -- last run, next run, weeks recorded,
+engines reachable, assistants that read a page to answer somebody, and what the
+last run held. A tile is marked amber only when a person has to do something.
+Everything below is the detail for when one of them reads wrong.
+
+That space used to hold the word "Admin" at 40px above a paragraph about commit
+behaviour, and the page below it was nineteen headings in a flat list. Neither
+is a thing an operator opens a dashboard to find. The page is three zones now --
+Operations, Audience, Curation -- and the eight enabled providers collapse to
+one line unless one of them cannot be reached, because eight rows that all said
+READY buried the row that mattered on the day one of them stopped.
+
+Numbers on this page are labelled by what they are rather than by what would be
+most alarming. The quarantine tile reads "held last run" and not "needs a
+decision", because alias curation since that run already covers most of it and
+the count only moves when the next Monday is measured. A dashboard that invents
+urgency gets ignored at exactly the moment it is right.
+
 ### The consensus row
 
 The board's sibling on `/consensus`, and the second place the system spends

@@ -287,11 +287,16 @@ ok = not any(k.startswith("b:") or k.startswith("ba:") for k in c)
 RESULTS.append((ok, "a miss under /brand does not count as a look-up", str(c)))
 print(f"  {'PASS' if ok else 'FAIL'}  a miss under /brand does not count as a look-up")
 
-# 17 -- the operator is not the audience, even from a browser ----------------------
+# 17 -- the operator is not the audience, from either side -------------------------
 clear()
 track({"path": "/admin", "referrer": None})
 time.sleep(2.5)
 case("an /admin view is refused server-side too", {}, counters())
+
+clear()
+get("/admin", "Mozilla/5.0 (compatible; GPTBot/1.2)")
+time.sleep(2.5)
+case("an agent probing /admin is not audience either", {}, counters())
 
 # 18 -- a search engine is not an assistant -----------------------------------------
 clear()
