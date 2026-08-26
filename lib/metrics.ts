@@ -82,6 +82,12 @@ export type Movement = {
   firstShareDelta: number;
   isNew: boolean;
   isDropout: boolean;
+  /**
+   * Whether the rotation change is larger than this sample can explain by
+   * chance. A move that is not significant is still reported as a number; it is
+   * just not drawn as an arrow or named as a story. See `exceedsNoise`.
+   */
+  significant: boolean;
 };
 
 /** Extractions that produced a usable answer: no error, not a refusal. */
@@ -200,6 +206,43 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+/**
+ * Is this week-over-week change bigger than the noise in the sample?
+ *
+ * Fifteen questions asked five times across a handful of engines is a small
+ * sample, and a proportion drawn from one wobbles. At 225 answered runs a share
+ * near 30% carries a 95% interval of roughly six points, so a brand "moving"
+ * four points between Mondays has, more likely than not, not moved at all.
+ *
+ * This publication's whole claim is that its figures are measurements rather
+ * than impressions. Drawing an arrow on a difference the sample cannot support
+ * -- or worse, naming a brand The Snub over one -- would be the most damaging
+ * thing it could print, because it would be indistinguishable from the guessing
+ * it exists to replace.
+ *
+ * The usual two-proportion test: a difference counts when it exceeds 1.96
+ * standard errors of that difference. Deliberately not a claim of statistical
+ * rigour beyond that -- repeats within a week are not independent draws, so
+ * treat this as a floor under what gets reported, not a p-value.
+ */
+export function exceedsNoise(
+  p1: number,
+  n1: number,
+  p2: number,
+  n2: number,
+): boolean {
+  if (n1 < 1 || n2 < 1) return false;
+  const se = Math.sqrt((p1 * (1 - p1)) / n1 + (p2 * (1 - p2)) / n2);
+  if (se === 0) return p1 !== p2;
+  return Math.abs(p1 - p2) / se > 1.96;
+}
+
+/** The 95% half-interval on a proportion, in percentage points. */
+export function marginOfError(p: number, n: number): number {
+  if (n < 1) return 0;
+  return round1(1.96 * Math.sqrt((p * (1 - p)) / n) * 100);
+}
+
 export function movement(
   thisWeek: BrandStanding[],
   lastWeek: BrandStanding[],
@@ -216,6 +259,9 @@ export function movement(
       firstShareDelta: round1((now.firstShare - (before?.firstShare ?? 0)) * 100),
       isNew: !before,
       isDropout: false,
+      significant: before
+        ? exceedsNoise(now.rotation, now.totalRuns, before.rotation, before.totalRuns)
+        : false,
     });
   }
 
@@ -227,6 +273,9 @@ export function movement(
         firstShareDelta: round1(-before.firstShare * 100),
         isNew: false,
         isDropout: true,
+        // Named last week and not once this week is a real disappearance, not a
+        // wobble, so it always counts.
+        significant: true,
       });
     }
   }
@@ -239,12 +288,20 @@ export function movement(
  * The week's biggest faller. A dropout always outranks a decline.
  * Returns null on a quiet week: inventing drama is how a chart loses trust.
  */
+/**
+ * The week's biggest faller, or nobody.
+ *
+ * A dropout always outranks a decline, and a decline the sample cannot support
+ * is not a story. Naming a brand The Snub over a four-point wobble on 225 runs
+ * would be exactly the kind of manufactured drama this publication exists to
+ * replace, and the one a reader could most easily check and disprove.
+ */
 export function theSnub(moves: Movement[]): Movement | null {
   if (!moves.length) return null;
   const dropouts = moves.filter((m) => m.isDropout);
   if (dropouts.length) return dropouts[0];
   const worst = moves[0];
-  return worst.rotationDelta < 0 ? worst : null;
+  return worst.rotationDelta < 0 && worst.significant ? worst : null;
 }
 
 export function sourceCounts(run: RunRecord): Array<[string, number]> {

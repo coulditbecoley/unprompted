@@ -27,7 +27,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { standings } from "../lib/metrics.ts";
+import { exceedsNoise, marginOfError, standings } from "../lib/metrics.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, "..");
@@ -88,7 +88,7 @@ const ratio = (n) => Number(n.toFixed(RATIO_DP));
 function pythonStandings(file) {
   const script = [
     "import json, sys",
-    "sys.path.insert(0, r'''" + path.join(REPO, "src") + "''')",
+    SRC_PATH_LINE,
     "from unprompted.aggregate import brand_week",
     "run = json.load(open(sys.argv[1], encoding='utf-8'))",
     "print(json.dumps([[b.brand, b.named, b.total_runs, b.first_named,",
@@ -99,6 +99,49 @@ function pythonStandings(file) {
     execFileSync(PYTHON, ["-c", script, file], { encoding: "utf-8" }),
   );
 }
+
+/** The one line that puts the package on Python's path, shared by both calls. */
+const SRC_PATH_LINE =
+  "sys.path.insert(0, r'''" + path.join(REPO, "src") + "''')";
+
+/**
+ * The significance rule, on inputs no published run happens to contain.
+ *
+ * It decides whether the board draws an arrow and whether a brand is named The
+ * Snub, so the two languages disagreeing here would mean the site telling a
+ * story the checks do not believe. The cases include the one that matters most:
+ * a large-looking swing on a small sample, which must not count.
+ */
+const NOISE_CASES = [
+  [0.3, 225, 0.26, 225],
+  [0.3, 225, 0.2, 225],
+  [0.3, 225, 0.15, 225],
+  [0.5, 15, 0.3, 15],
+  [0.3, 225, 0.3, 225],
+  [0.0, 225, 0.05, 225],
+  [1.0, 15, 1.0, 15],
+];
+
+test("Python and TypeScript agree on what counts as movement", () => {
+  assert.ok(PYTHON, "no python interpreter found");
+  const script = [
+    "import sys, json",
+    SRC_PATH_LINE,
+    "from unprompted.aggregate import exceeds_noise, margin_of_error",
+    "cases = json.loads(sys.argv[1])",
+    "print(json.dumps([[exceeds_noise(*c), margin_of_error(c[0], c[1])] for c in cases]))",
+  ].join("\n");
+  const theirs = JSON.parse(
+    execFileSync(PYTHON, ["-c", script, JSON.stringify(NOISE_CASES)], {
+      encoding: "utf-8",
+    }),
+  );
+  const ours = NOISE_CASES.map(([p1, n1, p2, n2]) => [
+    exceedsNoise(p1, n1, p2, n2),
+    marginOfError(p1, n1),
+  ]);
+  assert.deepEqual(ours, theirs, "the significance rule has drifted");
+});
 
 const runs = publishedRuns();
 

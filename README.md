@@ -288,6 +288,22 @@ it must not have. A day
 that has aged out of Redis keeps whatever was archived while it was there; the
 archive only ever grows.
 
+## When the run fails, somebody is told
+
+The week runs on one machine at 1pm on a Monday and writes to a log file nobody
+opens. A week that was held, or measured and then failed to push, looks exactly
+like a week that went fine: the site keeps showing last Monday's date, which is
+what it would show anyway. For a publication whose value is an unbroken series,
+that is the one failure that cannot be repaired later.
+
+`scripts/notify.py` reports every outcome on two channels that fail differently.
+`data/last-run.json` is committed with the run, so `/admin` shows it and git
+keeps every outcome; it survives the machine being off and needs somebody to
+look. A GitHub issue reaches a phone, is opened only for outcomes that need a
+human, and de-duplicates so re-running a bad Monday does not open a second one.
+Neither can fail the run: a notification that breaks what it reports on is worse
+than none.
+
 ## One metric, two implementations
 
 Rotation is computed in Python for the checks that decide whether a week

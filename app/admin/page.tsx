@@ -15,6 +15,7 @@ import {
 import { CATEGORIES } from "@/lib/categories";
 import { TrimTop } from "@/components/ui";
 import { AdminAnalytics } from "@/components/admin-analytics";
+import { RunStatus } from "@/components/run-status";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
@@ -81,6 +82,8 @@ export default async function AdminPage() {
 
   return (
     <section className="shell section">
+      <RunStatus />
+
       <p className="label">Operator</p>
       <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
         Admin

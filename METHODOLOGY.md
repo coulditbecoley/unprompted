@@ -65,6 +65,26 @@ against a thinner sample. See the checks below.
 
 "Named in 8 of 10 runs" is a measurement. "Was named" is a coin flip written down.
 
+## How much of a change is real
+
+Fifteen questions asked five times is a small sample, and a share drawn from a
+small sample wobbles. At 225 answered runs, a figure near 30% carries a 95%
+interval of roughly **six percentage points**. A brand that "moves" four points
+between Mondays has, more likely than not, not moved at all.
+
+So a week-over-week change is only drawn as movement, and a brand is only named
+The Snub, when the change is larger than the sample can explain by chance — the
+usual two-proportion test at 95%. A change that does not clear that bar is still
+printed, in grey, with a sign and no arrow: hiding it would be its own kind of
+dishonesty, but calling it a move would be worse.
+
+This is a floor under what gets reported rather than a claim of statistical
+rigour. Five repeats of one question in one week are not five independent draws,
+so treat the interval as the smallest honest uncertainty, not the whole of it.
+
+A brand that was named last week and not once this week is a disappearance
+rather than a wobble, and always counts.
+
 ---
 
 ## What we measure, and what we do not

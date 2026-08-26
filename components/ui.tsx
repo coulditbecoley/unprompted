@@ -122,6 +122,23 @@ export function Delta({ move }: { move?: Movement }) {
   if (move.rotationDelta === 0) return <span className="mono seq-delta">—</span>;
 
   const up = move.rotationDelta > 0;
+
+  // A change this sample cannot support gets its number and neither the arrow
+  // nor the colour. Both of those are the site saying "this happened", and on a
+  // fifteen-question week a few points often did not: the figure is still shown
+  // because hiding it would be its own kind of dishonesty.
+  if (!move.significant) {
+    return (
+      <span
+        className="mono seq-delta is-noise"
+        title="Within the noise of this sample. Reported, not called a move."
+      >
+        {up ? "+" : "−"}
+        {Math.abs(move.rotationDelta)}
+      </span>
+    );
+  }
+
   return (
     <span className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
       {up ? "▲" : "▼"}

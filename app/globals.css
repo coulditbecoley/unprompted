@@ -913,3 +913,26 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    is the one place in the audience view that qualifies: a path an agent
    expected and did not find is a decision waiting to be made. */
 .an-miss { font-style: normal; color: var(--warn); font-size: 11px; }
+
+/* --- last run --------------------------------------------------------------
+   Admin only. Amber is the site's "needs a human" colour and a run that did not
+   finish is exactly that; a held week is not a failure and does not get it. */
+.run-status {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 18px;
+  background: var(--surface); border: var(--rule-w) solid var(--rule);
+  border-radius: var(--r); font-size: 13px; color: var(--fg-2);
+}
+.run-status[data-status="failed"] { border-color: var(--warn); }
+.run-status-word { color: var(--fg); flex: none; }
+.run-status-detail { flex: 1 1 320px; min-width: 0; }
+.run-status-when { font-size: 11.5px; color: var(--fg-3); flex: none; }
+.run-status-flag {
+  flex: none; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  border: var(--rule-w) solid var(--fg-3); color: var(--fg-3);
+  border-radius: 2px; padding: 1px 5px;
+}
+.run-status-flag[data-bad="true"] { border-color: var(--warn); color: var(--warn); }
+/* A change the sample cannot support. Deliberately colourless: green and red
+   mean movement, and this is the site declining to call it one. */
+.seq-delta.is-noise { color: var(--fg-3); }

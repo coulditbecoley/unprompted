@@ -7,6 +7,7 @@ what every past week means, so a change here is a methodology version bump.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from statistics import median
@@ -43,6 +44,10 @@ class Movement:
     first_share_delta: float
     is_new: bool
     is_dropout: bool
+    # Whether the change is larger than this sample can explain by chance. A
+    # move that is not significant is still reported as a number; it is simply
+    # not drawn as an arrow or told as a story. See exceeds_noise.
+    significant: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -124,6 +129,36 @@ def brand_week(run: dict) -> list[BrandWeek]:
     return out
 
 
+def exceeds_noise(p1: float, n1: int, p2: float, n2: int) -> bool:
+    """Is this change bigger than the noise in the sample?
+
+    Mirrors exceedsNoise in lib/metrics.ts, and the agreement check compares the
+    two on every published run, so they cannot drift apart quietly.
+
+    Fifteen questions asked five times is a small sample and a proportion drawn
+    from one wobbles: at 225 answered runs a share near 30% carries a 95%
+    interval of about six points. Reporting a four-point "move" as movement
+    would be indistinguishable from the guessing this publication exists to
+    replace.
+
+    Not a claim of rigour beyond the usual two-proportion test: repeats within a
+    week are not independent draws. It is a floor under what gets reported.
+    """
+    if n1 < 1 or n2 < 1:
+        return False
+    se = math.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2)
+    if se == 0:
+        return p1 != p2
+    return abs(p1 - p2) / se > 1.96
+
+
+def margin_of_error(p: float, n: int) -> float:
+    """The 95% half-interval on a proportion, in percentage points."""
+    if n < 1:
+        return 0.0
+    return round(1.96 * math.sqrt(p * (1 - p) / n) * 100, 1)
+
+
 def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Movement]:
     """Week-over-week change, including entrants and dropouts."""
     prev = {b.brand: b for b in last_week}
@@ -139,6 +174,13 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
                 first_share_delta=round((now.first_share - (before.first_share if before else 0.0)) * 100, 1),
                 is_new=before is None,
                 is_dropout=False,
+                significant=(
+                    exceeds_noise(
+                        now.rotation, now.total_runs, before.rotation, before.total_runs
+                    )
+                    if before
+                    else False
+                ),
             )
         )
 
@@ -151,6 +193,9 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
                     first_share_delta=round(-before.first_share * 100, 1),
                     is_new=False,
                     is_dropout=True,
+                    # Named last week and not once this week is a real
+                    # disappearance rather than a wobble, so it always counts.
+                    significant=True,
                 )
             )
 
@@ -161,8 +206,9 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
 def the_snub(moves: list[Movement]) -> Movement | None:
     """The week's biggest faller. A dropout always outranks a mere decline.
 
-    Returns None when nothing actually fell, because inventing drama from a
-    quiet week is how a chart loses trust.
+    Returns None when nothing actually fell, and also when the biggest fall is
+    inside the sample's noise. Naming a brand over a four-point wobble on 225
+    runs is manufactured drama, and the kind a reader can check and disprove.
     """
     if not moves:
         return None
@@ -170,7 +216,7 @@ def the_snub(moves: list[Movement]) -> Movement | None:
     if dropouts:
         return min(dropouts, key=lambda m: m.rotation_delta)
     worst = min(moves, key=lambda m: m.rotation_delta)
-    return worst if worst.rotation_delta < 0 else None
+    return worst if worst.rotation_delta < 0 and worst.significant else None
 
 
 def source_counts(run: dict) -> list[tuple[str, int]]:

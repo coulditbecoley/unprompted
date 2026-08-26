@@ -1,0 +1,6 @@
+{
+  "status": "unknown",
+  "detail": "No run has reported yet. scripts/notify.py writes this at the end of every weekly run, whatever the outcome.",
+  "exit_code": 0,
+  "at": "2026-08-26T00:00:00+00:00"
+}
