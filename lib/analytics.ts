@@ -142,7 +142,12 @@ export async function record(hit: Hit): Promise<void> {
     fields.push("t:agent");
   } else if (hit.event) {
     fields.push(`c:${hit.event}`);
-  } else {
+  } else if (!hit.missing) {
+    // A miss is deliberately not a page view. Recording one inflated "human
+    // views" with pages that do not exist and put /wp-admin in the list of
+    // pages people read, which is the opposite of what that list is for. An
+    // agent miss is still an agent hit, because the fetch did happen and the
+    // agent branch above ran first.
     fields.push(`v:${hit.path}`);
     fields.push("t:human");
     if (hit.referrer) fields.push(`r:${hit.referrer}`);
@@ -152,8 +157,13 @@ export async function record(hit: Hit): Promise<void> {
   // resolve is worth more from an agent than from a person: it says what the
   // agent expected this site to have.
   if (hit.missing) fields.push(`x:${hit.path}`);
+
+  // Brand look-ups are split by who did the looking. Merged, "Cursor's page was
+  // read 60 times" quietly mixed a crawler sweeping every page with a person
+  // choosing one, and the second is the fact worth having.
   const brand = brandOf(hit.path);
-  if (brand) fields.push(`b:${brand}`);
+  if (brand && !hit.missing) fields.push(`${hit.agent ? "ba" : "b"}:${brand}`);
+
   const comparison = comparisonOf(hit.path, hit.query);
   if (comparison) fields.push(`m:${comparison}`);
 
@@ -174,6 +184,7 @@ export async function record(hit: Hit): Promise<void> {
         purpose: hit.agent?.purpose ?? null,
         event: hit.event ?? null,
         referrer: hit.referrer ?? null,
+        missing: hit.missing ?? false,
       }),
     );
     pipe.ltrim(FEED_KEY, 0, FEED_MAX - 1);
@@ -279,6 +290,8 @@ export async function cadence(): Promise<Cadence[]> {
 export type Totals = {
   views: Array<[string, number]>;
   brands: Array<[string, number]>;
+  /** The same look-ups, but by an agent rather than a person. */
+  brandsByAgents: Array<[string, number]>;
   comparisons: Array<[string, number]>;
   missing: Array<[string, number]>;
   /** Referrers that are themselves an assistant, split out from the rest. */
@@ -295,6 +308,7 @@ export type Totals = {
 const EMPTY: Totals = {
   views: [],
   brands: [],
+  brandsByAgents: [],
   comparisons: [],
   missing: [],
   fromAssistants: [],
@@ -324,6 +338,7 @@ export async function totals(days = 30): Promise<Totals> {
   const bucket: Record<string, Map<string, number>> = {
     v: new Map(),
     b: new Map(),
+    ba: new Map(),
     m: new Map(),
     x: new Map(),
     g: new Map(),
@@ -354,6 +369,7 @@ export async function totals(days = 30): Promise<Totals> {
   return {
     views: ranked(bucket.v),
     brands: ranked(bucket.b),
+    brandsByAgents: ranked(bucket.ba),
     comparisons: ranked(bucket.m),
     missing: ranked(bucket.x),
     // Derived at read time rather than stored twice: a referrer either is an
@@ -372,6 +388,7 @@ export async function totals(days = 30): Promise<Totals> {
 export type FeedEntry = {
   at: number;
   path: string;
+  missing?: boolean;
   agent: string | null;
   vendor: string | null;
   purpose: string | null;

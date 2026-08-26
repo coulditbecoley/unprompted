@@ -909,3 +909,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   .an-feed { grid-template-columns: 62px minmax(0,1fr) minmax(0,1.2fr); }
   .an-feed span:nth-child(4) { display: none; }
 }
+/* A miss in the live feed. Amber is the site's "needs a human" colour and this
+   is the one place in the audience view that qualifies: a path an agent
+   expected and did not find is a decision waiting to be made. */
+.an-miss { font-style: normal; color: var(--warn); font-size: 11px; }

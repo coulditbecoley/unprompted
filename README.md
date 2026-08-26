@@ -243,6 +243,17 @@ Beyond page views it counts the things only this site can answer:
   agent it is what it expected to find. `/llms.txt` exists because of exactly
   this signal.
 
+Brand look-ups are split by who did the looking: merged, "Cursor's page was read
+60 times" quietly mixes a crawler sweeping every page with a person choosing
+one, and the second is the fact worth having.
+
+**Cost.** A recorded event is five to eleven Redis commands, so the free tier's
+ten thousand a day is roughly a thousand agent hits, or about seventeen full
+65-page crawls. Past that the paid tier is $0.20 per 100k commands — 100k a day
+is about $6 a month. Both public write endpoints are rate limited per caller and
+both fail open, with an 800ms budget: a slow Redis must never become a slow
+site, and an uncounted event is a better outcome than a blocked reader.
+
 Misses are detected in `proxy.ts` against a list of known prefixes rather than
 in `app/not-found.tsx`, which was the obvious place and the wrong one: Next
 renders the not-found boundary as part of the tree for pages that resolve

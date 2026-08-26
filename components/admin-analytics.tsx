@@ -204,10 +204,22 @@ export async function AdminAnalytics() {
           <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
             Brands looked up
           </h3>
-          {t.brands.length === 0 ? (
+          {t.brands.length === 0 && t.brandsByAgents.length === 0 ? (
             <Empty what="No brand page read yet." />
           ) : (
-            <TwoCol rows={t.brands.slice(0, 12)} />
+            <>
+              <TwoCol rows={t.brands.slice(0, 12)} />
+              {t.brandsByAgents.length > 0 && (
+                <p className="cmp-note">
+                  People only. Assistants read brand pages{" "}
+                  {t.brandsByAgents.reduce((n, [, v]) => n + v, 0)} time(s) over
+                  the same window, most often{" "}
+                  {t.brandsByAgents[0]?.[0].replace(/ \(.*\)$/, "")}. Counted
+                  apart, because a crawler sweeping every page and a person
+                  choosing one are not the same interest.
+                </p>
+              )}
+            </>
           )}
         </div>
         <div>
@@ -303,7 +315,10 @@ export async function AdminAnalytics() {
                   <span className="an-dim">reader</span>
                 )}
               </span>
-              <span className="mono an-path">{e.event ?? e.path}</span>
+              <span className="mono an-path">
+                {e.event ?? e.path}
+                {e.missing && <i className="an-miss"> not here</i>}
+              </span>
               <span className="mono an-dim an-ref">{e.referrer ?? ""}</span>
             </div>
           ))}

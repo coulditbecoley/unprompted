@@ -192,6 +192,11 @@ def day_note(day: str, counters: dict[str, int], meta: dict[str, dict[str, str]]
     pairs = {k.replace(PAIR_SEP, " → "): v for k, v in split(counters, "gp").items()}
     lines += ["## What the agents read", ""] + table(pairs, ("Agent → page", "Hits"))
     lines += ["## Brands looked up", ""] + table(split(counters, "b"), ("Brand", "Views"))
+    by_agents = split(counters, "ba")
+    if by_agents:
+        lines += ["## Brands looked up by an assistant", ""] + table(
+            by_agents, ("Brand", "Reads")
+        )
     lines += ["## Compared against each other", ""] + table(
         split(counters, "m"), ("Pair", "Times")
     )
@@ -280,6 +285,11 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
         lines += ["_Nothing archived yet._", ""]
 
     lines += ["## Brands looked up, all time", ""] + table(of("b"), ("Brand", "Views"))
+    by_agents = of("ba")
+    if by_agents:
+        lines += ["## Brands looked up by an assistant, all time", ""] + table(
+            by_agents, ("Brand", "Reads")
+        )
     lines += ["## Compared against each other, all time", ""] + table(
         of("m"), ("Pair", "Times")
     )
