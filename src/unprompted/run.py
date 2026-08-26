@@ -22,6 +22,7 @@ import yaml
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
+from .budget import check as check_budget
 from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
@@ -89,7 +90,12 @@ def load_questions(category: str) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[RunRecord, list[str]]:
+def run_category(
+    category: str,
+    run_date: str,
+    dry_run: bool = False,
+    ignore_budget: bool = False,
+) -> tuple[RunRecord, list[str]]:
     """Execute one full run. Returns the record and any hold reasons."""
     spec = load_questions(category)
     runs_per_question = int(spec["runs_per_question"])
@@ -140,6 +146,20 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         for run_index in range(runs_per_question)
     ]
     print(f"  {len(tasks)} calls across {len(engines)} engine(s)", file=sys.stderr)
+
+    # The last pre-flight, and the only one that needs to know how big the run
+    # is. Placed here for the same reason as the two above: everything it can
+    # refuse, it refuses before a single call is billed. The expensive failure
+    # is not a run that does not happen, it is one that stops halfway -- which
+    # is what a spend cap did on 2026-08-24, leaving a category measured on two
+    # and two-thirds engines and a chart that had to be caveated in public.
+    verdict = check_budget(category, len(tasks))
+    print(f"  budget: {verdict.message.splitlines()[0]}", file=sys.stderr)
+    if not verdict.ok:
+        if ignore_budget:
+            print("  --ignore-budget: running anyway", file=sys.stderr)
+        else:
+            raise SystemExit(f"Refusing to start {category}.\n{verdict.message}")
 
     # as_completed rather than map: a twenty-minute run that prints nothing until
     # it finishes looks identical to a hung one, both here and in CI logs.
@@ -288,6 +308,11 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
+    parser.add_argument(
+        "--ignore-budget",
+        action="store_true",
+        help="run even if the month's ceiling in data/rates.json would be passed",
+    )
     args = parser.parse_args()
 
     load_local_env()
@@ -303,7 +328,9 @@ def main() -> int:
     for category in categories:
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
         try:
-            record, reasons = run_category(category, args.date, dry_run=args.dry_run)
+            record, reasons = run_category(
+                category, args.date, dry_run=args.dry_run, ignore_budget=args.ignore_budget
+            )
         except Exception as exc:  # noqa: BLE001 - one category must not cost the rest
             # Categories are independent measurements that happen to share a
             # scheduler. Letting one crash out of the loop skipped every

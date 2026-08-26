@@ -18,6 +18,14 @@
       "env": "ANTHROPIC_API_KEY"
     },
     {
+      "id": "gemini",
+      "label": "Gemini",
+      "kind": "api",
+      "role": "engine",
+      "enabled": true,
+      "env": "GEMINI_API_KEY"
+    },
+    {
       "id": "perplexity",
       "label": "Perplexity",
       "kind": "api",

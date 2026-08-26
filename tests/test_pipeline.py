@@ -7,6 +7,7 @@ a stub, because "one dead engine must not cost the week" is a real guarantee.
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -1533,16 +1534,26 @@ def test_disabling_a_hosted_engine_in_the_registry_actually_disables_it(monkeypa
 def test_an_enabled_engine_with_no_adapter_is_an_error_not_a_silent_omission(
     monkeypatch, tmp_path
 ):
-    """The admin route accepts any `env` string, so this is reachable from the UI."""
+    """The admin route accepts any `env` string, so this is reachable from the UI.
+
+    The example used to be "gemini", which stopped being an engine without an
+    adapter the day one was written for it -- and the test went green for the
+    wrong reason, asserting nothing. Named for a provider that is genuinely not
+    implemented, and asserted against the live ENGINES map so it cannot rot the
+    same way twice.
+    """
     import json
 
     from unprompted import cli_provider
-    from unprompted.engines import all_engines
+    from unprompted.engines import ENGINES, all_engines
+
+    missing = "mistral"
+    assert missing not in ENGINES, f"{missing} has an adapter now; pick another"
 
     registry = tmp_path / "providers.json"
     registry.write_text(
         json.dumps({"providers": [
-            {"id": "gemini", "kind": "api", "role": "engine", "enabled": True},
+            {"id": missing, "kind": "api", "role": "engine", "enabled": True},
         ]}),
         encoding="utf-8",
     )
@@ -1816,3 +1827,103 @@ def test_the_local_schema_fallback_matches_the_sdk_transform():
     assert json.dumps(_local_schema(_Extraction), sort_keys=True) == json.dumps(
         transform.transform_schema(_Extraction), sort_keys=True
     )
+
+
+# --- budget -----------------------------------------------------------------
+#
+# The guard exists because of one specific Monday: on 2026-08-24 the account hit
+# its spend cap partway through a category, 24 of claude's 75 calls failed, and
+# the week published measured on two and two-thirds engines. Everything below
+# tests the half-run case rather than the no-run case, because the half run is
+# the expensive one.
+
+def _priced_run(category, date_, answers, dollars_per_answer):
+    """A priced run with `answers` clean rows costing a known amount each."""
+    per = {
+        "input_tokens": int(dollars_per_answer / 1.25 * 1_000_000),
+        "output_tokens": 0,
+    }
+    return {
+        "category": category,
+        "run_date": date_,
+        "extractor": "claude-cli",
+        "extractions": [
+            {"engine": "chatgpt", "error": None, "usage": per} for _ in range(answers)
+        ],
+    }
+
+
+def test_budget_estimates_from_this_categorys_own_last_run():
+    from unprompted.budget import estimate_category
+
+    runs = [
+        _priced_run("alpha", "2026-08-10", 100, 0.10),
+        _priced_run("beta", "2026-08-17", 100, 0.50),
+    ]
+    est = estimate_category("alpha", 200, runs)
+
+    # Its own history, not the most recent run of something else.
+    assert est.confident
+    assert "alpha" in est.basis
+    assert est.dollars == pytest.approx(20.0, abs=0.05)
+
+
+def test_budget_falls_back_when_nothing_comparable_is_priced():
+    from unprompted.budget import FALLBACK_PER_ANSWER, estimate_category
+
+    est = estimate_category("alpha", 10, [])
+
+    # A guess, and it says so, because a refusal an operator cannot account for
+    # is one they will override.
+    assert not est.confident
+    assert est.dollars == pytest.approx(FALLBACK_PER_ANSWER * 10, abs=0.01)
+
+
+def test_budget_counts_held_runs_as_spent(tmp_path, monkeypatch):
+    """A month of failures is exactly when a ceiling matters."""
+    import unprompted.budget as budget
+
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "held")
+    for base, name in ((budget.RUNS_DIR, "published"), (budget.HELD_DIR, "held")):
+        day = base / "2026-08-10"
+        day.mkdir(parents=True)
+        (day / f"{name}.json").write_text(
+            json.dumps(_priced_run(name, "2026-08-10", 100, 0.10)), encoding="utf-8"
+        )
+
+    # Both, not just the one that published.
+    assert budget.spent_in_month(date(2026, 8, 26)) == pytest.approx(20.0, abs=0.1)
+    assert budget.spent_in_month(date(2026, 9, 1)) == 0.0
+
+
+def test_budget_refuses_a_run_that_would_pass_the_ceiling(monkeypatch):
+    import unprompted.budget as budget
+
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 25.0)
+    monkeypatch.setattr(
+        budget, "_archived_runs", lambda: [_priced_run("alpha", "2026-08-10", 100, 0.20)]
+    )
+
+    verdict = budget.check("alpha", 100, date(2026, 8, 26))
+
+    assert not verdict.ok
+    # The message has to carry the arithmetic and the way out, or it gets
+    # overridden reflexively the first time it fires.
+    assert "20.00" in verdict.message and "25.00" in verdict.message
+    assert "--ignore-budget" in verdict.message
+    assert "monthly_ceiling" in verdict.message
+
+
+def test_budget_allows_when_no_ceiling_is_set(monkeypatch):
+    """Opt-in. A guard nobody asked for is a guard that gets deleted."""
+    import unprompted.budget as budget
+
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 0.0)
+    monkeypatch.setattr(
+        budget, "_archived_runs", lambda: [_priced_run("alpha", "2026-08-10", 100, 9.99)]
+    )
+
+    verdict = budget.check("alpha", 1000, date(2026, 8, 26))
+    assert verdict.ok
+    assert "no monthly ceiling" in verdict.message

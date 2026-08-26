@@ -1,6 +1,8 @@
 {
   "note": "Dollars per million tokens, and dollars per billable search or request. The single place to correct when a provider changes price. Read by src/unprompted/cost.py and lib/metrics.ts, so the terminal and the dashboard can never disagree about what a week cost. Past runs were billed at the rates of their own week; correcting a rate here restates history, which is why the verified date is recorded and why the dashboard says 'at current rates'.",
   "verified": "2026-08-22",
+  "monthly_ceiling": 150.0,
+  "monthly_ceiling_note": "Dollars a calendar month of measuring may cost before the pre-flight refuses to start another category. Zero or absent means no ceiling. Lives here rather than in its own file because a ceiling and the rates it is denominated in go stale together -- correcting a price without revisiting the budget it is measured against is how a ceiling silently stops meaning what it meant.",
   "batch_discount": 0.5,
   "batch_discount_note": "The weekly extraction pass goes through the Batch API at half list price. A multiplier rather than a second rate, because a re-read of a handful of answers still goes out as live calls and is billed in full.",
   "batch_billed_extractors": [
@@ -19,6 +21,13 @@
       "input_per_m": 1.25,
       "output_per_m": 10.0,
       "per_search": 0.01
+    },
+    "gemini": {
+      "prices": "gemini-3.5-flash, thinking tokens billed as output",
+      "UNVERIFIED": "These three numbers were not read off Google's pricing page. Every other rate here was verified on the file's verified date; these were not, and a cost dashboard quoting an unchecked rate is exactly the quiet wrongness this file exists to prevent. Confirm at ai.google.dev/pricing before the first Gemini week publishes, correct them here, and delete this key.",
+      "input_per_m": 0.3,
+      "output_per_m": 2.5,
+      "per_search": 0.014
     },
     "perplexity": {
       "prices": "sonar",

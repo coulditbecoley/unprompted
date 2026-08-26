@@ -13,7 +13,7 @@ than each assistant's own.
 An engine that is not configured reports itself unavailable rather than raising,
 so a missing key degrades the week instead of ending it.
 
-The three hosted engines are built in because they are the definition of the
+The four hosted engines are built in because they are the definition of the
 series. Local CLI harnesses can be added as further engines from the admin
 dashboard, which writes them into providers.json; they are charted as their own
 rows under their own names and never stand in for a hosted engine. See
@@ -26,12 +26,14 @@ from ..cli_provider import ProviderError, declared_clis, load_registry
 from .anthropic_engine import AnthropicEngine
 from .base import Engine
 from .cli_engine import CliEngine
+from .gemini_engine import GeminiEngine
 from .openai_engine import OpenAIEngine
 from .perplexity_engine import PerplexityEngine
 
 ENGINES = {
     "chatgpt": OpenAIEngine,
     "claude": AnthropicEngine,
+    "gemini": GeminiEngine,
     "perplexity": PerplexityEngine,
 }
 
@@ -83,6 +85,7 @@ def available_engines() -> list[str]:
 __all__ = [
     "AnthropicEngine",
     "CliEngine",
+    "GeminiEngine",
     "OpenAIEngine",
     "PerplexityEngine",
     "ENGINES",
