@@ -81,6 +81,16 @@ def registry() -> dict[str, dict[str, str]]:
 # -- reading redis ------------------------------------------------------------
 
 
+class Unreachable(Exception):
+    """The store could not be read. Distinct from the store being empty.
+
+    Both used to return {}, so a day that could not be fetched was archived as a
+    day on which nothing happened, and the sync said so and exited zero. The
+    whole point of this script is that it runs before Redis prunes; a silent
+    failure to reach it is the one outcome that must be loud.
+    """
+
+
 def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     """One day's counters, or {} when the key has expired or never existed."""
     key = urllib.parse.quote(f"a:d:{day}", safe="")
@@ -91,39 +101,98 @@ def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
         with urllib.request.urlopen(request, timeout=20) as response:
             flat = json.loads(response.read()).get("result") or []
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        print(f"  {day}: unreachable ({exc})", file=sys.stderr)
-        return {}
+        raise Unreachable(f"{day}: {exc}") from exc
     return {flat[i]: int(flat[i + 1]) for i in range(0, len(flat) - 1, 2)}
 
 
 def split(counters: dict[str, int], kind: str) -> dict[str, int]:
     prefix = f"{kind}:"
-    return {k[len(prefix):]: v for k, v in counters.items() if k.startswith(prefix)}
+    return {
+        k[len(prefix):]: v
+        for k, v in counters.items()
+        if k.startswith(prefix) and isinstance(v, int)
+    }
 
 
 # -- writing the vault --------------------------------------------------------
 
 
-def write_raw(out_dir: Path, day: str, counters: dict[str, int]) -> bool:
+def snapshot(counters: dict[str, int], meta: dict[str, dict[str, str]]) -> dict:
+    """The vendor and purpose of every agent seen that day, frozen.
+
+    Without this, a note is relabelled from whatever `agents.json` says at the
+    moment it is rendered. Correcting a vendor, or moving an agent from training
+    to search, silently rewrote history that the raw counters cannot support --
+    and left the per-agent labels disagreeing with the aggregate purpose totals
+    stored beside them, which were never rewritten.
+
+    Written once, when the day is first archived. Days captured before this
+    existed have no snapshot and fall back to the live registry, which is the
+    old behaviour and the best that can be done for them.
+    """
+    seen = {k[2:] for k in counters if k.startswith("g:")}
+    # Only what a note renders. The registry entry also carries the match
+    # pattern, which is how the agent was identified rather than anything about
+    # it, and has no business in a record of what happened.
+    return {
+        name: {"vendor": meta[name]["vendor"], "purpose": meta[name]["purpose"]}
+        for name in sorted(seen)
+        if name in meta
+    }
+
+
+def write_raw(
+    out_dir: Path, day: str, counters: dict[str, int], meta: dict[str, dict[str, str]]
+) -> bool:
     """Store the day, unless what we have is smaller than what is already there.
 
     A day drops out of Redis after ninety days and comes back as {}. Writing
     that over a good archive would quietly delete the history this script exists
     to keep, so the archive only ever grows.
+
+    Written to a temporary file and moved into place, because this is the record
+    and a half-written one is worse than yesterday's: an interrupted run used to
+    be able to leave a truncated JSON that every later run then read as a
+    smaller day and refused to replace.
     """
     path = out_dir / "data" / f"{day}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    counted = {k: v for k, v in counters.items() if not k.startswith("_")}
     if path.exists():
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             existing = {}
-        if sum(existing.values()) >= sum(counters.values()):
+        previous = {k: v for k, v in existing.items() if not k.startswith("_")}
+        if sum(previous.values()) >= sum(counted.values()):
             return False
 
-    path.write_text(json.dumps(counters, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    payload = dict(counted)
+    payload["_agents"] = snapshot(counted, meta)
+
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
     return True
+
+
+def cell(text: str) -> str:
+    """One table cell, safe to put between pipes.
+
+    Every label here arrives from the public internet: a path, a referrer, a
+    comparison, a click. The site escapes them when it renders, but a Markdown
+    table is a second boundary and this file is the only thing standing at it.
+    A pipe splits the row, a newline ends it, and backticks or brackets render
+    as something other than the text that was counted.
+
+    Escaped rather than stripped, so what is shown is still what was recorded.
+    """
+    out = str(text).replace("\\", "\\\\").replace("|", "\\|")
+    out = out.replace("\r", " ").replace("\n", " ")
+    out = out.replace("`", "\\`").replace("[", "\\[").replace("]", "\\]")
+    out = out.replace("<", "&lt;").replace(">", "&gt;")
+    return out[:200] if len(out) > 200 else out
 
 
 def table(rows: dict[str, int], head: tuple[str, str], limit: int = 25) -> list[str]:
@@ -131,7 +200,7 @@ def table(rows: dict[str, int], head: tuple[str, str], limit: int = 25) -> list[
         return ["_Nothing._", ""]
     out = [f"| {head[0]} | {head[1]} |", "|---|---:|"]
     for name, count in sorted(rows.items(), key=lambda kv: -kv[1])[:limit]:
-        out.append(f"| {name} | {count} |")
+        out.append(f"| {cell(name)} | {int(count)} |")
     out.append("")
     return out
 
@@ -184,7 +253,9 @@ def day_note(day: str, counters: dict[str, int], meta: dict[str, dict[str, str]]
         for name, count in sorted(agents.items(), key=lambda kv: -kv[1]):
             info = meta.get(name, {})
             why = PURPOSE_WORD.get(info.get("purpose", ""), "—")
-            lines.append(f"| {name} | {info.get('vendor', '—')} | {why} | {count} |")
+            lines.append(
+                f"| {cell(name)} | {cell(info.get('vendor', '—'))} | {why} | {int(count)} |"
+            )
         lines.append("")
     else:
         lines += ["_No agent identified itself._", ""]
@@ -277,8 +348,8 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
         for name, count in sorted(agents.items(), key=lambda kv: -kv[1]):
             info = meta.get(name, {})
             lines.append(
-                f"| {name} | {info.get('vendor', '—')} | "
-                f"{PURPOSE_WORD.get(info.get('purpose', ''), '—')} | {count} |"
+                f"| {cell(name)} | {cell(info.get('vendor', '—'))} | "
+                f"{PURPOSE_WORD.get(info.get('purpose', ''), '—')} | {int(count)} |"
             )
         lines.append("")
     else:
@@ -348,12 +419,18 @@ def main() -> int:
 
     today = date.today()
     fresh = 0
+    unreachable = 0
     for offset in range(args.days):
         day = (today - timedelta(days=offset)).isoformat()
-        counters = fetch_day(url, token, day)
+        try:
+            counters = fetch_day(url, token, day)
+        except Unreachable as exc:
+            unreachable += 1
+            print(f"  could not read {exc}", file=sys.stderr)
+            continue
         if not counters:
             continue
-        if write_raw(out_dir, day, counters):
+        if write_raw(out_dir, day, counters, meta):
             fresh += 1
 
     # Notes are rebuilt from the archive rather than from Redis, so a day that
@@ -366,7 +443,10 @@ def main() -> int:
         except ValueError:
             continue
         dest = out_dir / f"Audience {day}.md"
-        body = day_note(day, counters, meta)
+        # The day's own snapshot, so a later edit to agents.json cannot relabel
+        # it. Days archived before snapshots existed fall back to the registry.
+        frozen = counters.get("_agents") or {}
+        body = day_note(day, counters, {**meta, **frozen} if frozen else meta)
         if dest.exists():
             existing = dest.read_text(encoding="utf-8")
             if STAMP not in existing:
@@ -379,6 +459,15 @@ def main() -> int:
 
     write_index(out_dir, meta)
     print(f"{fresh} day(s) archived, {written} note(s) written to {out_dir}")
+
+    if unreachable:
+        print(
+            f"FAILED: {unreachable} day(s) could not be read from Redis. Nothing "
+            f"was lost yet -- Redis keeps ninety days -- but this must succeed "
+            f"before then or that history is gone.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

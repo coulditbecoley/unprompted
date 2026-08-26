@@ -270,11 +270,21 @@ perfectly well, so a 200 filed itself as a 404. Adding a top-level route means
 adding it to `KNOWN` there; the failure is visible rather than silent, because
 the new route starts appearing in "asked for, and not here".
 
+Every label that reaches a counter is validated at the endpoint before it can
+become a Redis field name, because it later becomes a cell in a Markdown table
+in a private vault — a second rendering boundary that React's escaping does not
+cover. The exporter escapes them again on the way out.
+
 Counters live in Upstash Redis and expire after ninety days, which is right for
 a cache and wrong for a record. `scripts/sync_analytics.py` copies each day into
 the Obsidian vault before it ages out — raw JSON as the source of truth, a
 readable note per day, and an index carrying all-time totals. It runs from the
-daily vault sync and again at the end of a weekly run, and is idempotent. A day
+daily vault sync and again at the end of a weekly run, and is idempotent. Each
+archived day freezes the vendor and purpose of the agents it saw, so correcting
+`agents.json` later cannot rewrite what a past note says happened. An
+unreachable Redis exits non-zero rather than archiving an empty day: this has to
+succeed before the ninety days run out, so a silent failure is the one outcome
+it must not have. A day
 that has aged out of Redis keeps whatever was archived while it was there; the
 archive only ever grows.
 

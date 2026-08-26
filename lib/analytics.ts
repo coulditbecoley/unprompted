@@ -37,8 +37,38 @@ export function redis(): Redis | null {
   const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
-  client = new Redis({ url, token });
+  try {
+    client = new Redis({
+      url,
+      token,
+      // One attempt. A retry doubles the time a caller waits for a store that
+      // is already failing, and every caller here treats a dropped count as
+      // acceptable. Constructing throws on a malformed URL, which is why this
+      // is inside a try: it used to throw *before* every caller's own catch,
+      // so a typo'd env var turned /api/track's promised 204 into a 500.
+      retry: false,
+    });
+  } catch {
+    return null;
+  }
   return client;
+}
+
+/**
+ * Run `work`, or give up on it.
+ *
+ * Analytics is allowed to lose a number and is never allowed to cost a reader
+ * time. Failing open is not enough on its own: a store that refuses a
+ * connection fails fast, one that is merely unreachable can hang until the
+ * caller does. Observed on the rate limiter as a request that never returned.
+ */
+const DEADLINE_MS = 800;
+
+async function within<T>(work: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    work.catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), DEADLINE_MS)),
+  ]);
 }
 
 /** Whether capture is configured at all. Read by the dashboard to say so. */
@@ -130,6 +160,10 @@ function comparisonOf(path: string, query: string | null | undefined): string | 
 export async function record(hit: Hit): Promise<void> {
   const r = redis();
   if (!r) return;
+  return within(write(r, hit), undefined);
+}
+
+async function write(r: Redis, hit: Hit): Promise<void> {
 
   const date = today();
   const key = dayKey(date);

@@ -130,19 +130,6 @@ export function Delta({ move }: { move?: Movement }) {
   );
 }
 
-export function SequencerHead() {
-  return (
-    <div className="seq-row seq-head" aria-hidden="true">
-      <span className="label seq-rank">#</span>
-      <span className="label seq-brand">Brand</span>
-      <span className="label seq-cells">By question</span>
-      <span className="label seq-rot">Named</span>
-      <span className="label seq-first">First</span>
-      <span className="label seq-delta">Δ</span>
-    </div>
-  );
-}
-
 /* -- status bar ----------------------------------------------------------- */
 
 export function StatusBar({

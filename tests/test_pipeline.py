@@ -685,30 +685,6 @@ def test_a_run_that_names_nothing_at_all_is_held():
 
 # --- extractor availability -------------------------------------------------
 
-def test_an_unavailable_cli_extractor_is_skipped_rather_than_selected(monkeypatch):
-    """The registry is edited on a machine that is not the one that runs.
-
-    Selecting a CLI that is not installed turned all 225 extractions into
-    errors, and before the publish gate existed, published the result.
-    """
-    from unprompted import cli_provider
-
-    monkeypatch.setattr(
-        cli_provider,
-        "load_registry",
-        lambda: [
-            {
-                "id": "ghost-cli",
-                "kind": "cli",
-                "role": "extractor",
-                "enabled": True,
-                "command": "definitely-not-installed",
-            }
-        ],
-    )
-    assert cli_provider.cli_extractor() is None
-
-
 def test_an_available_cli_extractor_is_still_selected(monkeypatch):
     from unprompted import cli_provider
 
@@ -1233,49 +1209,6 @@ def test_a_failed_request_inside_a_good_batch_only_costs_that_answer(monkeypatch
     assert out[1].error and "errored" in out[1].error
 
 
-def test_an_enabled_api_extractor_beats_a_cli_below_it(monkeypatch, tmp_path):
-    """Registry order is the priority, and this used to silently not be true.
-
-    cli_extractor() only ever looked at CLI entries, so enabling the API
-    extractor in providers.json changed nothing and a local CLI stayed in
-    charge, burning subscription tokens the operator thought they had switched
-    off.
-    """
-    import json
-
-    from unprompted import cli_provider
-
-    registry = tmp_path / "providers.json"
-    registry.write_text(
-        json.dumps(
-            {
-                "providers": [
-                    {"id": "api", "kind": "api", "role": "extractor", "enabled": True},
-                    {
-                        "id": "claude-cli",
-                        "kind": "cli",
-                        "role": "extractor",
-                        "enabled": True,
-                        "command": "claude",
-                        "args": ["-p", "--strict-mcp-config"],
-                    },
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(cli_provider, "REGISTRY", registry)
-    monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
-
-    assert cli_provider.cli_extractor() is None
-
-    # Disabling it hands the job back to the CLI rather than to nothing.
-    data = json.loads(registry.read_text(encoding="utf-8"))
-    data["providers"][0]["enabled"] = False
-    registry.write_text(json.dumps(data), encoding="utf-8")
-    assert cli_provider.cli_extractor().id == "claude-cli"
-
-
 def test_a_dead_batch_holds_the_week_instead_of_destroying_it(monkeypatch):
     """The regression that made batching dangerous.
 
@@ -1617,6 +1550,101 @@ def test_an_enabled_engine_with_no_adapter_is_an_error_not_a_silent_omission(
 
     with pytest.raises(cli_provider.ProviderError, match="no adapter"):
         all_engines()
+
+
+def _registry(monkeypatch, entries):
+    from unprompted import cli_provider
+
+    monkeypatch.setattr(cli_provider, "load_registry", lambda: entries)
+    return cli_provider
+
+
+def test_an_unavailable_cli_extractor_is_skipped_rather_than_selected(monkeypatch):
+    """The registry is edited on a machine that is not the one that runs.
+
+    Selecting a CLI that is not installed turned all 225 extractions into
+    errors, and before the publish gate existed, published the result.
+    """
+    cli_provider = _registry(
+        monkeypatch,
+        [
+            {
+                "id": "ghost-cli",
+                "kind": "cli",
+                "role": "extractor",
+                "enabled": True,
+                "command": "definitely-not-installed",
+            }
+        ],
+    )
+    # Nothing enabled can run, which is a reason to stop rather than to return
+    # a None the caller will read as "use the hosted default".
+    with pytest.raises(cli_provider.ProviderError, match="enabled and available"):
+        cli_provider.resolve_extractor()
+
+
+def test_a_hosted_extractor_is_chosen_by_its_registry_id(monkeypatch):
+    """The id decides which hosted reader runs, and is recorded on the week.
+
+    Returning a bare None for any API entry meant the caller assumed Anthropic
+    whatever the registry said: enabling a different hosted extractor through
+    the admin UI silently ran Claude and stamped the run "api".
+    """
+    cli_provider = _registry(
+        monkeypatch,
+        [{"id": "claude-api-extract", "kind": "api", "role": "extractor", "enabled": True}],
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "present")
+
+    chosen = cli_provider.resolve_extractor()
+
+    assert isinstance(chosen, cli_provider.ApiExtractor)
+    assert chosen.id == "claude-api-extract"
+    assert chosen.model  # the week records which model read it
+
+
+def test_a_hosted_extractor_with_no_key_falls_through_to_the_cli(monkeypatch):
+    """The registry, the README and the dashboard all call the CLIs fallbacks.
+
+    Selection used to stop at the first API entry, so with the key absent the
+    run aborted instead of reaching the local harness sitting right below it.
+    """
+    cli_provider = _registry(
+        monkeypatch,
+        [
+            {"id": "claude-api-extract", "kind": "api", "role": "extractor", "enabled": True},
+            {
+                "id": "claude-cli",
+                "kind": "cli",
+                "role": "extractor",
+                "enabled": True,
+                "command": "claude",
+                "args": ["-p", "--strict-mcp-config"],
+            },
+        ],
+    )
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+
+    chosen = cli_provider.resolve_extractor()
+
+    assert isinstance(chosen, cli_provider.CliProvider)
+    assert chosen.id == "claude-cli"
+
+
+def test_an_unknown_hosted_extractor_is_refused_rather_than_substituted(monkeypatch):
+    """The admin route accepts any id with an env var, so this is reachable.
+
+    Substituting the one adapter that does exist would read the week with a
+    different model from the one the operator selected, and record it as
+    theirs.
+    """
+    cli_provider = _registry(
+        monkeypatch,
+        [{"id": "mistral-api-extract", "kind": "api", "role": "extractor", "enabled": True}],
+    )
+    with pytest.raises(cli_provider.ProviderError, match="no adapter exists"):
+        cli_provider.resolve_extractor()
 
 
 def test_a_broken_registry_stops_the_run_instead_of_shrinking_it(monkeypatch, tmp_path):

@@ -74,8 +74,3 @@ export function identifyAgent(userAgent: string | null): Agent | null {
   }
   return null;
 }
-
-/** Every agent this build knows how to name, for the dashboard's own legend. */
-export function knownAgents(): Agent[] {
-  return AGENTS.map(([, agent]) => agent);
-}

@@ -49,6 +49,7 @@ export async function GET() {
     "",
     "- Method: https://unprompted.report/methodology",
     "- Every question and answer: https://unprompted.report/questions",
+    "  (add ?c=<category-slug> for a specific one; the slugs are below)",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",

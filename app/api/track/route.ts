@@ -30,6 +30,21 @@ const MAX_EVENT = 80;
 const MAX_QUERY = 300;
 
 /**
+ * What a path from this site can actually look like.
+ *
+ * Anything recorded here becomes a Redis field name and then a cell in a
+ * Markdown table in the operator's private vault, which is a second rendering
+ * boundary that React's escaping does not cover. A pipe or a newline in a page
+ * path would rewrite that table; a link or image would render in it. The
+ * charset is the one real URLs on this site use, so nothing legitimate is lost
+ * by refusing the rest.
+ */
+const SAFE_PATH = /^\/[A-Za-z0-9\-._~/%]*$/;
+
+/** Label prefixes the beacon actually emits. Anything else is not ours. */
+const EVENT_PREFIXES = ["tab:", "sort:", "share:", "nav:", "out:"];
+
+/**
  * Only the keys the comparison pages address themselves with.
  *
  * A query string is a good way to accidentally store whatever somebody typed,
@@ -43,7 +58,10 @@ function safeQuery(raw: unknown): string | null {
   if (typeof raw !== "string" || !raw) return null;
   const out = new URLSearchParams();
   for (const [key, value] of new URLSearchParams(raw.slice(0, MAX_QUERY))) {
-    if (QUERY_KEYS.has(key) && value) out.set(key, value.slice(0, 80));
+    // Same reasoning as SAFE_PATH: these become labels in a Markdown table.
+    if (QUERY_KEYS.has(key) && value && /^[\w .+-]{1,80}$/.test(value)) {
+      out.set(key, value);
+    }
   }
   const s = out.toString();
   return s || null;
@@ -85,7 +103,7 @@ export async function POST(request: Request) {
     query?: unknown;
   };
   const path = typeof body.path === "string" ? body.path.slice(0, MAX_PATH) : "";
-  if (!path.startsWith("/")) return new NextResponse(null, { status: 204 });
+  if (!SAFE_PATH.test(path)) return new NextResponse(null, { status: 204 });
 
   // The operator is not the audience. The beacon already skips /admin, but a
   // guard that lives only in the browser is one a stale bundle or a hand-made
@@ -99,10 +117,16 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
-  const event =
+  const rawEvent =
     typeof body.event === "string" && body.event
       ? body.event.slice(0, MAX_EVENT).replace(/[^\w:./ -]/g, "")
       : null;
+  // An allowlist rather than a filter. The beacon emits five prefixes; a label
+  // that is none of them did not come from this site's own controls, and a
+  // counter nobody can explain is worse than one that is missing.
+  const event =
+    rawEvent && EVENT_PREFIXES.some((p) => rawEvent.startsWith(p)) ? rawEvent : null;
+  if (rawEvent && !event) return new NextResponse(null, { status: 204 });
 
   await record({
     path,

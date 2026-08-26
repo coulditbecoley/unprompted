@@ -21,11 +21,10 @@ from datetime import date
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
-from .cli_provider import cli_extractor
+from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .extract import extract_run
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
-from .extract import MODEL as EXTRACT_MODEL
 from .run import MAX_WORKERS, ROOT, git_sha, load_local_env, persist
 
 
@@ -100,9 +99,22 @@ def main() -> int:
     # Same reader the live pipeline would use, resolved once. Previously this
     # always took the hosted API path regardless of the registry, so a re-read
     # could silently use a different extractor from the run it was correcting.
-    extractor = cli_extractor()
-    print(f"re-extracting {len(answers)} stored answers", file=sys.stderr, flush=True)
-    extractions = extract_run(answers, extractor, max_workers=MAX_WORKERS)
+    try:
+        extractor = resolve_extractor()
+    except ProviderError as exc:
+        raise SystemExit(str(exc)) from exc
+    hosted = isinstance(extractor, ApiExtractor)
+    print(
+        f"re-extracting {len(answers)} stored answers via {extractor.label}",
+        file=sys.stderr,
+        flush=True,
+    )
+    extractions = extract_run(
+        answers,
+        None if hosted else extractor,
+        max_workers=MAX_WORKERS,
+        model=extractor.model if hosted else None,
+    )
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
     aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")
@@ -119,8 +131,8 @@ def main() -> int:
         method_version=record["method_version"],
         runs_per_question=record["runs_per_question"],
         engines=record["engines"],
-        extractor=extractor.id if extractor else "api",
-        extractor_model="" if extractor else EXTRACT_MODEL,
+        extractor=extractor.id,
+        extractor_model=extractor.model if hosted else "",
         # The answers were fetched when the source run fetched them. Dating a
         # re-read as if the engines were queried today put a day in the archive
         # on which nothing was asked, and made week-over-week movement compare a

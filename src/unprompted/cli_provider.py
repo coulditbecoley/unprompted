@@ -248,37 +248,95 @@ def is_available(provider: CliProvider) -> bool:
         return False
 
 
-def cli_extractor() -> CliProvider | None:
-    """The extractor to read this run with, or None to use the hosted API.
+@dataclass(frozen=True)
+class ApiExtractor:
+    """A hosted reader, named by the registry entry that selected it."""
 
-    Walks the registry in order and stops at the first *enabled* extractor of
-    any kind, so the order in providers.json is the priority and the admin
-    toggle means what it looks like it means. Previously this skipped API
-    entries entirely, which made enabling the API extractor in the registry do
-    nothing at all while a local CLI stayed silently in charge.
+    id: str
+    label: str
+    model: str
+    env: str
 
-    Returns one rather than merging several: two extractors reading the same
-    week would make the numbers depend on which one happened to run.
 
-    Unlike an engine, a missing extractor is not fatal. Extraction is a
-    mechanical reading job with a hosted fallback that produces the same answer,
-    so falling through costs money rather than meaning. A missing *engine*
-    changes what was measured, so run.py refuses to start instead.
+# Every hosted extractor this code can actually drive, keyed by registry id.
+#
+# An allowlist for the same reason ALLOWED_CLIS is one: the admin route accepts
+# any id with an env var attached, so without this, enabling `mistral-api-extract`
+# ran Claude and recorded the week as having been read by something it was not.
+# Adding a hosted extractor is a code change, on purpose.
+API_EXTRACTORS: dict[str, ApiExtractor] = {
+    "claude-api-extract": ApiExtractor(
+        id="claude-api-extract",
+        label="Claude (API, batch)",
+        model="claude-opus-5",
+        env="ANTHROPIC_API_KEY",
+    ),
+}
+
+
+def resolve_extractor() -> CliProvider | ApiExtractor:
+    """The reader for this run: the first enabled entry that can actually run.
+
+    Walks the registry in order, so providers.json is the priority and the admin
+    toggle means what it looks like it means.
+
+    Falls *through* an unavailable entry rather than stopping at it. Both halves
+    of that were wrong before. Stopping at the first API entry meant the CLIs
+    below it were never reached even though the registry, the README and the
+    dashboard all call them fallbacks for a machine with no key. And returning a
+    bare `None` for any API entry meant the caller assumed Anthropic whatever the
+    registry said, so the id recorded on the run was the generic string "api"
+    rather than the thing that read it.
+
+    Raises when an enabled hosted extractor has no adapter, rather than
+    substituting one. A week read by a different model from the one the operator
+    selected is method drift, and silently correct-looking.
     """
     for entry in load_registry():
         if entry.get("role") != "extractor" or not entry.get("enabled"):
             continue
-        if entry.get("kind") != "cli":
-            return None  # hosted API wins by being listed first
-        provider = _provider_from(entry)
-        if is_available(provider):
-            return provider
+
+        if entry.get("kind") == "cli":
+            provider = _provider_from(entry)
+            if is_available(provider):
+                return provider
+            print(
+                f"  extractor unavailable: {provider.id} "
+                f"({provider.command} is not on PATH)",
+                file=sys.stderr,
+            )
+            continue
+
+        name = entry.get("id", "")
+        api = API_EXTRACTORS.get(name)
+        if api is None:
+            raise ProviderError(
+                f"providers.json enables the API extractor {name!r}, but no "
+                f"adapter exists for it (known: {', '.join(sorted(API_EXTRACTORS))}). "
+                f"Add an adapter in cli_provider.API_EXTRACTORS, or disable that entry."
+            )
+        if os.environ.get(api.env):
+            return api
         print(
-            f"  cli extractor unavailable: {provider.id} "
-            f"({provider.command} is not on PATH)",
+            f"  extractor unavailable: {api.id} ({api.env} is not set)",
             file=sys.stderr,
         )
-    return None
+
+    raise ProviderError(
+        "no extractor in providers.json is both enabled and available on this "
+        "machine. Set the hosted extractor's key, put a local CLI on PATH, or "
+        "enable one that is."
+    )
+
+
+def cli_extractor() -> CliProvider | None:
+    """Back-compat shim: the resolved extractor, or None when it is the API.
+
+    Kept because `reextract` and the tests speak in these terms. New callers
+    should use resolve_extractor(), which can say *which* API.
+    """
+    resolved = resolve_extractor()
+    return resolved if isinstance(resolved, CliProvider) else None
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)

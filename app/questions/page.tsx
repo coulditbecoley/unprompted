@@ -3,32 +3,80 @@ import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
-import { CATEGORY, categoryLabel, REPO_ROOT, latestRun } from "@/lib/data";
+import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
+import { categoryLabel, REPO_ROOT, latestRun } from "@/lib/data";
 import { AwaitingFirstRun, TrimTop } from "@/components/ui";
 
-export const metadata: Metadata = {
-  title: "Every question, every answer",
-  description:
-    "The exact questions asked, and which brands each AI assistant named for each one. Show your work.",
-};
+type Params = { c?: string };
+
+function resolve(params: Params): string {
+  return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}): Promise<Metadata> {
+  const category = resolve(await searchParams);
+  const label = categoryLabel(category);
+  return {
+    title: `Every question, every answer: ${label}`,
+    description:
+      `The exact questions asked about ${label.toLowerCase()}, and which brands ` +
+      "each AI assistant named for each one. Show your work.",
+  };
+}
 
 type Spec = { questions: { id: string; text: string }[] };
+
+/**
+ * The category picker.
+ *
+ * This page carried one category while the site published three, so the
+ * evidence behind two thirds of the chart existed only as JSON in the
+ * repository — and llms.txt pointed machines here as "every question and
+ * answer". A trust surface that covers a third of the publication is worse
+ * than one that admits what it covers.
+ */
+function CategoryTabs({ category }: { category: string }) {
+  return (
+    <nav className="cat-tabs" aria-label="Category">
+      {CATEGORIES.map((c) => (
+        <a
+          key={c.slug}
+          href={`/questions?c=${c.slug}`}
+          className="cat-tab"
+          aria-current={c.slug === category ? "page" : undefined}
+        >
+          {c.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
 
 /**
  * The show-your-work surface. Every figure on the chart traces back to here,
  * and from here to the raw JSON in the repository. Credibility rests on this
  * page existing, so it is deliberately plain and complete rather than pretty.
  */
-export default function QuestionsPage() {
+export default async function QuestionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}) {
+  const category = resolve(await searchParams);
   const spec = loadYaml(
-    fs.readFileSync(path.join(REPO_ROOT, "questions", `${CATEGORY}.yml`), "utf-8"),
+    fs.readFileSync(path.join(REPO_ROOT, "questions", `${category}.yml`), "utf-8"),
   ) as Spec;
 
-  const run = latestRun(CATEGORY);
+  const run = latestRun(category);
 
   if (!run) {
     return (
-      <section className="shell">
+      <section className="shell section">
+        <CategoryTabs category={category} />
         <AwaitingFirstRun />
       </section>
     );
@@ -43,7 +91,8 @@ export default function QuestionsPage() {
 
   return (
     <section className="shell section">
-      <p className="label">{categoryLabel(CATEGORY)} · week of {run.run_date}</p>
+      <CategoryTabs category={category} />
+      <p className="label">{categoryLabel(category)} · week of {run.run_date}</p>
       <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
         Every question, and what each assistant answered.
       </h1>

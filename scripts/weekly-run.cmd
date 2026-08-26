@@ -33,6 +33,23 @@ if not "%DIRTY_SIZE%"=="0" (
   exit /b 1
 )
 
+REM The same rule for the inputs that decide what the numbers mean. A run is
+REM only reproducible from this repository if the code, questions, aliases and
+REM provider registry that produced it are in it; uncommitted, the recorded
+REM commit points at something that never ran.
+REM
+REM Deliberately narrow. An audit recommended refusing on *any* dirty file,
+REM which would trade a whole week's measurement for an uncommitted README
+REM edit. These four paths are the ones that change a published figure.
+git status --porcelain -- src questions aliases providers.json agents.json > "%TEMP%\unprompted-method.txt" 2>&1
+for /f %%A in ("%TEMP%\unprompted-method.txt") do set METHOD_SIZE=%%~zA
+if not "%METHOD_SIZE%"=="0" (
+  echo ABORT: the method is uncommitted, so this run could not be reproduced: >> "%TEMP%\unprompted-weekly.log"
+  type "%TEMP%\unprompted-method.txt" >> "%TEMP%\unprompted-weekly.log"
+  echo         Commit or stash these, then re-run. >> "%TEMP%\unprompted-weekly.log"
+  exit /b 1
+)
+
 python -m unprompted.run --category all >> "%TEMP%\unprompted-weekly.log" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
 

@@ -24,8 +24,8 @@ from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .cost import cost_of_run, format_report
 from .engines import all_engines
-from .cli_provider import cli_extractor
-from .extract import MODEL as EXTRACT_MODEL, extract_run
+from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
+from .extract import extract_run
 from .models import RunRecord
 from .normalize import AliasMap, normalize
 from .report import write_report
@@ -126,17 +126,12 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
     # has been paid for, so an extractor that cannot run is found at the worst
     # possible moment: a full run's spend with nothing readable at the end of
     # it. Resolved here rather than at the point of use so the failure is free.
-    extractor = cli_extractor()
-    if extractor is None and not os.environ.get("ANTHROPIC_API_KEY"):
-        raise SystemExit(
-            "the API extractor is first in providers.json but ANTHROPIC_API_KEY "
-            "is not set.\nSet the key, or enable a local extractor in "
-            "providers.json to read this run instead."
-        )
-    print(
-        f"  extractor: {extractor.label if extractor else 'Claude (API, batch)'}",
-        file=sys.stderr,
-    )
+    try:
+        extractor = resolve_extractor()
+    except ProviderError as exc:
+        raise SystemExit(str(exc)) from exc
+    hosted = isinstance(extractor, ApiExtractor)
+    print(f"  extractor: {extractor.label}", file=sys.stderr)
 
     tasks = [
         (engine, question["id"], question["text"], run_index)
@@ -173,7 +168,12 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         ok = sum(1 for a in got if not a.error)
         print(f"  {name}: {ok}/{len(got)} ok", file=sys.stderr)
 
-    extractions = extract_run(answers, extractor, max_workers=MAX_WORKERS)
+    extractions = extract_run(
+        answers,
+        None if hosted else extractor,
+        max_workers=MAX_WORKERS,
+        model=extractor.model if hosted else None,
+    )
 
     # The live path returns out of order; restore a deterministic sort so the
     # run file stays stable and diffable.
@@ -188,8 +188,10 @@ def run_category(category: str, run_date: str, dry_run: bool = False) -> tuple[R
         method_version=int(spec["method_version"]),
         runs_per_question=runs_per_question,
         engines=sorted(engines),
-        extractor=extractor.id if extractor else "api",
-        extractor_model="" if extractor else EXTRACT_MODEL,
+        # The registry id that actually read it, not the generic "api". Which
+        # reader produced a week is provenance, and it was unrecoverable.
+        extractor=extractor.id,
+        extractor_model=extractor.model if hosted else "",
         measured_on=run_date,
         git_sha=git_sha(),
         extractions=extractions,

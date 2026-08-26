@@ -381,7 +381,9 @@ def _local_schema(model: type[BaseModel]) -> dict:
 
 
 def extract_all_batch(
-    answers: list[EngineAnswer], api_key: str | None = None
+    answers: list[EngineAnswer],
+    api_key: str | None = None,
+    model: str | None = None,
 ) -> list[Extraction]:
     """Structure a whole run in one Batch API job. Half the price of live calls.
 
@@ -397,6 +399,9 @@ def extract_all_batch(
     this: the error-rate check holds it, the held file keeps every raw answer,
     and `reextract` reads it again for the price of the extraction alone.
     """
+    # The registry entry names the model, so a run reads with the extractor the
+    # operator selected rather than whatever this module last defaulted to.
+    model = model or MODEL
     bases: list[Extraction] = []
     requests = []
     for i, answer in enumerate(answers):
@@ -408,7 +413,7 @@ def extract_all_batch(
             {
                 "custom_id": f"x{i}",
                 "params": {
-                    "model": MODEL,
+                    "model": model,
                     "max_tokens": MAX_TOKENS,
                     "output_config": None,  # filled in below, inside the try
                     "messages": [
@@ -434,7 +439,7 @@ def extract_all_batch(
         # left the category with no record at all: every paid engine answer
         # discarded because the schema could not be constructed.
         output_config = {
-            **_effort(MODEL).get("output_config", {}),
+            **_effort(model).get("output_config", {}),
             "format": _json_format(),
         }
         for request in requests:
@@ -535,6 +540,7 @@ def extract_run(
     provider: CliProvider | None,
     api_key: str | None = None,
     max_workers: int = 6,
+    model: str | None = None,
 ) -> list[Extraction]:
     """Read a whole run's answers with whichever extractor the registry chose.
 
@@ -547,11 +553,11 @@ def extract_run(
     """
     if provider is None:
         print(
-            f"  extracting {len(answers)} answers via the Batch API ({MODEL})",
+            f"  extracting {len(answers)} answers via the Batch API ({model or MODEL})",
             file=sys.stderr,
             flush=True,
         )
-        out = extract_all_batch(answers, api_key=api_key)
+        out = extract_all_batch(answers, api_key=api_key, model=model)
         failed = sum(1 for e in out if e.error)
         print(f"  extracted {len(out)} ({failed} failed)", file=sys.stderr, flush=True)
         return out
