@@ -4,6 +4,7 @@ import type { NextFetchEvent, NextRequest } from "next/server";
 import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
 import { recordRequest } from "@/lib/analytics";
 
+
 /**
  * Gates the only non-public surface.
  *
@@ -37,7 +38,9 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // the response. Reading a waitUntil off the request and calling it unbound
   // throws on `this`, which took the whole site to a 500 for every route until
   // the second parameter was used properly.
-  event.waitUntil(recordRequest(path, request.headers.get("user-agent")));
+  event.waitUntil(
+    recordRequest(path, request.headers.get("user-agent"), !isKnownPath(path)),
+  );
 
   if (!path.startsWith("/admin") && !path.startsWith("/api/admin")) {
     return NextResponse.next();
@@ -93,6 +96,42 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
 }
 
 /**
+ * The prefixes this site actually serves.
+ *
+ * Used to spot a request for something that was never here, which is worth
+ * knowing mostly from agents: a person mistyping a URL says nothing, while an
+ * assistant repeatedly asking for a path says what it expected to find. On this
+ * site alone that is how /llms.txt got written.
+ *
+ * A prefix test rather than the real route table, so it catches the probes that
+ * matter — /wp-admin, /.env, /openapi.json — and does not catch a bad slug
+ * under a good prefix. Deliberate: the alternative is duplicating the router
+ * here and getting it subtly wrong.
+ *
+ * Adding a top-level route means adding it here. The failure is visible rather
+ * than silent: the new route starts appearing in "asked for, and not here".
+ */
+const KNOWN = [
+  "/chart",
+  "/brand/",
+  "/compare",
+  "/consensus",
+  "/questions",
+  "/categories",
+  "/methodology",
+  "/admin",
+  "/api/",
+  "/feed.xml",
+  "/llms.txt",
+  "/robots.txt",
+  "/sitemap.xml",
+];
+
+function isKnownPath(path: string): boolean {
+  return path === "/" || KNOWN.some((prefix) => path.startsWith(prefix));
+}
+
+/**
  * Everything a reader or an agent can actually land on.
  *
  * Deliberately not `/:path*`. Static assets, the beacon endpoint and the
@@ -103,6 +142,6 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/track|favicon|icon|apple-icon|opengraph-image|robots.txt|sitemap.xml).*)",
+    "/((?!_next/static|_next/image|api/track|favicon|icon|apple-icon|opengraph-image|sitemap.xml).*)",
   ],
 };

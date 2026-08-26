@@ -65,6 +65,7 @@ export const PAIR_SEP = "\u0000";
 
 const dayKey = (date: string) => `a:d:${date}`;
 const FEED_KEY = "a:feed";
+const SEEN_KEY = "a:seen";
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -89,7 +90,38 @@ export type Hit = {
   agent?: Agent | null;
   /** A named interaction rather than a page view: "tab:compare", "cat:…". */
   event?: string | null;
+  /** The query string, for the pages whose whole state lives in one. */
+  query?: string | null;
+  /** True when the request did not resolve to a page. */
+  missing?: boolean;
 };
+
+/**
+ * The brand a path is about, or null.
+ *
+ * Rolled up because `/brand/ai-coding-assistants/cursor` as a bare string
+ * answers "was this page read" and not "is anyone looking up Cursor", which is
+ * the question worth being able to answer for somebody.
+ */
+function brandOf(path: string): string | null {
+  const m = /^\/brand\/([^/]+)\/([^/?#]+)/.exec(path);
+  return m ? `${m[2]} (${m[1]})` : null;
+}
+
+/**
+ * The two brands a comparison is between, normalised so that Cursor vs Copilot
+ * and Copilot vs Cursor are one row. Which side a reader put first is not a
+ * fact about the brands.
+ */
+function comparisonOf(path: string, query: string | null | undefined): string | null {
+  if (!path.startsWith("/compare") || !query) return null;
+  const params = new URLSearchParams(query);
+  const a = params.get("a");
+  const b = params.get("b");
+  if (!a || !b || a === b) return null;
+  const [left, right] = [a, b].sort();
+  return `${left} vs ${right}`;
+}
 
 /**
  * One event. Never throws and never blocks the response: analytics failing must
@@ -116,6 +148,15 @@ export async function record(hit: Hit): Promise<void> {
     if (hit.referrer) fields.push(`r:${hit.referrer}`);
   }
 
+  // Dimensions that apply to a reader and an agent alike. A path that did not
+  // resolve is worth more from an agent than from a person: it says what the
+  // agent expected this site to have.
+  if (hit.missing) fields.push(`x:${hit.path}`);
+  const brand = brandOf(hit.path);
+  if (brand) fields.push(`b:${brand}`);
+  const comparison = comparisonOf(hit.path, hit.query);
+  if (comparison) fields.push(`m:${comparison}`);
+
   try {
     const pipe = r.pipeline();
     for (const field of fields) pipe.hincrby(key, field, 1);
@@ -136,6 +177,16 @@ export async function record(hit: Hit): Promise<void> {
       }),
     );
     pipe.ltrim(FEED_KEY, 0, FEED_MAX - 1);
+
+    // First and last seen, outside the daily keys because the question is "am I
+    // in this crawler's refresh cycle", which a per-day count cannot answer.
+    // Never expires: two fields per agent is a rounding error against a rolling
+    // ninety days of paths.
+    if (hit.agent) {
+      pipe.hsetnx(SEEN_KEY, `${hit.agent.name}:first`, Date.now());
+      pipe.hset(SEEN_KEY, { [`${hit.agent.name}:last`]: Date.now() });
+    }
+
     await pipe.exec();
   } catch {
     // Deliberately silent. A dropped count is not worth a log line on every
@@ -147,19 +198,91 @@ export async function record(hit: Hit): Promise<void> {
 export async function recordRequest(
   path: string,
   userAgent: string | null,
+  missing = false,
 ): Promise<void> {
   const agent = identifyAgent(userAgent);
   // Humans are recorded by the beacon instead, which runs after the page loads
   // and can therefore also report the referrer. Recording them here as well
   // would double every count.
-  if (!agent) return;
-  await record({ path, agent });
+  //
+  // A miss is the exception: the beacon never runs on a page that did not
+  // load, so a person asking for something that is not here would otherwise go
+  // uncounted entirely.
+  if (!agent) {
+    if (missing) await record({ path, missing: true });
+    return;
+  }
+  await record({ path, agent, missing });
+}
+
+/**
+ * Hosts that are an assistant rather than a website.
+ *
+ * A visit referred by one of these is the mirror image of an agent hit: an
+ * assistant answered somebody, that person clicked through, and the chart was
+ * cited to a human rather than only crawled. It is the most valuable referrer
+ * this site can receive and it was sitting in a list next to google.com.
+ */
+const ASSISTANT_HOSTS = [
+  "chatgpt.com",
+  "chat.openai.com",
+  "openai.com",
+  "perplexity.ai",
+  "claude.ai",
+  "gemini.google.com",
+  "copilot.microsoft.com",
+  "bing.com",
+  "you.com",
+  "phind.com",
+  "poe.com",
+  "duckduckgo.com",
+  "mistral.ai",
+  "chat.mistral.ai",
+  "grok.com",
+  "x.ai",
+];
+
+export function isAssistantHost(host: string): boolean {
+  return ASSISTANT_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** When each agent was first and last seen, for cadence rather than volume. */
+export type Cadence = { agent: string; first: number; last: number };
+
+export async function cadence(): Promise<Cadence[]> {
+  const r = redis();
+  if (!r) return [];
+  try {
+    const hash = await r.hgetall<Record<string, string>>(SEEN_KEY);
+    if (!hash) return [];
+    const byAgent = new Map<string, { first: number; last: number }>();
+    for (const [field, value] of Object.entries(hash)) {
+      const cut = field.lastIndexOf(":");
+      if (cut < 1) continue;
+      const name = field.slice(0, cut);
+      const which = field.slice(cut + 1);
+      const row = byAgent.get(name) ?? { first: 0, last: 0 };
+      if (which === "first") row.first = Number(value) || 0;
+      if (which === "last") row.last = Number(value) || 0;
+      byAgent.set(name, row);
+    }
+    return [...byAgent.entries()]
+      .map(([agent, v]) => ({ agent, ...v }))
+      .sort((a, b) => b.last - a.last);
+  } catch {
+    return [];
+  }
 }
 
 /* -- reading --------------------------------------------------------------- */
 
 export type Totals = {
   views: Array<[string, number]>;
+  brands: Array<[string, number]>;
+  comparisons: Array<[string, number]>;
+  missing: Array<[string, number]>;
+  /** Referrers that are themselves an assistant, split out from the rest. */
+  fromAssistants: Array<[string, number]>;
   agents: Array<[string, number]>;
   agentPaths: Array<[string, number]>;
   clicks: Array<[string, number]>;
@@ -171,6 +294,10 @@ export type Totals = {
 
 const EMPTY: Totals = {
   views: [],
+  brands: [],
+  comparisons: [],
+  missing: [],
+  fromAssistants: [],
   agents: [],
   agentPaths: [],
   clicks: [],
@@ -196,6 +323,9 @@ export async function totals(days = 30): Promise<Totals> {
 
   const bucket: Record<string, Map<string, number>> = {
     v: new Map(),
+    b: new Map(),
+    m: new Map(),
+    x: new Map(),
     g: new Map(),
     gp: new Map(),
     c: new Map(),
@@ -220,12 +350,19 @@ export async function totals(days = 30): Promise<Totals> {
   const ranked = (m: Map<string, number>) =>
     [...m.entries()].sort((a, b) => b[1] - a[1]);
 
+  const referrers = ranked(bucket.r);
   return {
     views: ranked(bucket.v),
+    brands: ranked(bucket.b),
+    comparisons: ranked(bucket.m),
+    missing: ranked(bucket.x),
+    // Derived at read time rather than stored twice: a referrer either is an
+    // assistant or is not, and that is a property of the hostname.
+    fromAssistants: referrers.filter(([host]) => isAssistantHost(host)),
     agents: ranked(bucket.g),
     agentPaths: ranked(bucket.gp),
     clicks: ranked(bucket.c),
-    referrers: ranked(bucket.r),
+    referrers,
     purposes: Object.fromEntries(bucket.p),
     humanHits: bucket.t.get("human") ?? 0,
     agentHits: bucket.t.get("agent") ?? 0,

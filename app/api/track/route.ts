@@ -26,6 +26,27 @@ export const dynamic = "force-dynamic";
 
 const MAX_PATH = 300;
 const MAX_EVENT = 80;
+const MAX_QUERY = 300;
+
+/**
+ * Only the keys the comparison pages address themselves with.
+ *
+ * A query string is a good way to accidentally store whatever somebody typed,
+ * so the beacon sends one only for those routes and this keeps only the
+ * parameters that are part of the page's identity. Anything else is dropped
+ * rather than trusted.
+ */
+const QUERY_KEYS = new Set(["a", "b", "c"]);
+
+function safeQuery(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  const out = new URLSearchParams();
+  for (const [key, value] of new URLSearchParams(raw.slice(0, MAX_QUERY))) {
+    if (QUERY_KEYS.has(key) && value) out.set(key, value.slice(0, 80));
+  }
+  const s = out.toString();
+  return s || null;
+}
 
 /** Hostname only, and only when it is not us. */
 function referrerHost(raw: unknown): string | null {
@@ -46,7 +67,12 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
-  const body = payload as { path?: unknown; referrer?: unknown; event?: unknown };
+  const body = payload as {
+    path?: unknown;
+    referrer?: unknown;
+    event?: unknown;
+    query?: unknown;
+  };
   const path = typeof body.path === "string" ? body.path.slice(0, MAX_PATH) : "";
   if (!path.startsWith("/")) return new NextResponse(null, { status: 204 });
 
@@ -62,6 +88,11 @@ export async function POST(request: Request) {
       ? body.event.slice(0, MAX_EVENT).replace(/[^\w:./ -]/g, "")
       : null;
 
-  await record({ path, referrer: event ? null : referrerHost(body.referrer), event });
+  await record({
+    path,
+    query: event ? null : safeQuery(body.query),
+    referrer: event ? null : referrerHost(body.referrer),
+    event,
+  });
   return new NextResponse(null, { status: 204 });
 }

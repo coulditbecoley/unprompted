@@ -1,4 +1,11 @@
-import { analyticsEnabled, daily, feed, PAIR_SEP, totals } from "@/lib/analytics";
+import {
+  analyticsEnabled,
+  cadence,
+  daily,
+  feed,
+  PAIR_SEP,
+  totals,
+} from "@/lib/analytics";
 import { TrimTop } from "@/components/ui";
 
 /**
@@ -55,13 +62,15 @@ export async function AdminAnalytics() {
     );
   }
 
-  const [t, entries, days] = await Promise.all([
+  const [t, entries, days, seen] = await Promise.all([
     totals(WINDOW_DAYS),
     feed(40),
     daily(14),
+    cadence(),
   ]);
 
   const live = t.purposes.live ?? 0;
+  const cited = t.fromAssistants.reduce((sum, [, n]) => sum + n, 0);
   const peak = Math.max(1, ...days.map((d) => d.human + d.agent));
 
   return (
@@ -84,7 +93,7 @@ export async function AdminAnalytics() {
 
       <div className="cns-summary" style={{ marginTop: 16 }}>
         <Stat value={String(live)} label="read to answer a person" />
-        <Stat value={String(t.purposes.training ?? 0)} label="crawled for training" />
+        <Stat value={String(cited)} label="arrived from an assistant" />
         <Stat value={String(t.agentHits)} label="agent hits" />
         <Stat value={String(t.humanHits)} label="human views" />
       </div>
@@ -164,6 +173,61 @@ export async function AdminAnalytics() {
         </>
       )}
 
+      {/* -- cadence: a different question from volume --------------------- */}
+      {seen.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
+            How often each one comes back
+          </h3>
+          <p className="cmp-note">
+            First and last seen, ever. A hit count says how much an agent read;
+            this says whether this site is still in its refresh cycle.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {seen.slice(0, 14).map((row) => (
+              <div className="seq-row an-row2" key={row.agent}>
+                <span className="mono an-name">{row.agent}</span>
+                <span className="an-dim an-path">
+                  first seen {ago(row.first)}
+                </span>
+                <span className="mono an-num">{ago(row.last)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* -- the two questions only this site can answer -------------------- */}
+      <div className="an-grid">
+        <div>
+          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
+            Brands looked up
+          </h3>
+          {t.brands.length === 0 ? (
+            <Empty what="No brand page read yet." />
+          ) : (
+            <TwoCol rows={t.brands.slice(0, 12)} />
+          )}
+        </div>
+        <div>
+          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
+            Compared against each other
+          </h3>
+          {t.comparisons.length === 0 ? (
+            <Empty what="No comparison made yet." />
+          ) : (
+            <TwoCol rows={t.comparisons.slice(0, 12)} />
+          )}
+        </div>
+      </div>
+      <p className="cmp-note">
+        Which brands a reader put side by side is revealed intent about who
+        competes with whom, and nobody else publishes it. Pairs are normalised,
+        so Cursor against Copilot and Copilot against Cursor are one row: which
+        side a reader typed first is not a fact about the brands.
+      </p>
+
       {/* -- humans -------------------------------------------------------- */}
       <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Pages people read</h3>
       {t.views.length === 0 ? (
@@ -190,6 +254,34 @@ export async function AdminAnalytics() {
           )}
         </div>
       </div>
+
+      {/* The mirror of agent traffic, and the better half of it. */}
+      {t.fromAssistants.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
+            Arrived from an assistant
+          </h3>
+          <p className="cmp-note">
+            A person asked an assistant something, it answered with this site,
+            and they clicked through. Agent hits say the chart was read; these
+            say it was passed on to somebody.
+          </p>
+          <TwoCol rows={t.fromAssistants.slice(0, 10)} />
+        </>
+      )}
+
+      {t.missing.length > 0 && (
+        <>
+          <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>
+            Asked for, and not here
+          </h3>
+          <p className="cmp-note">
+            Paths that resolved to nothing. From a person this is a typo; from an
+            agent it is what it expected this site to have.
+          </p>
+          <TwoCol rows={t.missing.slice(0, 10)} />
+        </>
+      )}
 
       {/* -- the live feed -------------------------------------------------- */}
       <h3 style={{ marginTop: 26, marginBottom: 8, fontSize: 15 }}>Latest</h3>

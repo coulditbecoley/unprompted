@@ -225,6 +225,31 @@ crawler passed through. A combined "bot traffic" number would destroy both.
 identifier is minted, no address is stored, and a referrer is reduced to a
 hostname server-side.
 
+Beyond page views it counts the things only this site can answer:
+
+- **Which brands get compared against each other.** `/compare` carries both
+  brands in its query string, so the pair is the measurement. Normalised, so
+  Cursor against Copilot and Copilot against Cursor are one row. Revealed intent
+  about who competes with whom, which nobody else publishes.
+- **Which brands get looked up**, rolled up from the per-brand pages.
+- **Who arrived *from* an assistant.** A referrer of `chatgpt.com`,
+  `perplexity.ai` or `claude.ai` means a person asked something, was answered
+  with this site, and clicked through — the mirror of an agent hit, and the
+  better half of it.
+- **How often each agent comes back**, first and last seen. A hit count says how
+  much an agent read; cadence says whether this site is still in its refresh
+  cycle.
+- **Paths that resolved to nothing.** From a person that is a typo; from an
+  agent it is what it expected to find. `/llms.txt` exists because of exactly
+  this signal.
+
+Misses are detected in `proxy.ts` against a list of known prefixes rather than
+in `app/not-found.tsx`, which was the obvious place and the wrong one: Next
+renders the not-found boundary as part of the tree for pages that resolve
+perfectly well, so a 200 filed itself as a 404. Adding a top-level route means
+adding it to `KNOWN` there; the failure is visible rather than silent, because
+the new route starts appearing in "asked for, and not here".
+
 Counters live in Upstash Redis and expire after ninety days, which is right for
 a cache and wrong for a record. `scripts/sync_analytics.py` copies each day into
 the Obsidian vault before it ages out — raw JSON as the source of truth, a

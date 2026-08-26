@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+
 import { Beacon } from "@/components/beacon";
 import "./globals.css";
 import { SiteFooter, SiteHeader } from "@/components/ui";
@@ -79,7 +81,15 @@ the finish review, the verdict, and DESIGN.md
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
-        <Beacon />
+        {/*
+          Suspense because Beacon reads useSearchParams, which Next requires be
+          wrapped or every statically generated page fails to prerender. Beacon
+          renders null, so the boundary costs nothing visible and the pages
+          around it stay static.
+        */}
+        <Suspense fallback={null}>
+          <Beacon />
+        </Suspense>
       </body>
     </html>
   );

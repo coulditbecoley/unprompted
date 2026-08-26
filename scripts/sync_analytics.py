@@ -57,6 +57,21 @@ PURPOSE_WORD = {
 PAIR_SEP = "\x00"
 
 
+# Hosts that are an assistant rather than a website. Mirrors ASSISTANT_HOSTS in
+# lib/analytics.ts; short and stable enough that a shared file would cost more
+# than it saves, unlike the agent registry which is long and changes.
+ASSISTANT_HOSTS = (
+    "chatgpt.com", "chat.openai.com", "openai.com", "perplexity.ai", "claude.ai",
+    "gemini.google.com", "copilot.microsoft.com", "bing.com", "you.com",
+    "phind.com", "poe.com", "duckduckgo.com", "mistral.ai", "chat.mistral.ai",
+    "grok.com", "x.ai",
+)
+
+
+def is_assistant(host: str) -> bool:
+    return any(host == h or host.endswith(f".{h}") for h in ASSISTANT_HOSTS)
+
+
 def registry() -> dict[str, dict[str, str]]:
     """Agent metadata, from the same file the site classifies requests with."""
     data = json.loads((REPO / "agents.json").read_text(encoding="utf-8"))
@@ -176,9 +191,24 @@ def day_note(day: str, counters: dict[str, int], meta: dict[str, dict[str, str]]
 
     pairs = {k.replace(PAIR_SEP, " → "): v for k, v in split(counters, "gp").items()}
     lines += ["## What the agents read", ""] + table(pairs, ("Agent → page", "Hits"))
+    lines += ["## Brands looked up", ""] + table(split(counters, "b"), ("Brand", "Views"))
+    lines += ["## Compared against each other", ""] + table(
+        split(counters, "m"), ("Pair", "Times")
+    )
     lines += ["## Pages people read", ""] + table(split(counters, "v"), ("Page", "Views"))
     lines += ["## Clicks", ""] + table(split(counters, "c"), ("Element", "Clicks"))
-    lines += ["## Came from", ""] + table(split(counters, "r"), ("Referrer", "Visits"))
+
+    referrers = split(counters, "r")
+    assistants = {k: v for k, v in referrers.items() if is_assistant(k)}
+    if assistants:
+        lines += ["## Arrived from an assistant", ""] + table(
+            assistants, ("Assistant", "Visits")
+        )
+    lines += ["## Came from", ""] + table(referrers, ("Referrer", "Visits"))
+
+    missing = split(counters, "x")
+    if missing:
+        lines += ["## Asked for, and not here", ""] + table(missing, ("Path", "Times"))
 
     lines += [
         "---",
@@ -249,6 +279,10 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     else:
         lines += ["_Nothing archived yet._", ""]
 
+    lines += ["## Brands looked up, all time", ""] + table(of("b"), ("Brand", "Views"))
+    lines += ["## Compared against each other, all time", ""] + table(
+        of("m"), ("Pair", "Times")
+    )
     lines += ["## Pages, all time", ""] + table(of("v"), ("Page", "Views"))
     lines += ["## Days", ""]
     for path in reversed(files):

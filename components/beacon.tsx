@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 /**
@@ -53,6 +53,15 @@ function labelFor(target: HTMLElement): string | null {
   const sort = target.closest<HTMLElement>(".seq-sort");
   if (sort) return `sort:${(sort.textContent ?? "").trim().slice(0, 20)}`;
 
+  // Share and copy. DESIGN.md says the growth engine is somebody screenshotting
+  // a number into an argument, and this was the one control on the site that
+  // measured it -- a <button>, so the anchor branch below never saw it.
+  const share = target.closest<HTMLElement>(".share-btn");
+  if (share) {
+    const text = (share.textContent ?? "").trim().toLowerCase();
+    return text.includes("copy") ? "share:copy" : "share:x";
+  }
+
   const link = target.closest<HTMLAnchorElement>("a[href]");
   if (!link) return null;
 
@@ -74,12 +83,24 @@ function labelFor(target: HTMLElement): string | null {
   return null;
 }
 
+/**
+ * Pages whose whole state lives in the query string.
+ *
+ * /compare puts both brands in the URL, so dropping the query collapsed every
+ * comparison anyone has ever made into a single meaningless count of /compare.
+ * Sent only for the routes where it means something: a query is otherwise a
+ * good way to accidentally store what somebody typed.
+ */
+const QUERY_ROUTES = ["/compare", "/consensus"];
+
 export function Beacon() {
   const pathname = usePathname();
+  const params = useSearchParams();
 
   useEffect(() => {
-    send({ path: pathname, referrer: document.referrer || null });
-  }, [pathname]);
+    const query = QUERY_ROUTES.includes(pathname) ? params.toString() : null;
+    send({ path: pathname, query, referrer: document.referrer || null });
+  }, [pathname, params]);
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
