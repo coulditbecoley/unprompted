@@ -1,0 +1,54 @@
+name: Did Monday happen
+
+# The one alarm that does not share a failure domain with the thing it watches.
+#
+# Every other notification in this repo runs inside the weekly job on the
+# operator's machine, so every one of them is silent in the case that matters
+# most: the job never started, or died before it could speak. On 2026-08-24 the
+# scheduled task was terminated mid-run, data/last-run.json still read "no run
+# has reported yet" two days later, and the site went on showing the previous
+# Monday's date -- which is what it shows on a healthy week. Nothing said a word.
+#
+# GitHub's cron does not care whether that machine is awake, plugged in, or
+# switched on at all. That independence is the whole point.
+#
+# One caveat worth knowing: GitHub disables scheduled workflows on a repository
+# with no activity for 60 days. This publication commits every Monday, so that
+# is not a live risk -- but a long quiet spell would disable the very thing that
+# notices quiet spells, and it is re-enabled from the Actions tab.
+
+on:
+  schedule:
+    # Tuesday 09:00 UTC — Monday 05:00 New York, roughly sixteen hours after the
+    # run is due. Deliberately not Monday night: a check that runs close to the
+    # deadline reports a slow week as a dead one, and an alarm that cries wolf
+    # gets muted, which costs more than the delay does.
+    - cron: "0 9 * * 2"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Pretend today is this date (YYYY-MM-DD), for testing"
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Is this week's run in the archive?
+        env:
+          # The token the `gh` CLI uses to open the issue. Nothing else here
+          # needs a secret: the check reads the repository it just checked out.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/watchdog.py --issue \
+            ${{ inputs.date && format('--date {0}', inputs.date) || '' }}

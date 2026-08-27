@@ -28,6 +28,13 @@ record stamps the version it ran under.
 The order of steps 5 and 6 is the point. The checks decide where a run lands,
 not merely whether someone is told about it.
 
+Every one of those checks runs inside the weekly job, which makes all of them
+silent in the one case that matters most: the job never started. A separate
+check runs on GitHub each Tuesday and asks only whether this week's run is in
+the archive. It is deliberately somewhere else — a watchdog sharing a failure
+domain with the thing it watches is decoration — and it reads the archive
+rather than any status file the run had to survive long enough to write.
+
 One honest caveat about step 3: answers are held in memory until the run is
 complete, so a machine that loses power mid-run loses that run's answers rather
 than writing a partial week. Nothing incomplete is ever published, but nothing

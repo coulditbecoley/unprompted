@@ -2016,3 +2016,109 @@ def test_errored_and_refused_calls_are_not_counted_against_grounding():
     reasons = _reasons(run, {"gemini"})
     assert not any("cited sources" in r for r in reasons)
     assert any("failed 15 of its own 20" in r for r in reasons)
+
+
+# --- the watchdog -----------------------------------------------------------
+#
+# Every other alarm here runs inside the weekly job, so every one is silent when
+# the job never started. On 2026-08-24 the task was terminated mid-run and
+# nothing anywhere said so. This is the check that runs somewhere else.
+
+def _watchdog(monkeypatch, tmp_path, categories, runs=(), held=()):
+    import importlib
+
+    wd = importlib.import_module("scripts.watchdog") if "scripts" in sys.modules else None
+    if wd is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import scripts.watchdog as wd  # noqa: PLC0415
+
+    q = tmp_path / "questions"
+    q.mkdir()
+    for c in categories:
+        (q / f"{c}.yml").write_text("questions: []", encoding="utf-8")
+
+    for base, entries in (("runs", runs), ("held", held)):
+        for day, category in entries:
+            d = tmp_path / "data" / base / day
+            d.mkdir(parents=True, exist_ok=True)
+            (d / f"{category}.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(wd, "QUESTIONS", q)
+    monkeypatch.setattr(wd, "RUNS", tmp_path / "data" / "runs")
+    monkeypatch.setattr(wd, "HELD", tmp_path / "data" / "held")
+    monkeypatch.setattr(wd, "STATUS_FILE", tmp_path / "last-run.json")
+    return wd
+
+
+def test_watchdog_is_quiet_when_the_week_is_in_the_archive(monkeypatch, tmp_path):
+    wd = _watchdog(
+        monkeypatch, tmp_path, ["alpha", "beta"],
+        runs=[("2026-08-24", "alpha"), ("2026-08-24", "beta")],
+    )
+    produced, missing, _ = wd.week_status(date(2026, 8, 24))
+    assert missing == []
+    assert produced == ["alpha", "beta"]
+
+
+def test_watchdog_counts_a_held_run_as_having_happened(monkeypatch, tmp_path):
+    """Held is the checks working, and it reports itself. This watches silence."""
+    wd = _watchdog(
+        monkeypatch, tmp_path, ["alpha"], held=[("2026-08-24", "alpha")]
+    )
+    _, missing, _ = wd.week_status(date(2026, 8, 24))
+    assert missing == []
+
+
+def test_watchdog_notices_a_category_that_went_silent(monkeypatch, tmp_path):
+    """The real 2026-08-24: two categories produced, ai-writing-tools silent.
+
+    gamma ran the week before, so its absence is a missed week rather than a
+    category that has not started -- which is the whole distinction.
+    """
+    wd = _watchdog(
+        monkeypatch, tmp_path, ["alpha", "beta", "gamma"],
+        runs=[("2026-08-24", "alpha"), ("2026-08-17", "gamma")],
+        held=[("2026-08-24", "beta")],
+    )
+    produced, missing, unstarted = wd.week_status(date(2026, 8, 24))
+    assert missing == ["gamma"]
+    assert produced == ["alpha", "beta"]
+    assert unstarted == []
+
+
+def test_watchdog_watches_every_category_in_the_question_bank(monkeypatch, tmp_path):
+    """A category added to questions/ is watched without editing the watchdog."""
+    wd = _watchdog(monkeypatch, tmp_path, ["alpha", "zeta"])
+    assert wd.live_categories() == ["alpha", "zeta"]
+
+
+def test_watchdog_looks_back_to_the_monday_that_should_have_run(monkeypatch, tmp_path):
+    wd = _watchdog(monkeypatch, tmp_path, ["alpha"])
+
+    # Mid-week looks back at this week's Monday.
+    assert wd.most_recent_monday(date(2026, 8, 26)) == date(2026, 8, 24)
+    assert wd.most_recent_monday(date(2026, 8, 30)) == date(2026, 8, 24)
+
+    # On a Monday, before the run is due, the week in question is the last one:
+    # a run in progress is not a missing run.
+    monday = date(2026, 8, 31)
+    assert wd.most_recent_monday(monday) in {date(2026, 8, 24), monday}
+
+
+def test_watchdog_does_not_alarm_about_a_category_that_never_started(
+    monkeypatch, tmp_path
+):
+    """A category added to the bank on a Tuesday has not missed a Monday.
+
+    Firing here would mean an alarm on the day of an ordinary edit, and an
+    alarm that cries wolf gets muted -- which costs more than the week it was
+    raised about.
+    """
+    wd = _watchdog(
+        monkeypatch, tmp_path, ["alpha", "brand-new"],
+        runs=[("2026-08-17", "alpha")],
+    )
+    produced, missing, unstarted = wd.week_status(date(2026, 8, 24))
+
+    assert missing == ["alpha"], "alpha has run before, so its silence is real"
+    assert unstarted == ["brand-new"], "never measured is not the same as missed"
