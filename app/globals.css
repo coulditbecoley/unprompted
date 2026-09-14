@@ -422,8 +422,8 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
 .sp-gap[data-sign="down"] { color: var(--down); }
 .sp-gap[data-sign="flat"] { color: var(--fg-3); }
 @media (max-width: 560px) {
-  .sp-row { grid-template-columns: 1fr auto auto; gap: 10px; padding: 12px; }
-  .sp-row .sp-rival { display: none; }
+  .sp-row { grid-template-columns: 1fr 1fr 60px; gap: 10px; padding: 12px; }
+  .sp-row .sp-brand { grid-column: 1 / -1; }
 }
 
 /* --- sparkline ----------------------------------------------------------- */

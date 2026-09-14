@@ -1,5 +1,19 @@
 # Upgrade loop
 
+## Cycle 27: retain the rival baseline on phones
+
+A browser check of the deployed dated coding chart at 390 by 844 showed that
+the mobile self-preference rows hide rival rates while retaining the gap. The
+560px CSS breakpoint now places the product label above three numeric columns,
+keeping own rate, rival rate and gap available together. Desktop layout stays
+unchanged. The temporary browser viewport was reset after inspection.
+
+Verification: the 84-page production build passed, and the built stylesheet
+contains the mobile label span with no rival-hiding rule. The design hook found
+no deterministic issues; no suppression was added. The corrected layout has not
+yet been rendered in a browser because it remains local. This closes a concrete
+information-loss defect, not full mobile acceptance.
+
 ## Cycle 26: preserve mixed category outcomes in weekly status
 
 The scheduled pipeline now writes a local summary after completing its category
