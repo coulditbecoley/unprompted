@@ -9,6 +9,7 @@ import type { Category, Sector } from "@/lib/categories";
 import { loadProviders } from "@/lib/providers";
 import {
   answeredPerQuestion,
+  comparisonReason,
   latestRun,
   loadAffiliations,
   loadHistory,
@@ -74,20 +75,18 @@ export function ChartBoard({
 
   const board = standings(run);
   const older = loadHistory(category.slug).filter(r => (r.measured_on || r.run_date) < (run.measured_on || run.run_date)).at(-1);
-  const prev = older ? standings(older) : [];
-  const moves = movement(board, prev);
+  const comparisonNote = comparisonReason(run, older);
+  const baselineDate = older?.measured_on || older?.run_date;
+  const moves = older && comparisonNote === null ? movement(board, standings(older)) : [];
   const moveFor = new Map(moves.map((m) => [m.brand, m]));
   const snub = theSnub(moves);
   const sources = sourceCounts(run).slice(0, 10);
   const leader = board[0];
-  const frozenAffiliations = run.methodology?.aliases?.affiliations;
-  const preference = selfPreference(run, frozenAffiliations
-    ? Object.fromEntries(Object.entries(frozenAffiliations).map(([brand, owners]) => [brand, typeof owners === "string" ? [owners] : owners]))
-    : loadAffiliations(category.slug));
+  const preference = selfPreference(run, loadAffiliations(category.slug, run));
 
   // Read once. Called inside the map below, this re-read and re-parsed the
   // whole question file for every question on the board.
-  const text = run.methodology?.questions ? Object.fromEntries(run.methodology.questions.questions.map(q => [q.id, q.text])) : loadQuestionText(category.slug);
+  const text = loadQuestionText(category.slug, run);
   const questionText = questionOrder(run).map((id) => text[id] ?? id);
 
   return (
@@ -112,7 +111,7 @@ export function ChartBoard({
 
       {/* This sentence has to match what the board actually draws. */}
       <p className="section-lead">
-        Week of {run.run_date}. One step per question, {run.runs_per_question} runs
+        Measured on {run.measured_on || run.run_date}. One step per question, {run.runs_per_question} runs
         each across {run.engines.length} engine
         {run.engines.length === 1 ? "" : "s"}. A taller step means the brand was
         named more often for that question.
@@ -151,6 +150,8 @@ export function ChartBoard({
         runsPerQuestion={run.runs_per_question}
       />
       <Freshness runDate={run.measured_on || run.run_date} />
+      {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
+      <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
       <p><Link href={`/chart/${category.slug}/${run.run_date}`}>Permanent link to this result</Link> · <Link href={`/questions?c=${category.slug}&date=${run.run_date}`}>Read the supporting answers</Link></p>
       <details><summary>Published readings</summary><ul>{history.map(r => <li key={r.run_date}><Link href={`/chart/${category.slug}/${r.run_date}`}>{r.run_date}{r.source_run ? " (reprocessed)" : ""}</Link></li>)}</ul></details>
 
@@ -183,8 +184,8 @@ export function ChartBoard({
           <h3>{snub.brand}</h3>
           <p>
             {snub.isDropout
-              ? "Named last week. Not named once this week."
-              : `Down ${Math.abs(snub.rotationDelta)} points week over week.`}
+              ? `Named on ${baselineDate}. Not named in this measurement.`
+              : `Down ${Math.abs(snub.rotationDelta)} points since ${baselineDate}.`}
           </p>
         </div>
       )}

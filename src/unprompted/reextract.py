@@ -19,8 +19,10 @@ import json
 import sys
 from datetime import date
 
+import yaml
+
 from .aggregate import brand_week, load_history
-from .checks import run_checks
+from .checks import population_reasons, run_checks
 from .budget import check as check_budget
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .engines import all_engines
@@ -42,7 +44,7 @@ def _main() -> int:
     parser.add_argument("--category", required=True)
     parser.add_argument(
         "--out-date",
-        help="date to write the re-extracted run under (default: today)",
+        help="unused YYYY-MM-DD after the source reading, not in the future (default: today)",
     )
     parser.add_argument(
         "--in-place",
@@ -55,27 +57,52 @@ def _main() -> int:
         raise SystemExit("In-place recovery would erase earlier usage. Use --out-date to create a new reading; the source is preserved.")
 
     load_local_env()
-    date.fromisoformat(args.date)
+    source_date = date.fromisoformat(args.date)
     if args.category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
         raise SystemExit("unknown category")
     out_date = args.out_date or date.today().isoformat()
-    date.fromisoformat(out_date)
+    reading_date = date.fromisoformat(out_date)
+    if source_date.isoformat() != args.date or reading_date.isoformat() != out_date:
+        raise SystemExit("source and output dates must use YYYY-MM-DD")
+    if reading_date <= source_date or reading_date > date.today():
+        raise SystemExit("a rereading date must be after its source reading and cannot be in the future")
     for bucket in ("runs", "held"):
         target = ROOT / "data" / bucket / out_date / f"{args.category}.json"
         if target.exists():
             raise SystemExit(f"refusing existing destination before extraction: {target}")
 
     path = ROOT / "data" / "runs" / args.date / f"{args.category}.json"
+    held = ROOT / "data" / "held" / args.date / f"{args.category}.json"
+    if path.exists() and held.exists():
+        raise SystemExit(f"ambiguous source: both {path} and {held} exist; preserve both for review")
     if not path.exists():
         # A held run is a re-extraction's most common subject: it was held
         # *because* something needed re-reading.
-        held = ROOT / "data" / "held" / args.date / f"{args.category}.json"
         if not held.exists():
             raise SystemExit(f"no run at {path} or {held}")
         path = held
     record = json.loads(path.read_text(encoding="utf-8"))
     if record.get("category") != args.category or record.get("run_date") != args.date:
         raise SystemExit("source record identity does not match its path")
+    structural_failures = population_reasons(record)
+    if structural_failures:
+        raise SystemExit("Cannot recover an incomplete source by rereading: " + "; ".join(structural_failures))
+
+    # Freeze and validate the actual alias policy before extraction can cost
+    # anything. An operator edit during a batch must not change this reading.
+    alias_data = yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8")) or {}
+    aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
+    spec = record.get("methodology", {}).get("questions") or yaml.safe_load(
+        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
+    )
+    reading_commit = git_sha()
+    # Legacy readings lack the original grounding declaration. Retain the
+    # existing current-policy fallback, but resolve it before any paid work.
+    recorded_engines = record.get("methodology", {}).get("engines")
+    grounding_engines = ({name for name, settings in recorded_engines.items() if settings.get("grounds")}
+                        if recorded_engines else
+                        {name for name, engine in all_engines().items() if engine.grounds})
+    max_brands = int(spec.get("max_brands", 15))
 
     answers = [
         EngineAnswer(
@@ -87,6 +114,7 @@ def _main() -> int:
             sources=e.get("sources", []),
             source_kind=e.get("source_kind", "unspecified"),
             fetched_at=e.get("fetched_at", ""),
+            measurement_git_sha=e.get("measurement_git_sha"),
             # A stored extraction failure is ours, not the engine's, so clear it
             # and retry. A genuine engine failure stays a failure: there is no
             # answer text to re-parse. Note that .get("error", "") is not enough,
@@ -115,7 +143,7 @@ def _main() -> int:
     except ProviderError as exc:
         raise SystemExit(str(exc)) from exc
     hosted = isinstance(extractor, ApiExtractor)
-    verdict = check_budget(args.category, len(answers))
+    verdict = check_budget(args.category, sum(not a.error for a in answers), extraction_only=True)
     if not verdict.ok:
         raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
     print(
@@ -132,14 +160,12 @@ def _main() -> int:
     )
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
-    aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
-    import yaml
     methodology = {**record.get("methodology", {}),
                    "extraction_prompt": EXTRACT_PROMPT,
                    "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
-                   "aliases": yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8"))}
+                   "aliases": alias_data}
 
     fresh = RunRecord(
         category=record["category"],
@@ -155,7 +181,7 @@ def _main() -> int:
         # re-reading against a real week.
         measured_on=record.get("measured_on") or record["run_date"],
         source_run=f"{record['run_date']}/{record['category']}",
-        git_sha=git_sha(),
+        git_sha=reading_commit,
         methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,
@@ -167,24 +193,17 @@ def _main() -> int:
         if (h.get("measured_on") or h["run_date"]) < (record.get("measured_on") or record["run_date"])
     ]
     this_week = brand_week(fresh.to_dict())
-    import yaml as _yaml
-
-    spec = record.get("methodology", {}).get("questions") or _yaml.safe_load(
-        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
-    )
     result = run_checks(
         fresh.to_dict(),
         this_week,
         brand_week(history[-1]) if history else [],
-        max_brands=int(spec.get("max_brands", 15)),
+        max_brands=max_brands,
         previous=history[-1] if history else None,
         # Re-extraction re-reads stored answers and never re-queries an engine,
         # so the sources in the record are the ones the engine gave on the day.
-        # The grounding rule applies exactly as it did then, and reading the
-        # flag off the live engines keeps one definition of who searches.
-        grounding_engines=({name for name, settings in record["methodology"]["engines"].items() if settings.get("grounds")}
-                           if record.get("methodology", {}).get("engines") else
-                           {name for name, e in all_engines().items() if e.grounds}),
+        # Use the recorded declaration where available, otherwise the legacy
+        # fallback captured before extraction. That fallback is not historical proof.
+        grounding_engines=grounding_engines,
     )
 
     # Same gate as a live run: a re-extraction that still fails its checks is

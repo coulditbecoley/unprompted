@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 
 from .aggregate import brand_week, load_history
+from . import budget
 from .checks import run_checks
 from .budget import check as check_budget
 from .cost import cost_of_run, format_report
@@ -132,7 +133,8 @@ def _run_category(
 ) -> tuple[RunRecord, list[str]]:
     """Execute one full run. Returns the record and any hold reasons."""
     spec = load_questions(category)
-    date.fromisoformat(run_date)
+    if date.fromisoformat(run_date).isoformat() != run_date:
+        raise ValueError("run date must use YYYY-MM-DD")
     for bucket in ("runs", "held"):
         target = ROOT / "data" / bucket / run_date / f"{category}.json"
         if target.exists():
@@ -212,6 +214,9 @@ def _run_category(
         "extraction_prompt": EXTRACT_PROMPT,
         "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
     }
+    alias_data = methodology["aliases"] or {}
+    aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
+    measurement_commit = git_sha()
     prior = load_history(ROOT / "data" / "runs", category)
     if prior and prior[-1].get("method_version") == spec["method_version"]:
         before = prior[-1].get("methodology", {})
@@ -234,8 +239,11 @@ def _run_category(
             answers.append(answer)
         else:
             pending.append((engine, qid, text, run_index))
+    if answers:
+        print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):
         answer = engine.ask_one(qid, text, run_index)
+        answer.measurement_git_sha = measurement_commit
         write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
         return answer
 
@@ -244,9 +252,10 @@ def _run_category(
             pool.submit(ask_and_save, engine, qid, text, run_index): engine.name
             for engine, qid, text, run_index in pending
         }
-        for done, future in enumerate(as_completed(futures), start=1):
+        for future in as_completed(futures):
             answer = future.result()
             answers.append(answer)
+            done = len(answers)
             if done % 10 == 0 or done == len(tasks):
                 failed = sum(1 for a in answers if a.error)
                 print(
@@ -276,7 +285,6 @@ def _run_category(
     # run file stays stable and diffable.
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
 
-    aliases = AliasMap.load(ROOT / "aliases" / f"{category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
     record = RunRecord(
@@ -290,7 +298,7 @@ def _run_category(
         extractor=extractor.id,
         extractor_model=extractor.model if hosted else "",
         measured_on=run_date,
-        git_sha=git_sha(),
+        git_sha=measurement_commit,
         methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,
@@ -387,6 +395,60 @@ def all_categories() -> list[str]:
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
 
 
+def preflight(categories: list[str], run_date: str) -> dict:
+    """Read-only configuration and aggregate budget inspection, not a paid dry run."""
+    if date.fromisoformat(run_date).isoformat() != run_date:
+        raise ValueError("run date must be YYYY-MM-DD")
+    issues, rows = [], []
+    try:
+        engines = all_engines()
+    except (ProviderError, OSError, ValueError) as exc:
+        issues.append(f"engine configuration cannot be read: {exc}")
+        engines = {}
+    if not engines:
+        issues.append("no engines are declared")
+    availability = {name: engine.is_configured for name, engine in engines.items()}
+    issues.extend(f"{name}: {engines[name].unavailable_reason}" for name, ready in availability.items() if not ready)
+    extractor_id = None
+    try:
+        extractor_id = resolve_extractor().id
+    except ProviderError as exc:
+        issues.append(str(exc))
+    for category in categories:
+        try:
+            spec = load_questions(category)
+            AliasMap.load(ROOT / "aliases" / f"{category}.yml")
+            for bucket in ("runs", "held"):
+                if (ROOT / "data" / bucket / run_date / f"{category}.json").exists():
+                    issues.append(f"{category}: already recorded in data/{bucket}/{run_date}")
+            rows.append({"category": category, "answers": len(spec["questions"]) * spec["runs_per_question"] * len(engines)})
+        except (OSError, ValueError, KeyError, yaml.YAMLError) as exc:
+            issues.append(f"{category}: {exc}")
+    projection = None
+    try:
+        archived = budget._archived_runs()
+        spent = budget.spent_in_month(date.today(), archived)
+        for row in rows:
+            estimate = budget.estimate_category(row["category"], row["answers"], archived)
+            row.update(estimated_dollars=estimate.dollars, estimate_basis=estimate.basis,
+                       historical_cost_basis=estimate.confident)
+        if len(rows) == len(categories) and engines:
+            additional = round(sum(row["estimated_dollars"] for row in rows), 2)
+            projected = round(spent + additional, 4)
+            within = budget.MONTHLY_CEILING <= 0 or projected <= budget.MONTHLY_CEILING
+            projection = {"month": date.today().strftime("%Y-%m"), "recorded_dollars": spent,
+                          "estimated_additional_dollars": additional, "projected_dollars": projected,
+                          "ceiling_dollars": budget.MONTHLY_CEILING, "within_ceiling": within}
+            if not within:
+                issues.append("combined category estimate exceeds the monthly ceiling; a later category may refuse after earlier spend")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        issues.append(f"budget cannot be calculated: {exc}")
+    return {"status": "issues_found" if issues else "checks_passed", "run_date": run_date,
+            "scope": "Local configuration, destination and estimated budget checks only. No provider calls, credential authentication, checkpoint compatibility, Git synchronization or publication acceptance is tested.",
+            "engines_configured": availability, "extractor": extractor_id,
+            "categories": rows, "budget": projection, "issues": issues}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one week of Unprompted.")
     parser.add_argument(
@@ -396,12 +458,15 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
+    parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
         help="run even if the month's ceiling in data/rates.json would be passed",
     )
     args = parser.parse_args()
+    if args.preflight and (args.dry_run or args.ignore_budget):
+        parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
     load_local_env()
 
@@ -409,6 +474,10 @@ def main() -> int:
     if not categories:
         print("no categories to run", file=sys.stderr)
         return 1
+    if args.preflight:
+        result = preflight(categories, args.date)
+        print(json.dumps(result, indent=2))
+        return 2 if result["issues"] else 0
 
     held: dict[str, list[str]] = {}
     total = 0.0

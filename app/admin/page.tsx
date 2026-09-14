@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
@@ -10,7 +11,6 @@ import {
   answered,
   costOfRun,
   engineHealth,
-  latestRun,
   loadAllRuns,
   loadHeld,
   loadHistory,
@@ -54,11 +54,26 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const aliasesRaw = fs.readFileSync(aliasesPath, "utf-8");
   const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number };
 
-  const history = loadHistory(category);
-  const run = latestRun(category);
+  const perCategory = CATEGORIES.map((c) => {
+    let history: ReturnType<typeof loadHistory> = [];
+    let error: string | null = null;
+    try { history = loadHistory(c.slug); }
+    catch (failure) { error = failure instanceof Error ? failure.message : "Archive is unreadable"; }
+    const latest = history.at(-1);
+    return {
+      slug: c.slug, label: c.label, history, error,
+      date: latest?.run_date ?? null,
+      methodVersion: latest?.method_version ?? null,
+      extractor: latest?.extractor ?? null,
+      engines: latest?.engines ?? [],
+    };
+  });
+  const selectedArchive = perCategory.find(c => c.slug === category)!;
+  const history = selectedArchive.history;
+  const run = history.at(-1);
   const board = run ? standings(run) : [];
 
-  const quarantine = loadQuarantine();
+  const { entries: quarantine, errors: quarantineErrors } = loadQuarantine();
 
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
@@ -78,20 +93,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // dashboard should say so rather than leaving it to be inferred.
   const localEngines = engines.filter(({ p }) => p.kind === "cli");
   const held = loadHeld();
-
-  // Every category, not just the flagship: a held or stale category is exactly
-  // what an operator needs to notice, and it would be invisible here otherwise.
-  const perCategory = CATEGORIES.map((c) => {
-    const latest = latestRun(c.slug);
-    return {
-      slug: c.slug,
-      label: c.label,
-      date: latest?.run_date ?? null,
-      methodVersion: latest?.method_version ?? null,
-      extractor: latest?.extractor ?? null,
-      engines: latest?.engines ?? [],
-    };
-  });
 
   // Read here rather than inside the masthead so the whole page makes one pass
   // over the store instead of two.
@@ -205,7 +206,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             : lastRun?.status === "failed"
               ? "failed"
               : "none yet",
-      note: run ? run.run_date : "no data",
+      note: selectedArchive.error ? "archive unavailable" : run ? run.run_date : "no data",
       attention: lastRun?.status === "failed" || lastRun?.status === "held",
     },
     nextRunTile(),
@@ -237,7 +238,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       label: "Weeks recorded",
-      value: String(history.length),
+      value: selectedArchive.error ? "unavailable" : String(history.length),
       note: `method v${spec.method_version}`,
     },
     {
@@ -262,15 +263,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       label: "Held last run",
-      value: String(materialQuarantine),
+      value: quarantineErrors.length ? "incomplete" : String(materialQuarantine),
       note:
-        materialQuarantine === 0
+        quarantineErrors.length ? "review unreadable quarantine evidence" : materialQuarantine === 0
           ? "nothing material"
           : `of ${quarantine.length} names, at the map of that day`,
       // Not marked. These are a record of the last run, not a queue: alias
       // edits since then already cover most of them and the count only moves
       // when the next Monday is measured.
-      attention: false,
+      attention: quarantineErrors.length > 0,
     },
   ];
 
@@ -300,9 +301,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h3 style={{ marginTop: 6 }}>State</h3>
           <div className="cmp-stat"><span>Method version</span><span>v{spec.method_version}</span></div>
           <div className="cmp-stat"><span>Runs per question</span><span>{spec.runs_per_question}</span></div>
-          <div className="cmp-stat"><span>Weeks recorded</span><span>{history.length}</span></div>
-          <div className="cmp-stat"><span>Latest run</span><span>{run?.run_date ?? "none"}</span></div>
-          <div className="cmp-stat"><span>Brands charted</span><span>{board.length}</span></div>
+          <div className="cmp-stat"><span>Weeks recorded</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
+          <div className="cmp-stat"><span>Latest run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
+          <div className="cmp-stat"><span>Brands charted</span><span>{selectedArchive.error ? "unavailable" : board.length}</span></div>
+          {selectedArchive.error && <p>Published readings are unavailable. Review the archive errors below.</p>}
         </div>
 
         <div className="cmp-pick">
@@ -366,9 +368,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <div className="cmp-pick">
           <TrimTop />
           <h3 style={{ marginTop: 6 }}>Quarantine</h3>
+          {quarantineErrors.length > 0 && <div><p>Quarantine review is incomplete. These sources could not be assessed:</p><ul>{quarantineErrors.map(error => <li key={error}>{error}</li>)}</ul></div>}
           {quarantine.length === 0 ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              Empty. Nothing is waiting on you.
+              {quarantineErrors.length ? "No names are available from the readable records." : "No unresolved names in the latest archived readings."}
             </p>
           ) : (
             <>
@@ -380,7 +383,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 the next run is measured.
               */}
               <div className="cmp-stat">
-                <span>Material at the last run</span>
+                <span>{quarantineErrors.length ? "Material in readable records" : "Material at the last run"}</span>
                 <span>{materialQuarantine}</span>
               </div>
               <div className="cmp-stat">
@@ -388,9 +391,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span style={{ color: "var(--fg-3)" }}>{quarantine.length}</span>
               </div>
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
-                Latest run of each category, most frequent first. A name seen
-                often is a brand the alias map is missing. A name seen once is
-                usually a hallucination and should stay out.
+                Latest readable record of each category, most frequent first.
+                Unresolved names need contextual review; frequency does not establish product identity.
               </p>
 
               {/* Only the names worth acting on are visible. The tail is real
@@ -460,34 +462,40 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="seq-brand" style={{ gap: 3 }}>
                 {c.label}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {c.date
+                  {c.error ? c.error : c.date
                     ? `${c.date} · method v${c.methodVersion} · read by ${c.extractor ?? "api"} · ${c.engines.length} engines`
                     : "no published run yet"}
                 </small>
               </span>
               <span className="mono" style={{ fontSize: 11, color: c.date ? "var(--fg-2)" : "var(--fg-3)" }}>
-                {c.date ? "PUBLISHED" : "NONE"}
+                {c.error ? "UNAVAILABLE" : c.date ? "PUBLISHED" : "NONE"}
               </span>
             </div>
           ))}
 
-          {held.map((h) => (
+          {held.runs.map((h) => (
             <div className="seq-row" key={`${h.date}-${h.category}`} style={{ gridTemplateColumns: "1fr auto" }}>
               <span className="seq-brand" style={{ gap: 3 }}>
                 {h.category}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {h.date} · held, {Math.round(h.errorRate * 100)}% of calls errored ·
+                  {h.date} · held, {h.errorRate === null ? "call error rate unavailable" : `${Math.round(h.errorRate * 100)}% of calls errored`} ·
                   kept in data/held, never published
                 </small>
                 <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
                   {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
                 </small>
+                <small><a href={`https://github.com/coulditbecoley/unprompted/blob/main/data/held/${h.date}/${h.category}.json`}>Read this held reading’s answers and metadata on GitHub</a></small>
+                {h.recoveredOn && <small><Link href={`/chart/${h.category}/${h.recoveredOn}`}>View published rereading from {h.recoveredOn}</Link></small>}
               </span>
-              <span className="mono seq-delta is-down" style={{ fontSize: 11 }}>
-                HELD
+              <span className={`mono seq-delta${h.recoveredOn ? "" : " is-down"}`} style={{ fontSize: 11 }}>
+                {h.recoveredOn ? "REREAD PUBLISHED" : "HELD"}
               </span>
             </div>
           ))}
+          {held.errors.length > 0 && <div>
+            <p>Some held or published recovery records could not be read. Review these files before treating this list as complete:</p>
+            <ul>{held.errors.map(error => <li key={error}>{error}</li>)}</ul>
+          </div>}
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 10 }}>
           A held run is the checks working, not a crash. Its answers are kept, so
@@ -582,7 +590,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h3 style={{ marginTop: 6 }}>Engine health</h3>
 
           {health.length === 0 ? (
-            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>No run to read.</p>
+            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>{archiveErrors.length ? "Archive health is unavailable. Review the archive errors above." : "No run to read."}</p>
           ) : (
             <>
               {health.map((h) => (

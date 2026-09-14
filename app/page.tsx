@@ -7,6 +7,7 @@ import {
   answeredPerQuestion,
   CATEGORY,
   categoryLabel,
+  comparisonReason,
   REPO_ROOT,
   latestRun,
   loadHistory,
@@ -40,15 +41,17 @@ export default function Home() {
   const questions = run?.methodology?.questions?.questions ?? spec.questions;
 
   const board = run ? standings(run) : [];
-  const prev = history.length > 1 ? standings(history[history.length - 2]) : [];
-  const moves = board.length ? movement(board, prev) : [];
+  const older = history.at(-2);
+  const comparisonNote = run ? comparisonReason(run, older) : null;
+  const baselineDate = older?.measured_on || older?.run_date;
+  const moves = older && comparisonNote === null ? movement(board, standings(older)) : [];
   const moveFor = new Map(moves.map((m) => [m.brand, m]));
   const snub = theSnub(moves);
   const leader = board[0];
 
   // The board's steps are indexed by question order, so the text has to be put
   // in the same order to be able to name the column a reader is pointing at.
-  const text = run?.methodology?.questions ? Object.fromEntries(questions.map(q => [q.id, q.text])) : loadQuestionText(CATEGORY);
+  const text = loadQuestionText(CATEGORY, run);
   const questionsInBoardOrder = run
     ? questionOrder(run).map((id) => text[id] ?? id)
     : [];
@@ -122,6 +125,8 @@ export default function Home() {
               runsPerQuestion={run.runs_per_question}
             />
             <Freshness runDate={measured!} />
+            {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
+            <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
             <LiveBoard
               questions={questionsInBoardOrder}
               denominators={answeredPerQuestion(run)}
@@ -150,8 +155,8 @@ export default function Home() {
                 <h3>{snub.brand}</h3>
                 <p>
                   {snub.isDropout
-                    ? "Named last week. Not named once this week."
-                    : `Down ${Math.abs(snub.rotationDelta)} points week over week.`}
+                    ? `Named on ${baselineDate}. Not named in this measurement.`
+                    : `Down ${Math.abs(snub.rotationDelta)} points since ${baselineDate}.`}
                 </p>
               </div>
             )}

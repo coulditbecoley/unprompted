@@ -16,7 +16,8 @@ categories remain on their question-bank versions. Historical runs retain their
 recorded versions; this revision does not rewrite or recover them.
 
 Unprompted measures which brands AI assistants name when people ask real buying
-questions, and publishes the result every week. This document is the method. It
+questions, and attempts a measurement every week. Results publish only after
+their checks pass. This document is the method. It
 is versioned, it lives in the same public repository as the data, and every run
 record stamps the version it ran under.
 
@@ -32,10 +33,10 @@ record stamps the version it ran under.
    published number can be re-derived from the text it came from.
 4. Brand names are normalised against `aliases/<category>.yml`. Anything
    unrecognised is quarantined and **never appears on the chart**.
-5. Seven sanity checks run, **before anything is written**.
+5. Publication checks run before a final held or published reading is written.
 6. A run that passes is appended to `data/runs/` and the site republishes. A run
    that fails is written to `data/held/` instead, where it is kept in full for
-   review and is not read by the site. Nothing in either directory is ever
+   operator review and is excluded from public charts. Nothing in either directory is ever
    overwritten or edited.
 
 The order of steps 5 and 6 is the point. The checks decide where a run lands,
@@ -48,10 +49,13 @@ the archive. It is deliberately somewhere else — a watchdog sharing a failure
 domain with the thing it watches is decoration — and it reads the archive
 rather than any status file the run had to survive long enough to write.
 
-One honest caveat about step 3: answers are held in memory until the run is
-complete, so a machine that loses power mid-run loses that run's answers rather
-than writing a partial week. Nothing incomplete is ever published, but nothing
-incomplete is recovered either.
+Each completed engine response is checkpointed under `.unprompted/` before it
+is collected for extraction. A restart with matching methodology and answer
+identities reuses those saved calls, including recorded errors. Progress logs
+distinguish reused calls from work still pending. Checkpoints are intermediate
+state, not published readings; a final reading must still pass all its checks.
+A crash before a response is saved can still lose that response, and local
+checkpointing cannot establish whether a provider billed an interrupted request.
 
 ---
 
@@ -177,10 +181,10 @@ and in testing it ranked Claude Code above OpenAI's own Codex. Treating either a
 interchangeable with its hosted namesake would change what a row means partway
 through a series.
 
-Two things a local engine cannot report, both visible in the data rather than
-hidden: it returns **no citations**, so it contributes nothing to the source
-counts; and it reports no token usage, so the cost report shows $0.00 for it,
-which is accurate because those calls are billed to a subscription.
+The local adapter records no structured citations, so those answers contribute
+nothing to source counts and do not prove that a search occurred. It also records
+no token usage. A $0.00 usage estimate for these calls excludes subscription
+costs; it is not evidence that the calls or their service were free.
 
 Turning a local engine on changes the engine list, which is a method version
 bump. That rule is now enforced rather than merely written down: a run whose
@@ -193,11 +197,11 @@ any single engine failing more than 20% of *its own* calls holds it. The second
 exists because the first cannot see one broken engine — with five engines, one
 that fails every call is only 20% of the run.
 
-An engine whose credentials are missing is queried anyway and its calls are
-recorded as errors, rather than being dropped from the run. Dropping them would
-let a vanished key quietly change which engines the week was measured across —
-exactly the change "Never break the series" below says must never happen
-silently.
+Before measurement, every declared engine must be configured on the runner and
+a supported extractor must be available. Missing credentials or an unavailable
+local executable refuse the category before calls begin. Configuration checks
+do not authenticate credentials with providers; failures discovered during a
+call remain recorded errors. The engine roster is never silently reduced.
 
 Where an engine declines to recommend anything, that is recorded as a refusal
 rather than dropped. How often the machines refuse to answer a buying question is
@@ -226,15 +230,27 @@ engines changes what the numbers mean. Any such change **bumps the version at th
 top of this file**, and either the history is re-run under the new method or a
 clearly separate series begins.
 
-Only the engine-list rule is currently enforced in code; the others are a
-commitment kept by the operator, and that difference is stated here rather than
-implied to be automatic.
+Where the prior published reading includes frozen methodology, the runner refuses
+changes to the recorded question specification, engine configuration, system
+prompt, extraction prompt, or extractor without a version bump before paid calls.
+Publication checks also enforce roster versioning and the expected call
+population when a frozen question manifest exists. Legacy
+records without snapshots cannot prove that historical wording was unchanged.
+Movement indicators and history-chart connections are suppressed between
+incompatible measurements; versioning does not make those measurements comparable.
 
 Every run also records the commit it ran from, the model that read the answers,
 and the date the engines were actually queried. Re-reading stored answers with a
 corrected alias map produces a **new** file that carries the original
 measurement date and a pointer to the run it was read from, so a re-reading is
 never mistaken for a fresh week.
+
+New answers also carry `measurement_git_sha`, the measurement invocation's code
+revision. A resumed run can contain answers from multiple revisions, and each
+retains its own value through extraction and rereading. Older answers without
+this field remain unknown; the final reading's `git_sha` does not reconstruct
+their original code revision. These fields identify repository revisions, not
+provider model internals or proof that a working tree was unchanged.
 
 The past is never edited. `data/runs/` is append-only and the tooling refuses to
 write over anything in it, including on a re-read. The repository's public git
@@ -273,36 +289,45 @@ Claude model was the one counting.
 Which reader ran is no longer implicit: every run record carries an `extractor`
 field naming it, and the weekly note prints it in its frontmatter.
 
-We think the effect is small, because extraction is a mechanical reading task
-and the raw answers are published alongside the counts, so anyone can check a
-row by hand. But "we think it is small" is not evidence, and the honest position
-is that this figure carries a conflict until it has been checked with a
-different model doing the extraction.
+The size and direction of any extraction bias have not been established.
+Missed or unsupported brand mentions can affect standings and self-preference
+figures for every engine. A second model agreeing with Claude would measure
+agreement, not establish accuracy.
 
-That check is now runnable rather than hypothetical. A second local harness
-(Codex) is registered as an extractor, and because every raw answer is stored, a
-past week can be re-read by the other harness without re-querying any engine:
+Stored answers can be reread without querying the engines again:
 
     python -m unprompted.reextract <date> --category <slug>
 
 Recovery writes a new dated reading and retains its source, including previous
 extraction usage. Use `--out-date YYYY-MM-DD` to choose an unused output date.
+The output date must be later than the source reading and cannot be in the future.
+An empty source, a missing declared engine, or a frozen population mismatch
+refuses before extractor resolution: rereading cannot recreate missing answers.
+If the source identity exists in both held and published storage, recovery
+refuses rather than silently selecting one. Both records remain for review.
+Grounding requirements use the source's recorded engine configuration when
+available. Legacy sources fall back to current configuration captured before
+extraction; this does not establish their original grounding requirements.
 The former `--in-place` option now refuses before paid work. Recovery runs under
-the same process lock and conservative budget preflight as a new measurement.
+the same process lock and monthly ceiling as a new measurement. Its estimate
+prices only eligible extraction calls using recorded extraction usage; all prior
+engine and extraction spend still counts toward the month. If extraction usage
+is unavailable, the conservative per-answer fallback remains. These estimates
+cannot guarantee provider balances or the token usage of a changed reader.
 Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
 
-with the other extractor enabled in `providers.json`. Comparing the two
-resulting records is the cross-extractor check. Until it has been run over a
-full week and published, treat any self-preference number involving Claude as
-provisional. The raw answers behind every count are in `data/runs/`, which is
-exactly why they are published.
+Recovery currently requires the supported hosted extractor. Local CLI extraction
+is disabled pending isolation qualification; enabling a registry entry does not
+make it available. No independent cross-extractor validation is claimed.
 
-Two things that are *not* affected by this: the standings themselves, which do
-not depend on whose product is whose, and the ChatGPT figure, where a Claude
-extractor finding that ChatGPT under-names its own product runs against the
-direction any bias would push.
+A reproducible, blinded review packet can be prepared and scored using
+`scripts/review_extractions.py`, as described in
+[READING-REVIEW.md](https://github.com/coulditbecoley/unprompted/blob/main/READING-REVIEW.md).
+It binds labels to exact saved answers and withholds accuracy metrics until all
+sampled answers are reviewed. Human adjudication is still pending. Published
+answers in `data/runs/` allow readers to inspect the evidence behind each count.
 
 ---
 

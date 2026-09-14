@@ -22,6 +22,18 @@ from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
 from unprompted.normalize import AliasMap, normalize
 
 
+def test_alias_configuration_rejects_collisions_and_malformed_exclusions():
+    for exclude in ("Alpha", [42], [" "]):
+        with pytest.raises(ValueError, match="exclude must be"):
+            AliasMap({"Alpha": []}, exclude=exclude)
+    for canonical in ({"Alpha": ["shared"], "Beta": ["Shared Inc."]}, {"Alpha": ["Beta"], "Beta": []}):
+        with pytest.raises(ValueError, match="alias collision"):
+            AliasMap(canonical)
+    with pytest.raises(ValueError, match="canonical mapping"):
+        AliasMap([])
+    assert AliasMap({"Alpha": ["alpha", "Alpha Inc."]}, exclude=None).resolve("alpha") == "Alpha"
+
+
 ALIASES = AliasMap(
     {
         "PSA": ["psa", "professional sports authenticator", "psa grading"],
@@ -197,8 +209,8 @@ def test_movement_reports_deltas_entrants_and_dropouts():
 
 
 def test_the_snub_prefers_a_dropout_over_a_decline():
-    last = [BrandWeek("PSA", 5, 5, 1.0, 5, 1.0, 1.0, []), BrandWeek("Beckett", 1, 5, 0.2, 0, 0.0, 2.0, [])]
-    this = [BrandWeek("PSA", 2, 5, 0.4, 2, 0.4, 1.0, [])]
+    last = [BrandWeek("PSA", 100, 100, 1.0, 100, 1.0, 1.0, []), BrandWeek("Beckett", 20, 100, 0.2, 0, 0.0, 2.0, [])]
+    this = [BrandWeek("PSA", 40, 100, 0.4, 40, 0.4, 1.0, [])]
     assert the_snub(movement(this, last)).brand == "Beckett"
 
 
@@ -206,6 +218,32 @@ def test_the_snub_is_none_on_a_quiet_week():
     """Inventing drama from a flat week is how a chart loses trust."""
     week = [BrandWeek("PSA", 5, 5, 1.0, 5, 1.0, 1.0, [])]
     assert the_snub(movement(week, week)) is None
+
+
+def test_small_sample_dropout_does_not_become_a_headline():
+    a, b = _week("A", 1), _week("B", 1)
+    a.total_runs = b.total_runs = 10
+    assert the_snub(movement([b], [a])) is None
+    a.total_runs = b.total_runs = 100
+    assert the_snub(movement([b], [a])).brand == "A"
+
+
+def test_method_change_suppresses_movement_holds_and_report_headlines(tmp_path):
+    from unprompted.report import build_report
+    previous = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(100)])
+    previous.update(category="alpha", run_date="2026-09-01", method_version=1,
+                    runs_per_question=100, engines=["claude"], methodology={"aliases": {}})
+    current = {**previous, "run_date": "2026-09-14", "method_version": 2,
+        "extractions": _run([ex(run=i, brands=["PSA" if i < 10 else "Beta", "CGC"]) for i in range(100)])["extractions"]}
+    now, old = brand_week(current), brand_week(previous)
+    assert run_checks(current, now, old, previous=previous).passed
+    text = build_report(current, [previous], tmp_path / "missing.yml")
+    assert "methodology version changed" in text and "## The Snub" not in text
+    current["method_version"] = 1
+    assert any("moved" in r for r in run_checks(current, now, old, previous=previous).reasons)
+    text = build_report(current, [previous], tmp_path / "missing.yml")
+    assert "Compared with the measurement from 2026-09-01" in text
+    assert "points since 2026-09-01" in text and "week over week" not in text
 
 
 def test_source_counts_group_by_host_and_rank_by_frequency():
@@ -289,6 +327,15 @@ def test_too_many_brands_holds_the_week_legacy():
 
 def test_run_with_no_extractions_at_all_holds():
     assert run_checks({"extractions": []}, [], []).held
+
+def test_declared_engine_cannot_disappear_from_a_legacy_reading():
+    run = _run([ex(engine=e, brands=["PSA", "CGC"]) for e in ("claude", "chatgpt")])
+    run["engines"] = ["claude", "chatgpt"]
+    assert run_checks(run, brand_week(run), []).passed
+    run["extractions"] = [row for row in run["extractions"] if row["engine"] != "chatgpt"]
+    # No frozen question manifest: legacy re-extraction can reach this path.
+    result = run_checks(run, brand_week(run), [])
+    assert result.held and any("chatgpt" in reason and "no recorded calls" in reason for reason in result.reasons)
 
 
 # --- engine failure behaviour ----------------------------------------------
@@ -577,6 +624,21 @@ def test_report_renders_without_em_dashes():
     assert "## Standings" in text
     assert "PSA" in text
     assert pretty("ai-coding-assistants") == "AI Coding Assistants"
+
+
+def test_report_does_not_invent_affiliations_for_a_frozen_empty_map(tmp_path):
+    from unprompted.report import build_report
+    from unprompted.aggregate import load_affiliations
+    aliases = tmp_path / "alpha.yml"
+    aliases.write_text("affiliations:\n  PSA: claude\n")
+    run = _run([ex(engine="claude", brands=["PSA"]), ex(engine="chatgpt", brands=["CGC"])])
+    run.update(category="alpha", run_date="2026-09-14", method_version=1,
+               runs_per_question=1, engines=["claude", "chatgpt"])
+    assert "## Does an engine favour its own tool?" in build_report(run, [], aliases)
+    run["methodology"] = {"aliases": {}}
+    assert "## Does an engine favour its own tool?" not in build_report(run, [], aliases)
+    run["methodology"]["aliases"]["affiliations"] = {"Archived": "old", "Shared": ["one", "two"]}
+    assert load_affiliations(tmp_path / "missing.yml", run=run) == {"Archived": ["old"], "Shared": ["one", "two"]}
 
 
 def test_every_runnable_category_has_its_alias_map():
@@ -991,13 +1053,14 @@ def test_adding_an_engine_without_a_method_bump_holds_the_week():
         "engines": ["chatgpt", "claude", "perplexity"],
         "method_version": 1,
     }
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in [*previous["engines"], "claude-code"] for i in range(50)])
     run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
     run["method_version"] = 1
 
     result = run_checks(run, brand_week(run), [], previous=previous)
     assert result.held
-    assert "claude-code" in " ".join(result.reasons)
+    assert any("engine list changed" in r and "claude-code" in r for r in result.reasons)
 
 
 def test_adding_an_engine_with_a_method_bump_passes():
@@ -1005,7 +1068,8 @@ def test_adding_an_engine_with_a_method_bump_passes():
         "engines": ["chatgpt", "claude", "perplexity"],
         "method_version": 1,
     }
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in [*previous["engines"], "claude-code"] for i in range(50)])
     run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
     run["method_version"] = 2
 
@@ -1014,7 +1078,8 @@ def test_adding_an_engine_with_a_method_bump_passes():
 
 def test_an_unchanged_engine_list_is_not_flagged():
     previous = {"engines": ["chatgpt", "claude"], "method_version": 1}
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in previous["engines"] for i in range(50)])
     run["engines"] = ["claude", "chatgpt"]  # order must not matter
     run["method_version"] = 1
 

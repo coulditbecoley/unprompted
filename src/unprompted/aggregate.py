@@ -159,6 +159,43 @@ def margin_of_error(p: float, n: int) -> float:
     return round(1.96 * math.sqrt(p * (1 - p) / n) * 100, 1)
 
 
+def comparison_reason(run: dict, previous: dict | None) -> str | None:
+    """Why movement cannot be compared; None means the recorded methods match.
+
+    Legacy records use their declared method, engines and observed question IDs.
+    Where both records freeze configuration, those snapshots must match too.
+    """
+    if previous is None:
+        return "No earlier published measurement is available for comparison."
+    for key in ("method_version", "runs_per_question"):
+        if any(type(r.get(key)) is not int or r[key] < 1 for r in (run, previous)):
+            return "Recorded methodology is incomplete; movement is unavailable."
+    if run.get("category") != previous.get("category") or not run.get("category"):
+        return "These measurements cover different categories."
+    if run["method_version"] != previous["method_version"]:
+        return "The methodology version changed; movement is not comparable."
+    if run["runs_per_question"] != previous["runs_per_question"]:
+        return "The number of repetitions changed; movement is not comparable."
+    if not run.get("engines") or not previous.get("engines"):
+        return "Recorded methodology is incomplete; movement is unavailable."
+    if sorted(run["engines"]) != sorted(previous["engines"]):
+        return "The engine roster changed; movement is not comparable."
+    dates = [r.get("measured_on") or r.get("run_date", "") for r in (run, previous)]
+    if not all(dates) or dates[0] <= dates[1]:
+        return "These readings do not represent successive measurements."
+    questions = [sorted({e["question_id"] for e in r.get("extractions", [])}) for r in (run, previous)]
+    if not questions[0] or questions[0] != questions[1]:
+        return "Question coverage changed; movement is not comparable."
+    snapshots = [r.get("methodology", {}) for r in (run, previous)]
+    for key in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor", "aliases"):
+        if all(key in s for s in snapshots) and snapshots[0][key] != snapshots[1][key]:
+            return "The recorded reading configuration changed; movement is not comparable."
+    for key in ("extractor", "extractor_model"):
+        if all(r.get(key) for r in (run, previous)) and run[key] != previous[key]:
+            return "The extractor changed; movement is not comparable."
+    return None
+
+
 def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Movement]:
     """Week-over-week change, including entrants and dropouts."""
     prev = {b.brand: b for b in last_week}
@@ -193,8 +230,7 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
                     first_share_delta=round(-before.first_share * 100, 1),
                     is_new=False,
                     is_dropout=True,
-                    # Named last week and not once this week is a real
-                    # disappearance rather than a wobble, so it always counts.
+                    # A disappearance still needs enough observations to support a headline.
                     significant=exceeds_noise(0, this_week[0].total_runs if this_week else 0, before.rotation, before.total_runs),
                 )
             )
@@ -204,19 +240,19 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
 
 
 def the_snub(moves: list[Movement]) -> Movement | None:
-    """The week's biggest faller. A dropout always outranks a mere decline.
+    """The week's biggest faller. A supported dropout outranks a mere decline.
 
     Returns None when nothing actually fell, and also when the biggest fall is
     inside the sample's noise. Naming a brand over a four-point wobble on 225
     runs is manufactured drama, and the kind a reader can check and disprove.
     """
-    if not moves:
+    supported = [m for m in moves if m.significant and m.rotation_delta < 0]
+    if not supported:
         return None
-    dropouts = [m for m in moves if m.is_dropout]
+    dropouts = [m for m in supported if m.is_dropout]
     if dropouts:
         return min(dropouts, key=lambda m: m.rotation_delta)
-    worst = min(moves, key=lambda m: m.rotation_delta)
-    return worst if worst.rotation_delta < 0 and worst.significant else None
+    return min(supported, key=lambda m: m.rotation_delta)
 
 
 def source_counts(run: dict) -> list[tuple[str, int]]:
@@ -315,7 +351,7 @@ def self_preference(
     return out
 
 
-def load_affiliations(path: str | Path) -> dict[str, list[str]]:
+def load_affiliations(path: str | Path, *, run: dict | None = None) -> dict[str, list[str]]:
     """Read the brand -> owning-engines map from a category's alias file.
 
     A value may be one engine name or a list of them. A list is needed because
@@ -326,7 +362,9 @@ def load_affiliations(path: str | Path) -> dict[str, list[str]]:
     """
     import yaml
 
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    frozen = (run or {}).get("methodology", {}).get("aliases")
+    # A recorded empty map is evidence of no affiliations, not missing history.
+    data = frozen if frozen is not None else yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     raw = data.get("affiliations", {}) or {}
     return {
         brand: [owner] if isinstance(owner, str) else list(owner)

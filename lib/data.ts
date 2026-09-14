@@ -18,6 +18,7 @@ import { CATEGORIES, getCategory as getCategoryFromRegistry } from "./categories
 // "@/lib/data" and the split is an implementation detail, not an API change.
 import {
   answered,
+  comparisonReason,
   standings,
   type BrandStanding,
   type Extraction,
@@ -117,7 +118,8 @@ export function loadAllRuns(includeHeld = false): ArchiveScan {
   if (includeHeld) {
     const published = loadAllRuns();
     const held = scanRuns(path.join(REPO_ROOT, "data", "held"));
-    return { runs: [...published.runs, ...held.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)), errors: [...published.errors, ...held.errors] };
+    return { runs: [...published.runs, ...held.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)),
+      errors: [...published.errors.map(e => `data/runs/${e}`), ...held.errors.map(e => `data/held/${e}`)] };
   }
   return scanRuns(RUNS_DIR);
 }
@@ -125,18 +127,28 @@ export function loadAllRuns(includeHeld = false): ArchiveScan {
 function scanRuns(root: string): ArchiveScan {
   const runs: RunRecord[] = [];
   const errors: string[] = [];
-  if (!fs.existsSync(root)) return { runs, errors };
-
-  const dates = fs
-    .readdirSync(root)
-    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .sort();
+  let dates: string[];
+  try {
+    dates = fs.readdirSync(root).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") errors.push(".: archive directory is unreadable");
+    return { runs, errors };
+  }
 
   for (const date of dates) {
     const dir = path.join(root, date);
-    if (!fs.statSync(dir).isDirectory()) continue;
-
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+    let files: string[];
+    try {
+      if (!fs.statSync(dir).isDirectory()) {
+        errors.push(`${date}: expected an archive directory`);
+        continue;
+      }
+      files = fs.readdirSync(dir).filter(f => f.endsWith(".json")).sort();
+    } catch {
+      errors.push(`${date}: archive directory is unreadable`);
+      continue;
+    }
+    for (const file of files) {
       const where = `${date}/${file}`;
       let parsed: unknown;
       try {
@@ -171,12 +183,13 @@ export function latestRun(category: string): RunRecord | null {
  * published question bank. Exported because a step is meaningless without the
  * question it belongs to, and the comparison page names them.
  */
-export function loadQuestionText(category: string): Record<string, string> {
-  const file = path.join(REPO_ROOT, "questions", `${category}.yml`);
-  if (!fs.existsSync(file)) return {};
-  const spec = loadYaml(fs.readFileSync(file, "utf-8")) as
-    | { questions?: Array<{ id?: string; text?: string }> }
-    | undefined;
+export function loadQuestionText(category: string, run?: RunRecord | null): Record<string, string> {
+  let spec: { questions?: Array<{ id?: string; text?: string }> } | undefined = run?.methodology?.questions;
+  if (spec === undefined) {
+    const file = path.join(REPO_ROOT, "questions", `${category}.yml`);
+    if (!fs.existsSync(file)) return {};
+    spec = loadYaml(fs.readFileSync(file, "utf-8")) as typeof spec;
+  }
   const out: Record<string, string> = {};
   for (const q of spec?.questions ?? []) {
     if (typeof q?.id === "string" && typeof q?.text === "string") out[q.id] = q.text;
@@ -201,11 +214,13 @@ export function loadQuestionText(category: string): Record<string, string> {
 export function brandHistory(
   category: string,
   brand: string,
-): Array<{ date: string; rotation: number; firstShare: number }> {
-  return loadHistory(category).map((run) => {
+): Array<{ date: string; readingDate: string; rotation: number; firstShare: number; breakReason: string | null }> {
+  return loadHistory(category).map((run, i, runs) => {
     const row = standings(run).find((s) => s.brand === brand);
     return {
-      date: run.run_date,
+      date: run.measured_on || run.run_date,
+      readingDate: run.run_date,
+      breakReason: i ? comparisonReason(run, runs[i - 1]) : null,
       rotation: row?.rotation ?? 0,
       firstShare: row?.firstShare ?? 0,
     };
@@ -271,12 +286,13 @@ export type SelfPreference = {
  * replaces could only ever see a flat "Brand: engine" line, so it silently
  * returned nothing for a list and the ownership simply vanished.
  */
-export function loadAffiliations(category: string): Record<string, string[]> {
-  const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
-  if (!fs.existsSync(file)) return {};
-  const parsed = loadYaml(fs.readFileSync(file, "utf-8")) as
-    | { affiliations?: Record<string, string | string[]> }
-    | undefined;
+export function loadAffiliations(category: string, run?: RunRecord): Record<string, string[]> {
+  let parsed = run?.methodology?.aliases;
+  if (parsed == null) {
+    const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
+    if (!fs.existsSync(file)) return {};
+    parsed = loadYaml(fs.readFileSync(file, "utf-8")) as typeof parsed;
+  }
   const raw = parsed?.affiliations;
   if (!raw || typeof raw !== "object") return {};
 
@@ -326,7 +342,7 @@ export function selfPreference(
   return out;
 }
 
-export type HeldRun = { category: string; date: string; errorRate: number; reasons: string[] };
+export type HeldRun = { category: string; date: string; errorRate: number | null; reasons: string[]; recoveredOn?: string };
 
 /**
  * Runs that failed their checks and were withheld.
@@ -336,34 +352,45 @@ export type HeldRun = { category: string; date: string; errorRate: number; reaso
  * that needs a person: it is the pipeline saying it would rather print nothing
  * than print something wrong.
  */
-export function loadHeld(): HeldRun[] {
+export function loadHeld(): { runs: HeldRun[]; errors: string[] } {
   const dir = path.join(REPO_ROOT, "data", "held");
-  if (!fs.existsSync(dir)) return [];
-
-  const out: HeldRun[] = [];
-  for (const date of fs.readdirSync(dir).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))) {
-    for (const file of fs.readdirSync(path.join(dir, date))) {
-      if (!file.endsWith(".json")) continue;
-      try {
-        const run = JSON.parse(
-          fs.readFileSync(path.join(dir, date, file), "utf-8"),
-        ) as RunRecord;
-        const total = run.extractions.length;
-        const errored = run.extractions.filter((e) => e.error).length;
-        out.push({
-          category: run.category,
-          date: run.run_date,
-          errorRate: total ? errored / total : 0,
-          reasons: Array.isArray(run.publication_checks?.reasons)
-            ? run.publication_checks.reasons.filter((r): r is string => typeof r === "string" && !!r.trim())
-            : [],
-        });
-      } catch {
-        // A corrupt held file must not take the dashboard down.
+  const held = scanRuns(dir);
+  const published = loadAllRuns();
+  const key = (r: RunRecord) => `${r.run_date}/${r.category}`;
+  const index = new Map<string, RunRecord | null>();
+  for (const record of [...held.runs, ...published.runs]) {
+    // Legacy paths present in both buckets cannot identify a unique source.
+    index.set(key(record), index.has(key(record)) ? null : record);
+  }
+  const recoveries = new Map<string, string>();
+  for (const reading of published.runs) {
+    const ancestors: string[] = [];
+    let cursor = reading;
+    let valid = reading.publication_checks?.passed !== false;
+    while (valid && cursor.source_run) {
+      const parent = index.get(cursor.source_run);
+      if (!parent || parent.category !== reading.category || parent.run_date >= cursor.run_date
+        || (parent.measured_on || parent.run_date) !== (reading.measured_on || reading.run_date)) {
+        valid = false;
+        break;
       }
+      ancestors.push(key(parent));
+      cursor = parent;
+    }
+    if (valid) for (const ancestor of ancestors) {
+      if ((recoveries.get(ancestor) ?? "") < reading.run_date) recoveries.set(ancestor, reading.run_date);
     }
   }
-  return out.sort((a, b) => b.date.localeCompare(a.date));
+  const runs = held.runs.map((run): HeldRun => ({
+    category: run.category,
+    date: run.run_date,
+    errorRate: run.extractions.length ? run.extractions.filter(e => e.error).length / run.extractions.length : null,
+    reasons: Array.isArray(run.publication_checks?.reasons)
+      ? run.publication_checks.reasons.filter((r): r is string => typeof r === "string" && !!r.trim()) : [],
+    recoveredOn: recoveries.get(key(run)),
+  }));
+  return { runs: runs.sort((a, b) => b.date.localeCompare(a.date)),
+    errors: [...held.errors.map(e => `data/held/${e}`), ...published.errors.map(e => `data/runs/${e}`)] };
 }
 
 /**
@@ -408,99 +435,50 @@ export function quarantineKey(name: string): string {
 }
 
 /**
- * Unrecognised names from the most recent run of each live category.
- *
- * Deliberately not every file ever written. Quarantine is a to-do list, not an
- * archive: flattening all history produced hundreds of names, most of them
- * one-off hallucinations from categories that no longer exist, which buried the
- * handful that were real brands missing from the alias map.
- *
- * Sorted by how often each name appeared, because that is the triage signal. A
- * name seen forty times is a brand we are failing to count; a name seen once is
- * noise.
+ * Unrecognised names from each live category's latest readable record.
+ * Sidecars are written only for nonempty quarantine, so they cannot establish
+ * whether a newer reading cleared it. Use the immutable source and its own
+ * answered-call denominator. Frequency prioritizes review, not product identity.
  */
-export function loadQuarantine(): QuarantineEntry[] {
-  const dir = path.join(REPO_ROOT, "data", "quarantine");
-  if (!fs.existsSync(dir)) return [];
-
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+export function loadQuarantine(): { entries: QuarantineEntry[]; errors: string[] } {
+  const archive = loadAllRuns(true);
+  const errors = [...archive.errors];
   const found = new Map<string, { count: number; categories: Set<string>; material: boolean }>();
 
   for (const category of CATEGORIES) {
-    // File names are `<date>-<category>.json`, so the newest sorts last.
-    const latest = files
-      .filter((f) => f.endsWith(`-${category.slug}.json`))
-      .sort()
-      .pop();
+    const readings = archive.runs.filter(r => r.category === category.slug);
+    const latest = readings.at(-1);
     if (!latest) continue;
-
-    const date = latest.slice(0, 10);
-
-    /*
-      The denominator belongs to the run this file came from, which may be one
-      the checks held rather than published -- a held run still produced these
-      names, and holding it is often why they are worth looking at.
-    */
-    const answered = answeredCount(category.slug, date);
-    // The same floor checks.py uses, and never below two: one sighting of a
-    // thing is not evidence of anything at any sample size.
-    const floor = answered ? Math.ceil(answered * QUARANTINE_MATERIAL) : Infinity;
-
-    let names: unknown;
-    try {
-      names = JSON.parse(fs.readFileSync(path.join(dir, latest), "utf-8"));
-    } catch {
-      continue; // A corrupt file must not take the dashboard down.
+    const where = `${latest.run_date}/${category.slug}`;
+    if (readings.filter(r => r.run_date === latest.run_date).length !== 1) {
+      errors.push(`${where}: ambiguous held/published identity`);
+      continue;
     }
-    if (!Array.isArray(names)) continue;
-
+    const names = latest.quarantined;
+    if (!Array.isArray(names) || names.some(n => typeof n !== "string" || !n.trim())) {
+      errors.push(`${where}: quarantine names are missing or malformed`);
+      continue;
+    }
+    const total = answered(latest).length;
+    if (names.length && !total) {
+      errors.push(`${where}: quarantine has no answered-call denominator`);
+      continue;
+    }
     const here = new Map<string, number>();
     for (const raw of names) {
-      if (typeof raw !== "string" || !raw.trim()) continue;
       const key = quarantineKey(raw);
-      here.set(key, (here.get(key) ?? 0) + 1);
+      if (key) here.set(key, (here.get(key) ?? 0) + 1);
     }
-
     for (const [name, count] of here) {
       const at = found.get(name) ?? { count: 0, categories: new Set<string>(), material: false };
       at.count += count;
       at.categories.add(category.slug);
-      // Material where it was actually seen that often, not where the pooled
-      // total happens to cross a floor borrowed from somewhere else.
-      if (count >= floor) at.material = true;
+      if (total && count / total >= QUARANTINE_MATERIAL) at.material = true;
       found.set(name, at);
     }
   }
 
-  return [...found.entries()]
-    .map(([name, at]) => ({
-      name,
-      count: at.count,
-      categories: [...at.categories].sort(),
-      material: at.material,
-    }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-}
-
-/**
- * How many calls a given run actually answered, published or held.
- *
- * Held runs live in a separate directory and are exactly the ones whose
- * quarantine is most worth reading, so both are checked. Returns 0 when the run
- * cannot be found, which the caller reads as "no denominator" rather than as a
- * denominator of zero.
- */
-function answeredCount(category: string, date: string): number {
-  for (const base of ["runs", "held"]) {
-    const file = path.join(REPO_ROOT, "data", base, date, `${category}.json`);
-    if (!fs.existsSync(file)) continue;
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf-8"));
-      if (!isRunRecord(parsed)) continue;
-      return parsed.extractions.filter((e) => !e.error).length;
-    } catch {
-      return 0;
-    }
-  }
-  return 0;
+  return { entries: [...found.entries()]
+    .map(([name, at]) => ({ name, count: at.count, categories: [...at.categories].sort(), material: at.material }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)), errors };
 }

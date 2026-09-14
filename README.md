@@ -48,6 +48,19 @@ Full detail, including what we deliberately do *not* measure, is in
 
 ## Running it yourself
 
+Before a measurement, inspect configuration, existing destinations and the
+combined estimate for all categories without making provider calls:
+
+```powershell
+python -m unprompted.run --preflight --category all
+```
+
+This prints JSON and exits 0 when these local checks pass, or 2 when issues are
+found. It does not authenticate credentials, validate checkpoint compatibility,
+change the budget ceiling, start a measurement, or certify publication. A
+combined estimate above the ceiling means a later category may refuse after
+earlier categories spend; it does not change the existing per-category policy.
+
 Use a project virtual environment. On Windows:
 
 ```powershell

@@ -138,6 +138,7 @@ def _base_for(answer: EngineAnswer) -> tuple[Extraction, bool]:
         source_kind=answer.source_kind,
         answer=answer.text,
         fetched_at=answer.fetched_at,
+        measurement_git_sha=answer.measurement_git_sha,
         # The engine's own usage rides along on the record it produced. Without
         # this the cost report reads $0.00 for every run, which is worse than no
         # report at all: it says the publication is free.

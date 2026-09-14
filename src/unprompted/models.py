@@ -32,6 +32,9 @@ class EngineAnswer:
     # searches. Measured rather than estimated: "what does a category cost" is
     # a question the data should answer, not one we guess at.
     usage: dict[str, int] = field(default_factory=dict)
+    # Invocation code revision when this response was requested. Legacy saves
+    # lack this field; a later reader must not invent their original revision.
+    measurement_git_sha: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -75,6 +78,7 @@ class Extraction:
     # week it belonged to but not when any answer in it was fetched. That is the
     # difference between "measured on Monday" and "re-read on Wednesday".
     fetched_at: str = ""
+    measurement_git_sha: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -89,6 +93,7 @@ class Extraction:
             "answer": self.answer,
             "usage": self.usage,
             "fetched_at": self.fetched_at,
+            "measurement_git_sha": self.measurement_git_sha,
         }
 
 
