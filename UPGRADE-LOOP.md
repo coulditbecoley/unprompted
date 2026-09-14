@@ -1,5 +1,29 @@
 # Upgrade loop
 
+## Cycle 23: review the September 14 image hold
+
+Image methodology version 3 maps Flux Kontext and FLUX.1 Kontext to Flux.
+Black Forest Labs identifies Kontext as part of its Flux generation/editing
+family: https://bfl.ai/models/flux-kontext . This preserves the existing family
+identity rather than creating a separate ranked brand for a model variant.
+
+Photoroom joins the existing editor exclusions. All ten saved-answer mentions
+concern product-photo staging, background swaps/removal, or ecommerce photo
+workflows. This applies the category's existing editor policy; it is not a claim
+that Photoroom cannot generate images. Its own product pages describe both:
+https://www.photoroom.com/ai-product-photography and
+https://www.photoroom.com/tools/ai-images . A broader category policy change would
+require reviewing the other excluded editors consistently.
+
+The September 14 held reading and frozen methodology remain unchanged. These
+alias decisions affect future processing, not the existing publication outcome.
+No paid re-extraction or new measurement was started.
+
+Verification: 159 Python tests passed, including checks over the real alias maps.
+An offline probe of the saved quarantine list against version 3 leaves zero
+names at the 2% blocking floor (375 answered rows). This probe neither reruns the
+extractor nor proves that a future reading will pass every publication check.
+
 Work one evidenced problem at a time: inspect the real path, implement the
 smallest useful change, run a check that can fail, record the result, then
 re-rank the remaining work. Local checks and live acceptance are separate.

@@ -37,6 +37,8 @@ canonical:
     - flux.2 klein
     - flux.2 klein 4b
     - flux klein
+    - flux kontext
+    - flux.1 kontext
   Ideogram:
     - ideogram
   Adobe Firefly:
@@ -196,6 +198,8 @@ exclude:
   - creative cloud
   - adobe creative cloud
   - luminar neo
+  # Reviewed 2026-09-14: product-photo staging and background editing.
+  - photoroom
   # Upscalers and enhancers: they improve an image rather than make one.
   - topaz photo ai
   - topaz
