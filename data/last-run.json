@@ -1,6 +1,6 @@
 {
-  "status": "unknown",
-  "detail": "No run has reported yet. scripts/notify.py writes this at the end of every weekly run, whatever the outcome.",
-  "exit_code": 0,
-  "at": "2026-08-26T00:00:00+00:00"
+  "status": "held",
+  "detail": "At least one category was held and did not publish. The reasons are in the log above and the data is in data\\held\\.",
+  "exit_code": 2,
+  "at": "2026-09-07T18:50:48+00:00"
 }

@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .aggregate import BrandWeek
+from .normalize import _key
 
 # Starting thresholds. Tune after four weeks of real baseline and bump the
 # methodology version when you do.
@@ -95,15 +96,36 @@ def run_checks(
     quarantined = run.get("quarantined", [])
     if quarantined:
         total = this_week[0].total_runs if this_week else 0
+        # Counted on the folded key rather than the raw string, because one
+        # unknown brand arrives under several spellings and counting them
+        # separately splits a material name into slivers that each sit under
+        # the floor.
+        #
+        # Measured on 2026-09-07, ai-image-generators: "FLUX.2 Klein (4B)",
+        # "FLUX.2 [klein] 4B", "FLUX.2 klein 4B" and "FLUX.2-klein-4B" are 8
+        # mentions of one thing, over the floor -- and the rule said nothing,
+        # because no single spelling reached it. Same week, ai-writing-tools
+        # reported "NovelCrafter" and "Novelcrafter" as two separate findings.
         counts: dict[str, int] = {}
+        spellings: dict[str, dict[str, int]] = {}
         for name in quarantined:
-            counts[name] = counts.get(name, 0) + 1
+            key = _key(name)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+            seen_as = spellings.setdefault(key, {})
+            seen_as[name] = seen_as.get(name, 0) + 1
         material = sorted(
-            (n for n, c in counts.items() if total and c / total >= MIN_ROTATION_TO_COUNT),
-            key=lambda n: -counts[n],
+            (k for k, c in counts.items() if total and c / total >= MIN_ROTATION_TO_COUNT),
+            key=lambda k: -counts[k],
         )
         if material:
-            shown = ", ".join(material[:8])
+            # Reported as the commonest spelling, not the folded key: the
+            # operator has to find this name in an answer and decide about it,
+            # and the key is not what any engine actually wrote.
+            shown = ", ".join(
+                max(spellings[k].items(), key=lambda kv: kv[1])[0] for k in material[:8]
+            )
             reasons.append(
                 f"{len(material)} unrecognised brand name(s) appeared in at least "
                 f"{MIN_ROTATION_TO_COUNT:.0%} of runs and need a decision: {shown}"

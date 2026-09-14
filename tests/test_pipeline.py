@@ -16,7 +16,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from unprompted.aggregate import BrandWeek, brand_week, movement, source_counts, the_snub
-from unprompted.checks import MAX_ERROR_RATE, run_checks
+from unprompted.checks import MAX_ERROR_RATE, MIN_ROTATION_TO_COUNT, run_checks
 from unprompted.engines.base import Engine
 from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
 from unprompted.normalize import AliasMap, normalize
@@ -177,6 +177,32 @@ def test_quarantined_name_holds_the_week():
     run["quarantined"] = ["Totally Fake Grading"]
     result = run_checks(run, brand_week(run), [])
     assert result.held and "Totally Fake Grading" in result.reasons[0]
+
+
+def test_spellings_of_one_unknown_name_are_counted_together():
+    # Real shape from 2026-09-07: four spellings of one model, 8 mentions
+    # between them and none of them material alone. Counted raw, every sliver
+    # sat under the 2% floor and the week published an unreviewed name.
+    # 200 runs puts the 2% floor at 4 mentions, so 3 of each spelling is under
+    # it alone and 6 together is over. A five-run fixture cannot express this:
+    # one mention is already 20%.
+    run = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(200)])
+    assert brand_week(run)[0].total_runs * MIN_ROTATION_TO_COUNT == 4
+    run["quarantined"] = ["FLUX.2 Klein (4B)"] * 3 + ["FLUX.2 [klein] 4B"] * 3
+    result = run_checks(run, brand_week(run), [])
+    assert result.held, "spellings of one name must be counted together"
+    # Reported as something an operator can search an answer for, not a key.
+    assert "FLUX.2" in result.reasons[0]
+    # And still one finding rather than two.
+    assert "1 unrecognised" in result.reasons[0]
+
+
+def test_one_off_unknown_spellings_still_publish():
+    # The other half of the same rule: folding must not turn the long tail
+    # into a hold, or the chart never ships.
+    run = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(200)])
+    run["quarantined"] = ["Some New Grader", "Another New Grader"]
+    assert run_checks(run, brand_week(run), []).passed
 
 
 def test_large_rotation_swing_holds_the_week():

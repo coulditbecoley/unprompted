@@ -66,6 +66,23 @@ if not "%RUN_EXIT%"=="0" if not "%RUN_EXIT%"=="2" (
   exit /b %RUN_EXIT%
 )
 
+REM Record the outcome BEFORE staging, so it is committed with the week it
+REM describes. Exit 2 means a category was held, which is the checks working
+REM rather than breaking -- and still wants a person, because a held week does
+REM not publish and nothing else says so.
+REM
+REM This used to run at :published, after the commit. notify.py's own docstring
+REM says data\last-run.json is "committed with the run", and it never was: every
+REM run that got this far left the file dirty, and the dirty-data guard at the
+REM top of this script then refused to start the NEXT run. One completed run
+REM disabled the schedule until somebody committed the file by hand. First bit
+REM on 2026-09-07, which is why 2026-09-14 would not have measured anything.
+if "%RUN_EXIT%"=="2" (
+  python scripts\notify.py --status held --exit-code 2 --detail "At least one category was held and did not publish. The reasons are in the log above and the data is in data\held\." >> "%TEMP%\unprompted-weekly.log" 2>&1
+) else (
+  python scripts\notify.py --status published --exit-code 0 --detail "Every category published." >> "%TEMP%\unprompted-weekly.log" 2>&1
+)
+
 REM Written with labels rather than one parenthesised block on purpose: cmd
 REM expands %VAR% for a whole block when it parses it, so a variable set inside
 REM the block reads as empty and the SHA comparison below would silently never
@@ -123,16 +140,6 @@ python scripts\notify.py --status failed --exit-code 3 --detail "The push report
 exit /b 3
 
 :published
-REM Record the outcome either way. Exit 2 means a category was held, which
-REM is the checks working rather than breaking -- and still wants a person,
-REM because a held week does not publish and nothing else says so.
-if "%RUN_EXIT%"=="2" (
-  python scripts\notify.py --status held --exit-code 2 --detail "At least one category was held and did not publish. The reasons are in the log above and the data is in data\held\." >> "%TEMP%\unprompted-weekly.log" 2>&1
-) else (
-  python scripts\notify.py --status published --exit-code 0 --detail "Every category published." >> "%TEMP%\unprompted-weekly.log" 2>&1
-)
-
-
 REM Mirror the week into the Obsidian vault while the data is fresh, and
 REM archive the audience counters with it.
 python scripts\sync_vault.py --no-pull >> "%TEMP%\unprompted-weekly.log" 2>&1
