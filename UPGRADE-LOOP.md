@@ -1,5 +1,18 @@
 # Upgrade loop
 
+## Cycle 25: reject contradictory alias exclusions
+
+Both admin validation and the shared Python AliasMap constructor now reject an
+exact folded spelling assigned to a charted brand and also listed as excluded.
+Previously the exclusion won silently during normalization. The shared guard
+covers measurement, recovery and preflight; admin refuses before a GitHub write.
+Distinct parent names and product names remain permitted under existing policy.
+
+Verification: 159 Python tests, 32 Node tests and typecheck passed. Expanded
+existing checks cover canonical-name and alias collisions with exclusions,
+including punctuation/corporate-suffix folding. Real alias-map checks pass.
+This validates exact folded conflicts, not every possible contextual spelling.
+
 ## Cycle 24: describe excluded readings accurately
 
 The shared ChartBoard shortfall notice now reports usable readings per recorded

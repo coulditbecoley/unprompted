@@ -141,6 +141,8 @@ class AliasMap:
                 if not isinstance(alias, str) or not alias.strip():
                     raise ValueError("aliases must be non-empty strings")
                 key = _key(alias)
+                if key in self._excluded:
+                    raise ValueError(f"charted alias is also excluded: {alias}")
                 if key in self._lookup and self._lookup[key] != name:
                     raise ValueError(f"alias collision: {alias}")
                 self._lookup[key] = name

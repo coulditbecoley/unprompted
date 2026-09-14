@@ -194,6 +194,7 @@ function validate(target: Target, content: string): string | null {
     const canonical = spec.canonical;
     if (!canonical || typeof canonical !== "object" || Array.isArray(canonical)) return "aliases needs a canonical mapping";
     if (spec.exclude != null && (!Array.isArray(spec.exclude) || spec.exclude.some(x => typeof x !== "string" || !x.trim()))) return "exclude must be a list of non-empty strings";
+    const excluded = new Set((Array.isArray(spec.exclude) ? spec.exclude : []).map(quarantineKey));
     const owners = new Map<string, string>();
     for (const [name, list] of Object.entries(canonical as Record<string, unknown>)) {
       if (!name.trim()) return "canonical names cannot be empty";
@@ -203,6 +204,7 @@ function validate(target: Target, content: string): string | null {
       if (Array.isArray(list) && list.some(x => typeof x !== "string" || !x.trim())) return `aliases for ${name} must contain non-empty strings`;
       for (const spelling of [name, ...(Array.isArray(list) ? list : [])]) {
         const key = quarantineKey(spelling);
+        if (excluded.has(key)) return `charted alias is also excluded: ${spelling}`;
         if (owners.has(key) && owners.get(key) !== name) return `alias collision: ${spelling}`;
         owners.set(key, name);
       }

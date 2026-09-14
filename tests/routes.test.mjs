@@ -332,6 +332,9 @@ test("route integration: analytics and stale editor protection", async (t) => {
     for (const exclude of ["Alpha", [42], [" "]]) {
       assert.equal((await commit(request("/api/admin/commit", { target: "aliases", baseline: "", content: JSON.stringify({ canonical: { Alpha: [] }, exclude }) }, { cookie }))).status, 400);
     }
+    for (const exclude of [["Alpha Inc."], ["shared"]]) {
+      assert.equal((await commit(request("/api/admin/commit", { target: "aliases", baseline: "", content: JSON.stringify({ canonical: { Alpha: ["shared"] }, exclude }) }, { cookie }))).status, 400);
+    }
     assert.equal(calls.length, 0);
   });
 });

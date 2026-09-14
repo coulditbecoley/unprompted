@@ -23,6 +23,9 @@ from unprompted.normalize import AliasMap, normalize
 
 
 def test_alias_configuration_rejects_collisions_and_malformed_exclusions():
+    for exclude in (["Alpha Inc."], ["shared"]):
+        with pytest.raises(ValueError, match="also excluded"):
+            AliasMap({"Alpha": ["shared"]}, exclude=exclude)
     for exclude in ("Alpha", [42], [" "]):
         with pytest.raises(ValueError, match="exclude must be"):
             AliasMap({"Alpha": []}, exclude=exclude)
