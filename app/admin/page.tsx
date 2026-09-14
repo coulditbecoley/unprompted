@@ -11,7 +11,6 @@ import {
   answered,
   costOfRun,
   engineHealth,
-  latestRun,
   loadAllRuns,
   loadHeld,
   loadHistory,
@@ -55,8 +54,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const aliasesRaw = fs.readFileSync(aliasesPath, "utf-8");
   const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number };
 
-  const history = loadHistory(category);
-  const run = latestRun(category);
+  const perCategory = CATEGORIES.map((c) => {
+    let history: ReturnType<typeof loadHistory> = [];
+    let error: string | null = null;
+    try { history = loadHistory(c.slug); }
+    catch (failure) { error = failure instanceof Error ? failure.message : "Archive is unreadable"; }
+    const latest = history.at(-1);
+    return {
+      slug: c.slug, label: c.label, history, error,
+      date: latest?.run_date ?? null,
+      methodVersion: latest?.method_version ?? null,
+      extractor: latest?.extractor ?? null,
+      engines: latest?.engines ?? [],
+    };
+  });
+  const selectedArchive = perCategory.find(c => c.slug === category)!;
+  const history = selectedArchive.history;
+  const run = history.at(-1);
   const board = run ? standings(run) : [];
 
   const quarantine = loadQuarantine();
@@ -79,20 +93,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // dashboard should say so rather than leaving it to be inferred.
   const localEngines = engines.filter(({ p }) => p.kind === "cli");
   const held = loadHeld();
-
-  // Every category, not just the flagship: a held or stale category is exactly
-  // what an operator needs to notice, and it would be invisible here otherwise.
-  const perCategory = CATEGORIES.map((c) => {
-    const latest = latestRun(c.slug);
-    return {
-      slug: c.slug,
-      label: c.label,
-      date: latest?.run_date ?? null,
-      methodVersion: latest?.method_version ?? null,
-      extractor: latest?.extractor ?? null,
-      engines: latest?.engines ?? [],
-    };
-  });
 
   // Read here rather than inside the masthead so the whole page makes one pass
   // over the store instead of two.
@@ -206,7 +206,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             : lastRun?.status === "failed"
               ? "failed"
               : "none yet",
-      note: run ? run.run_date : "no data",
+      note: selectedArchive.error ? "archive unavailable" : run ? run.run_date : "no data",
       attention: lastRun?.status === "failed" || lastRun?.status === "held",
     },
     nextRunTile(),
@@ -238,7 +238,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       label: "Weeks recorded",
-      value: String(history.length),
+      value: selectedArchive.error ? "unavailable" : String(history.length),
       note: `method v${spec.method_version}`,
     },
     {
@@ -301,9 +301,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h3 style={{ marginTop: 6 }}>State</h3>
           <div className="cmp-stat"><span>Method version</span><span>v{spec.method_version}</span></div>
           <div className="cmp-stat"><span>Runs per question</span><span>{spec.runs_per_question}</span></div>
-          <div className="cmp-stat"><span>Weeks recorded</span><span>{history.length}</span></div>
-          <div className="cmp-stat"><span>Latest run</span><span>{run?.run_date ?? "none"}</span></div>
-          <div className="cmp-stat"><span>Brands charted</span><span>{board.length}</span></div>
+          <div className="cmp-stat"><span>Weeks recorded</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
+          <div className="cmp-stat"><span>Latest run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
+          <div className="cmp-stat"><span>Brands charted</span><span>{selectedArchive.error ? "unavailable" : board.length}</span></div>
+          {selectedArchive.error && <p>Published readings are unavailable. Review the archive errors below.</p>}
         </div>
 
         <div className="cmp-pick">
@@ -461,13 +462,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="seq-brand" style={{ gap: 3 }}>
                 {c.label}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {c.date
+                  {c.error ? c.error : c.date
                     ? `${c.date} · method v${c.methodVersion} · read by ${c.extractor ?? "api"} · ${c.engines.length} engines`
                     : "no published run yet"}
                 </small>
               </span>
               <span className="mono" style={{ fontSize: 11, color: c.date ? "var(--fg-2)" : "var(--fg-3)" }}>
-                {c.date ? "PUBLISHED" : "NONE"}
+                {c.error ? "UNAVAILABLE" : c.date ? "PUBLISHED" : "NONE"}
               </span>
             </div>
           ))}
@@ -588,7 +589,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h3 style={{ marginTop: 6 }}>Engine health</h3>
 
           {health.length === 0 ? (
-            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>No run to read.</p>
+            <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>{archiveErrors.length ? "Archive health is unavailable. Review the archive errors above." : "No run to read."}</p>
           ) : (
             <>
               {health.map((h) => (

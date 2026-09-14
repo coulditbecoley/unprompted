@@ -1,7 +1,7 @@
 // Actual route handlers and Redis SDK; external transports are isolated in-process.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
+import { createRequire, registerHooks } from "node:module";
 import { existsSync } from "node:fs";
 import fs from "node:fs";
 import path from "node:path";
@@ -127,6 +127,74 @@ test("held review follows explicit recovery chains and exposes corrupt files", a
   assert.equal(held.errors.length, 2);
   assert.ok(held.errors.some(e => e.includes("data/held/2026-09-01/broken.json")));
   assert.ok(held.errors.some(e => e.includes("wrong.json: declares wrong-identity")));
+});
+
+test("archive scans expose directory failures and retain readable sibling records", async (t) => {
+  const { loadAllRuns, REPO_ROOT } = await import("../lib/data.ts");
+  const root = path.join(REPO_ROOT, "data", "runs");
+  const originalList = fs.readdirSync, originalStat = fs.statSync, originalRead = fs.readFileSync;
+  let rootFailure = null;
+  const failure = () => { throw Object.assign(new Error("offline read failure"), { code: "EACCES" }); };
+  t.mock.method(fs, "readdirSync", (p, ...args) => {
+    if (p === root) {
+      if (rootFailure) throw Object.assign(new Error("offline root failure"), { code: rootFailure });
+      return ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"];
+    }
+    if (p === path.join(root, "2026-09-03")) return failure();
+    if (p === path.join(root, "2026-09-04")) return ["alpha.json"];
+    return originalList(p, ...args);
+  });
+  t.mock.method(fs, "statSync", (p, ...args) => {
+    if (p === path.join(root, "2026-09-01")) return failure();
+    if (path.dirname(p) === root) return { isDirectory: () => path.basename(p) !== "2026-09-02" };
+    return originalStat(p, ...args);
+  });
+  t.mock.method(fs, "readFileSync", (p, ...args) => p === path.join(root, "2026-09-04/alpha.json")
+    ? JSON.stringify({ category: "alpha", run_date: "2026-09-04", method_version: 1, runs_per_question: 1, engines: [], extractions: [] })
+    : originalRead(p, ...args));
+  const scan = loadAllRuns();
+  assert.deepEqual(scan.runs.map(r => r.category), ["alpha"]);
+  assert.equal(scan.errors.length, 3);
+  assert.ok(scan.errors.some(e => e.includes("2026-09-02: expected an archive directory")));
+  rootFailure = "EACCES";
+  assert.deepEqual(loadAllRuns(), { runs: [], errors: [".: archive directory is unreadable"] });
+  rootFailure = "ENOENT";
+  assert.deepEqual(loadAllRuns(), { runs: [], errors: [] });
+});
+
+test("admin server component remains readable when a published category is corrupt", async (t) => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const data = await import("../lib/data.ts");
+  const categories = await import("../lib/categories.ts");
+  const providers = await import("../lib/providers.ts");
+  const category = categories.DEFAULT_CATEGORY;
+  const reading = data.loadHistory(category, true)[0];
+  const broken = path.join(data.REPO_ROOT, "data", "runs", reading.run_date, `${category}.json`);
+  const originalRead = fs.readFileSync;
+  t.mock.method(fs, "readFileSync", (p, ...args) => p === broken ? "invalid JSON" : originalRead(p, ...args));
+  assert.throws(() => data.loadHistory(category), /not valid JSON/);
+  const source = originalRead(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, process, console, require: id => {
+    if (id === "@/lib/data") return data;
+    if (id === "@/lib/categories") return categories;
+    if (id === "@/lib/providers") return providers;
+    if (id === "@/lib/analytics") return { totals };
+    // Exercise the page and its real archive readers; child widgets are outside this check.
+    if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
+    return nativeRequire(id);
+  } });
+  const html = renderToStaticMarkup(await exports.default({ searchParams: Promise.resolve({ category }) }));
+  assert.match(html, /UNAVAILABLE/);
+  assert.match(html, /not valid JSON/);
+  assert.ok(html.includes(`data/runs/${reading.run_date}/${category}.json`));
+  assert.match(html, /Published readings are unavailable/);
+  assert.match(html, /PUBLISHED/); // healthy categories remain visible
 });
 
 test("brand history retains absent brands, dates rereads by measurement, and marks method breaks", async (t) => {

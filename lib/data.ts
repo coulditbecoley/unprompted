@@ -118,7 +118,8 @@ export function loadAllRuns(includeHeld = false): ArchiveScan {
   if (includeHeld) {
     const published = loadAllRuns();
     const held = scanRuns(path.join(REPO_ROOT, "data", "held"));
-    return { runs: [...published.runs, ...held.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)), errors: [...published.errors, ...held.errors] };
+    return { runs: [...published.runs, ...held.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)),
+      errors: [...published.errors.map(e => `data/runs/${e}`), ...held.errors.map(e => `data/held/${e}`)] };
   }
   return scanRuns(RUNS_DIR);
 }
@@ -126,18 +127,28 @@ export function loadAllRuns(includeHeld = false): ArchiveScan {
 function scanRuns(root: string): ArchiveScan {
   const runs: RunRecord[] = [];
   const errors: string[] = [];
-  if (!fs.existsSync(root)) return { runs, errors };
-
-  const dates = fs
-    .readdirSync(root)
-    .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
-    .sort();
+  let dates: string[];
+  try {
+    dates = fs.readdirSync(root).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") errors.push(".: archive directory is unreadable");
+    return { runs, errors };
+  }
 
   for (const date of dates) {
     const dir = path.join(root, date);
-    if (!fs.statSync(dir).isDirectory()) continue;
-
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+    let files: string[];
+    try {
+      if (!fs.statSync(dir).isDirectory()) {
+        errors.push(`${date}: expected an archive directory`);
+        continue;
+      }
+      files = fs.readdirSync(dir).filter(f => f.endsWith(".json")).sort();
+    } catch {
+      errors.push(`${date}: archive directory is unreadable`);
+      continue;
+    }
+    for (const file of files) {
       const where = `${date}/${file}`;
       let parsed: unknown;
       try {

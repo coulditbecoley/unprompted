@@ -241,3 +241,23 @@ statements and omits the obsolete local-harness availability claim. No provider
 calls, source-record edits, or changes to the running main checkout were made.
 At 13:11 local the scheduled log reported 100/375 coding calls, zero failures;
 publication and the remaining categories are still pending.
+
+## Cycle 12: retain operator access during archive corruption
+
+The admin page now catches published-history failures per category. The affected
+category's history count, latest reading, and brand count say unavailable;
+healthy categories and operator controls remain reachable in the server output.
+Public history readers still throw on invalid records. Archive scans also report
+failed directory reads and date-shaped non-directories, retain readable siblings,
+and identify the held/published bucket in combined errors. A missing archive root
+remains an empty archive; permission errors do not become an empty success.
+
+Verification: 29 Node tests passed, including an in-process render of the actual
+admin page with a corrupt published record. That check uses real archive readers
+and React server rendering, with child widgets stubbed; it is not a browser or
+widget acceptance claim. Directory fixtures cover stat/list failures, non-directory
+entries, a readable sibling, denied root access, and an absent root. The final
+77-page build passed, and the two affected checks passed again after adding
+explicit path and strict-public-reader assertions. Python is unchanged from its
+156-test pass. At 13:17 local the scheduled task remained Running and reported
+150/375 coding calls with zero failures. Main remains clean and frozen.
