@@ -197,8 +197,8 @@ def test_movement_reports_deltas_entrants_and_dropouts():
 
 
 def test_the_snub_prefers_a_dropout_over_a_decline():
-    last = [BrandWeek("PSA", 5, 5, 1.0, 5, 1.0, 1.0, []), BrandWeek("Beckett", 1, 5, 0.2, 0, 0.0, 2.0, [])]
-    this = [BrandWeek("PSA", 2, 5, 0.4, 2, 0.4, 1.0, [])]
+    last = [BrandWeek("PSA", 100, 100, 1.0, 100, 1.0, 1.0, []), BrandWeek("Beckett", 20, 100, 0.2, 0, 0.0, 2.0, [])]
+    this = [BrandWeek("PSA", 40, 100, 0.4, 40, 0.4, 1.0, [])]
     assert the_snub(movement(this, last)).brand == "Beckett"
 
 
@@ -206,6 +206,32 @@ def test_the_snub_is_none_on_a_quiet_week():
     """Inventing drama from a flat week is how a chart loses trust."""
     week = [BrandWeek("PSA", 5, 5, 1.0, 5, 1.0, 1.0, [])]
     assert the_snub(movement(week, week)) is None
+
+
+def test_small_sample_dropout_does_not_become_a_headline():
+    a, b = _week("A", 1), _week("B", 1)
+    a.total_runs = b.total_runs = 10
+    assert the_snub(movement([b], [a])) is None
+    a.total_runs = b.total_runs = 100
+    assert the_snub(movement([b], [a])).brand == "A"
+
+
+def test_method_change_suppresses_movement_holds_and_report_headlines(tmp_path):
+    from unprompted.report import build_report
+    previous = _run([ex(run=i, brands=["PSA", "CGC"]) for i in range(100)])
+    previous.update(category="alpha", run_date="2026-09-01", method_version=1,
+                    runs_per_question=100, engines=["claude"], methodology={"aliases": {}})
+    current = {**previous, "run_date": "2026-09-14", "method_version": 2,
+        "extractions": _run([ex(run=i, brands=["PSA" if i < 10 else "Beta", "CGC"]) for i in range(100)])["extractions"]}
+    now, old = brand_week(current), brand_week(previous)
+    assert run_checks(current, now, old, previous=previous).passed
+    text = build_report(current, [previous], tmp_path / "missing.yml")
+    assert "methodology version changed" in text and "## The Snub" not in text
+    current["method_version"] = 1
+    assert any("moved" in r for r in run_checks(current, now, old, previous=previous).reasons)
+    text = build_report(current, [previous], tmp_path / "missing.yml")
+    assert "Compared with the measurement from 2026-09-01" in text
+    assert "points since 2026-09-01" in text and "week over week" not in text
 
 
 def test_source_counts_group_by_host_and_rank_by_frequency():

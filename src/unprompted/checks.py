@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .aggregate import BrandWeek
+from .aggregate import BrandWeek, comparison_reason
 from .normalize import _key
 
 # Starting thresholds. Tune after four weeks of real baseline and bump the
@@ -147,7 +147,8 @@ def run_checks(
             )
 
     # 2. Implausible week-over-week swing.
-    prev = {b.brand: b for b in last_week}
+    comparable = previous is None or comparison_reason(run, previous) is None
+    prev = {b.brand: b for b in last_week} if comparable else {}
     for brand in this_week:
         before = prev.get(brand.brand)
         if before is None:

@@ -58,6 +58,9 @@ import {
   standings,
   consensus,
   engineDivergence,
+  comparisonReason,
+  movement,
+  theSnub,
 } from "../lib/metrics.ts";
 
 test("ties, missing engines and pluralities cannot manufacture consensus", () => {
@@ -102,6 +105,40 @@ const PYTHON = (() => {
 })();
 
 /** Every published run, so the check is over real data and not a sample. */
+test("Python and TypeScript refuse the same incompatible comparisons", { skip: !PYTHON }, () => {
+  const previous = { category: "alpha", run_date: "2026-09-01", method_version: 1,
+    runs_per_question: 1, engines: ["a", "b"], extractor: "reader", extractor_model: "model",
+    extractions: [{ question_id: "q1" }], methodology: { aliases: { canonical: { A: ["a"], B: ["b"] } } } };
+  const current = { ...structuredClone(previous), run_date: "2026-09-14" };
+  const cases = [[current, previous, true], [current, null, false]];
+  for (const edit of [
+    { method_version: 2 }, { category: "beta" }, { engines: ["a"] },
+    { runs_per_question: 2 }, { measured_on: "2026-09-01" },
+    { extractions: [{ question_id: "q2" }] }, { extractor_model: "other" },
+    { methodology: { aliases: { canonical: { Changed: [] } } } }, { method_version: null },
+  ]) cases.push([{ ...current, ...edit }, previous, false]);
+  cases.push([{ ...current, engines: ["b", "a"], methodology: {
+    aliases: { canonical: { B: ["b"], A: ["a"] } },
+  } }, previous, true]);
+  const reasons = cases.map(([now, old, allowed]) => {
+    const reason = comparisonReason(now, old);
+    assert.equal(reason === null, allowed);
+    return reason;
+  });
+  const script = ["import sys,json", SRC_PATH_LINE,
+    "from unprompted.aggregate import comparison_reason",
+    "print(json.dumps([comparison_reason(a,b) for a,b,_ in json.load(sys.stdin)]))"].join(NEWLINE);
+  assert.deepEqual(JSON.parse(execFileSync(PYTHON, ["-c", script], {
+    input: JSON.stringify(cases), encoding: "utf8", cwd: REPO,
+  })), reasons);
+});
+
+test("a dropout without sufficient observations does not become a headline", () => {
+  const row = (brand, totalRuns) => ({ brand, rotation: 1, firstShare: 1, totalRuns });
+  assert.equal(theSnub(movement([row("B", 10)], [row("A", 10)])), null);
+  assert.equal(theSnub(movement([row("B", 100)], [row("A", 100)])).brand, "A");
+});
+
 function publishedRuns() {
   if (!fs.existsSync(RUNS)) return [];
   return fs

@@ -55,7 +55,7 @@ export type RunRecord = {
   publication_checks?: { passed: boolean; reasons: string[] };
   measured_on?: string;
   source_run?: string;
-  methodology?: { questions?: { questions: Array<{ id: string; text: string }> }; aliases?: { affiliations?: Record<string, string | string[]> } };
+  methodology?: { [key: string]: unknown; questions?: { questions: Array<{ id: string; text: string }> }; aliases?: { affiliations?: Record<string, string | string[]> } };
   category: string;
   run_date: string;
   method_version: number;
@@ -67,6 +67,7 @@ export type RunRecord = {
    * append-only, so those files are never backfilled.
    */
   extractor?: string;
+  extractor_model?: string;
   extractions: Extraction[];
   quarantined: string[];
 };
@@ -268,6 +269,37 @@ export function marginOfError(p: number, n: number): number {
   return round1(1.96 * Math.sqrt((p * (1 - p)) / n) * 100);
 }
 
+export function comparisonReason(run: RunRecord, previous?: RunRecord): string | null {
+  if (!previous) return "No earlier published measurement is available for comparison.";
+  for (const key of ["method_version", "runs_per_question"] as const) {
+    if ([run, previous].some(r => !Number.isInteger(r[key]) || r[key] < 1))
+      return "Recorded methodology is incomplete; movement is unavailable.";
+  }
+  if (!run.category || run.category !== previous.category) return "These measurements cover different categories.";
+  if (run.method_version !== previous.method_version) return "The methodology version changed; movement is not comparable.";
+  if (run.runs_per_question !== previous.runs_per_question) return "The number of repetitions changed; movement is not comparable.";
+  if (!run.engines?.length || !previous.engines?.length) return "Recorded methodology is incomplete; movement is unavailable.";
+  if (JSON.stringify([...run.engines].sort()) !== JSON.stringify([...previous.engines].sort()))
+    return "The engine roster changed; movement is not comparable.";
+  const dates = [run, previous].map(r => r.measured_on || r.run_date);
+  if (!dates.every(Boolean) || dates[0] <= dates[1]) return "These readings do not represent successive measurements.";
+  const questions = [run, previous].map(r => [...new Set(r.extractions.map(e => e.question_id))].sort());
+  if (!questions[0].length || JSON.stringify(questions[0]) !== JSON.stringify(questions[1]))
+    return "Question coverage changed; movement is not comparable.";
+  // JSON object key order is not a methodology change.
+  const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable)
+    : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, stable(v)])) : value;
+  const snapshots = [run.methodology ?? {}, previous.methodology ?? {}];
+  for (const key of ["questions", "engines", "system_prompt", "extraction_prompt", "extractor", "aliases"]) {
+    if (snapshots.every(s => key in s) && JSON.stringify(stable(snapshots[0][key])) !== JSON.stringify(stable(snapshots[1][key])))
+      return "The recorded reading configuration changed; movement is not comparable.";
+  }
+  for (const key of ["extractor", "extractor_model"] as const) {
+    if (run[key] && previous[key] && run[key] !== previous[key]) return "The extractor changed; movement is not comparable.";
+  }
+  return null;
+}
+
 export function movement(
   thisWeek: BrandStanding[],
   lastWeek: BrandStanding[],
@@ -298,8 +330,7 @@ export function movement(
         firstShareDelta: round1(-before.firstShare * 100),
         isNew: false,
         isDropout: true,
-        // Named last week and not once this week is a real disappearance, not a
-        // wobble, so it always counts.
+        // A disappearance still needs enough observations to support a headline.
         significant: exceedsNoise(0, thisWeek[0]?.totalRuns ?? 0, before.rotation, before.totalRuns),
       });
     }
@@ -310,23 +341,19 @@ export function movement(
 }
 
 /**
- * The week's biggest faller. A dropout always outranks a decline.
- * Returns null on a quiet week: inventing drama is how a chart loses trust.
- */
-/**
  * The week's biggest faller, or nobody.
  *
- * A dropout always outranks a decline, and a decline the sample cannot support
+ * A supported dropout outranks a decline, and a decline the sample cannot support
  * is not a story. Naming a brand The Snub over a four-point wobble on 225 runs
  * would be exactly the kind of manufactured drama this publication exists to
  * replace, and the one a reader could most easily check and disprove.
  */
 export function theSnub(moves: Movement[]): Movement | null {
-  if (!moves.length) return null;
-  const dropouts = moves.filter((m) => m.isDropout);
+  const supported = moves.filter(m => m.significant && m.rotationDelta < 0).sort((a, b) => a.rotationDelta - b.rotationDelta);
+  if (!supported.length) return null;
+  const dropouts = supported.filter((m) => m.isDropout);
   if (dropouts.length) return dropouts[0];
-  const worst = moves[0];
-  return worst.rotationDelta < 0 && worst.significant ? worst : null;
+  return supported[0];
 }
 
 export function sourceCounts(run: RunRecord): Array<[string, number]> {

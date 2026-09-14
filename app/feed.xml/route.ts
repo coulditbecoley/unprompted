@@ -2,6 +2,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { runInstant } from "@/lib/schedule";
 import {
   categoryLabel,
+  comparisonReason,
   loadHistory,
   movement,
   standings,
@@ -45,7 +46,9 @@ export function GET() {
   const entries = weeks
     .map(({ run, older }) => {
       const board = standings(run);
-      const moves = movement(board, older ? standings(older) : []);
+      const comparisonNote = comparisonReason(run, older);
+      const baselineDate = older?.measured_on || older?.run_date;
+      const moves = older && comparisonNote === null ? movement(board, standings(older)) : [];
       const snub = theSnub(moves);
       const leader = board[0];
       const label = categoryLabel(run.category);
@@ -67,8 +70,9 @@ export function GET() {
         run.source_run ? `<p>Re-read on ${esc(run.run_date)}; originally measured ${esc(measured)}.</p>` : "",
         `<p>${esc(label)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${esc(run.engines.join(", "))}), method v${run.method_version}.</p>`,
         `<ol>${rows}</ol>`,
+        `<p>${esc(comparisonNote ?? `Compared with the measurement from ${baselineDate}.`)}</p>`,
         snub
-          ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? "named last week, not named once this week" : `down ${Math.abs(snub.rotationDelta)} points`}.</p>`
+          ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? `named on ${esc(baselineDate!)}, not named in this measurement` : `down ${Math.abs(snub.rotationDelta)} points since ${esc(baselineDate!)}`}.</p>`
           : "",
         `<p><a href="${SITE}/chart/${run.category}/${run.run_date}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
       ].join("");

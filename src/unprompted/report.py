@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .aggregate import (
     brand_week,
+    comparison_reason,
     load_affiliations,
     load_history,
     movement,
@@ -41,7 +42,9 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
 
     prior = [h for h in history if (h.get("measured_on") or h["run_date"]) < (run.get("measured_on") or date)]
     last = brand_week(prior[-1]) if prior else []
-    moves = movement(board, last)
+    comparison_note = comparison_reason(run, prior[-1] if prior else None)
+    baseline_date = (prior[-1].get("measured_on") or prior[-1]["run_date"]) if prior else None
+    moves = movement(board, last) if comparison_note is None else []
     move_for = {m.brand: m for m in moves}
     snub = the_snub(moves)
 
@@ -85,6 +88,10 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
 
     out.append("## Standings")
     out.append("")
+    if comparison_note:
+        out.extend([comparison_note, ""])
+    else:
+        out.extend([f"Compared with the measurement from {baseline_date}.", ""])
     out.append("| # | Brand | Named | Rotation | First |  |")
     out.append("|---|---|---|---|---|---|")
     for i, b in enumerate(board, 1):
@@ -105,9 +112,9 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
         out.append("## The Snub")
         out.append("")
         detail = (
-            "Named last week, not named once this week."
+            f"Named on {baseline_date}, not named in this measurement."
             if snub.is_dropout
-            else f"Down {abs(snub.rotation_delta)} points week over week."
+            else f"Down {abs(snub.rotation_delta)} points since {baseline_date}."
         )
         out.append(f"**{snub.brand}**: {detail}")
         out.append("")

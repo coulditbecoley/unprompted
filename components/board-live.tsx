@@ -196,7 +196,7 @@ export function LiveBoard({
           <SortHead
             className="seq-delta"
             label="Δ"
-            hint="Sort by movement since last week"
+            hint="Sort by change from the comparison measurement"
             k="move"
             sort={sort}
             onSort={setSort}

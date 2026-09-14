@@ -128,3 +128,26 @@ passed (77 generated pages, including TypeScript checks). Tests cover missing
 versus empty snapshots, archived scalar/list ownership, and the report's actual
 self-preference section. Browser rendering remains unverified. Dependencies were
 installed from the existing lockfile in the isolated worktree; main was untouched.
+
+## Cycle 6: show only comparable changes, against a dated baseline
+
+Homepage, category and dated charts, Atom feed, and generated reports now suppress
+movement when recorded methods, engine rosters, repetition counts, question
+coverage, or shared frozen reading configurations differ. Same-measurement
+re-readings are not temporal comparisons. Legacy comparisons rely on declared
+metadata; absent provenance cannot certify unchanged provider behavior.
+
+Readers see the reason comparison is unavailable or the actual baseline date;
+chart baseline dates link to the immutable prior reading. A multi-week gap is no
+longer described as last week. The publication swing check also skips incompatible
+measurements, while all population, failure and quarantine checks remain active.
+Dropout headlines now honor the existing sample-support flag, which their prior
+special case ignored. Numerical movement remains visible when comparable; an
+unsupported disappearance does not become a headline.
+
+Verification: 148 Python tests and 25 Node tests passed. The cross-language test
+checks incompatible and compatible cases, including reordered metadata keys.
+Report integration checks both method-change suppression and dated comparisons.
+The production build passed with 77 pages; generated homepage and chart HTML
+contain the no-baseline explanation. This is generated-output evidence, not a
+browser interaction or hosted deployment pass. Main remains frozen for 13:00.
