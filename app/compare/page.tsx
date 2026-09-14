@@ -109,7 +109,7 @@ export default async function ComparePage({
       </h1>
       <p className="section-lead cmp-lead">
         <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} />{" "}
-        {categoryLabel(category)}, week of {run.run_date}.
+        {categoryLabel(category)}, measured on {run.measured_on || run.run_date}.
       </p>
 
       <Picker category={category} brands={brands} left={L.brand} right={R.brand} />
@@ -147,7 +147,7 @@ export default async function ComparePage({
                   <span>{questionsLed(row, sides[index === 0 ? 1 : 0].row)}</span>
                 </div>
                 <div className="cmp-stat">
-                  <span>Weeks tracked</span>
+                  <span>Measurements tracked</span>
                   <span>{history.length}</span>
                 </div>
                 {(() => {
@@ -162,7 +162,7 @@ export default async function ComparePage({
               </>
             ) : (
               <p className="cmp-absent">
-                Not named in any answer in the week of {run.run_date}.
+                Not named in any answer measured on {run.measured_on || run.run_date}.
               </p>
             )}
           </div>
@@ -201,8 +201,7 @@ export default async function ComparePage({
         <>
           <h2 className="cmp-h2">Rotation over time</h2>
           <p className="cmp-note">
-            The share of answers naming each brand, every measured week. A week
-            with no mention is a zero, not a gap in the line.
+            The share of answers naming each brand, for each measurement. Zero means the brand was absent from its answered calls. Points are evenly spaced by measurement.
           </p>
           <TwoLines a={L} b={R} weeks={weeks} />
         </>
@@ -389,22 +388,21 @@ function TwoLines({
   b,
   weeks,
 }: {
-  a: { brand: string; history: Array<{ date: string; rotation: number }> };
-  b: { brand: string; history: Array<{ date: string; rotation: number }> };
+  a: { brand: string; history: ReturnType<typeof brandHistory> };
+  b: { brand: string; history: ReturnType<typeof brandHistory> };
   weeks: number;
 }) {
   const W = 720;
   const H = 132;
   const pad = 10;
 
-  const points = (history: Array<{ rotation: number }>) =>
+  const points = (history: ReturnType<typeof brandHistory>) =>
     history
       .map((h, i) => {
         const x = pad + (i * (W - pad * 2)) / (weeks - 1);
         const y = H - pad - h.rotation * (H - pad * 2);
         return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
+      });
 
   const first = a.history[0]?.date ?? b.history[0]?.date;
   const last =
@@ -417,15 +415,22 @@ function TwoLines({
         className="cmp-svg"
         preserveAspectRatio="none"
         role="img"
-        aria-label={`Rotation across ${weeks} weeks: ${a.brand} against ${b.brand}.`}
+        aria-label={`Rotation across ${weeks} measurements: ${a.brand} against ${b.brand}. Lines connect comparable measurements only.`}
       >
         {[0, 0.5, 1].map((t) => {
           const y = H - pad - t * (H - pad * 2);
           return <line key={t} className="spark-grid" x1={pad} x2={W - pad} y1={y} y2={y} />;
         })}
-        <polyline className="cmp-line" points={points(a.history)} />
-        <polyline className="cmp-line is-b" points={points(b.history)} />
+        {[a, b].map((side, sideIndex) => {
+          const coordinates = points(side.history);
+          const className = sideIndex ? "cmp-line is-b" : "cmp-line";
+          return <g key={sideIndex}>
+            <path className={className} d={coordinates.map((p, i) => `${i === 0 || side.history[i].breakReason ? "M" : "L"}${p}`).join(" ")} />
+            {coordinates.map((p, i) => <circle key={side.history[i].date} className={className} cx={p.split(",")[0]} cy={p.split(",")[1]} r="3" />)}
+          </g>;
+        })}
       </svg>
+      {a.history.some(h => h.breakReason) && <p>Lines break where measurements are not comparable.</p>}
       <div className="cmp-legend">
         <span className="mono">
           <i className="cmp-key" aria-hidden="true" /> {a.brand}

@@ -197,3 +197,25 @@ individually but the aggregate estimate exceeds the ceiling, plus existing outpu
 and unreadable budget cases. The isolated CLI correctly reports its absent API
 credentials and the $153.1127 aggregate projection against $150. No production
 credentials were copied into this worktree. Main and its budget remain unchanged.
+
+## Cycle 10: keep history charts honest across method changes
+
+Brand and head-to-head history charts now reuse the comparison guard to break
+their SVG paths between incompatible readings. Dots retain every measurement,
+including isolated points and true zero mentions. History dates identify the
+measurement; brand history links to the exact published reading, including a
+later reread. The table explains method breaks, and both charts disclose their
+equal spacing by measurement. Latest-result copy no longer calls old data this
+week or treats a reread date as a fresh measurement.
+
+Verification: 27 Node tests, typecheck, and the final 77-page production build
+passed. The added offline archive case covers an absent brand, a method change,
+and a later reread of the same measurement. Browser rendering remains unverified.
+No CSS changes or new design suppressions were introduced.
+
+Scheduled-run observation: on September 14 at 13:02 local, Task Scheduler showed
+the existing weekly task Running. Its log began at 13:00:02 and passed Git guards,
+then started coding with all five engines and the hosted batch extractor. At
+13:07 the log reached 60/375 calls with zero failures. This confirms startup and
+partial progress only; publication, remaining categories, and push are pending.
+Main remains at af06305 with no tracked changes; the budget remains $150.

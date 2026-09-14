@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CATEGORIES, getCategory } from "@/lib/categories";
@@ -47,7 +48,7 @@ export async function generateMetadata({
   return {
     title: `${brand} in AI answers`,
     description: row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(category).toLowerCase()} in the week of ${run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(category).toLowerCase()} measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
       : `Tracking how often AI assistants name ${brand}.`,
   };
 }
@@ -81,13 +82,13 @@ export default async function BrandPage({
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {categoryLabel(category).toLowerCase()} in the week
-            of {run!.run_date}, and named it first in{" "}
+            {row.totalRuns} answers about {categoryLabel(category).toLowerCase()} measured on
+            {run!.measured_on || run!.run_date}, and named it first in{" "}
             {Math.round(row.firstShare * 100)}% of runs.
           </>
         ) : (
           <>
-            {brand} was not named in any answer in the most recent measured week.
+            {brand} was not named in any answer in the latest measurement.
           </>
         )}
       </p>
@@ -107,7 +108,7 @@ export default async function BrandPage({
         <div className="cmp-grid" style={{ marginTop: 14 }}>
           <div className="cmp-pick">
             <TrimTop />
-            <h3 style={{ marginTop: 6 }}>This week</h3>
+            <h3 style={{ marginTop: 6 }}>Latest measurement</h3>
             <div className="cmp-stat">
               <span>Rotation</span>
               <span>
@@ -123,7 +124,7 @@ export default async function BrandPage({
               <span>{row.medianPosition ?? "—"}</span>
             </div>
             <div className="cmp-stat">
-              <span>Weeks tracked</span>
+              <span>Measurements tracked</span>
               <span>{history.length}</span>
             </div>
             {tone && (
@@ -142,7 +143,7 @@ export default async function BrandPage({
 
           <div className="cmp-pick">
             <TrimTop />
-            <h3 style={{ marginTop: 6 }}>Every run this week</h3>
+            <h3 style={{ marginTop: 6 }}>Every answer in this measurement</h3>
             <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 10 }}>
               {row.cells.map((on, i) => (
                 <i key={i} className="seq-cell" data-on={on} style={{ animationDelay: `${i * 18}ms` }} />
@@ -161,7 +162,7 @@ export default async function BrandPage({
       <div className="seq-board">
         <TrimTop />
         <div className="seq-row seq-head" style={{ gridTemplateColumns: "1fr auto auto" }}>
-          <span className="label">Week</span>
+          <span className="label">Measured</span>
           <span className="label">Named</span>
           <span className="label">First</span>
         </div>
@@ -170,7 +171,7 @@ export default async function BrandPage({
           .reverse()
           .map((h) => (
             <div className="seq-row" key={h.date} style={{ gridTemplateColumns: "1fr auto auto" }}>
-              <span className="mono" style={{ fontSize: 13.5 }}>{h.date}</span>
+              <span className="mono" style={{ fontSize: 13.5 }}><Link href={`/chart/${category}/${h.readingDate}`}>{h.date}</Link>{h.breakReason && <small style={{ display: "block" }}>{h.breakReason}</small>}</span>
               <span className="mono" style={{ fontSize: 13 }}>{Math.round(h.rotation * 100)}%</span>
               <span className="mono" style={{ fontSize: 13, color: "var(--fg-2)" }}>
                 {Math.round(h.firstShare * 100)}%
@@ -185,7 +186,7 @@ export default async function BrandPage({
       </div>
 
       <p className="mono" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 20 }}>
-        Measured across {runs.length} week{runs.length === 1 ? "" : "s"}. Raw answers
+        Measured across {runs.length} measurement{runs.length === 1 ? "" : "s"}. Raw answers
         for every figure are in the public repository.
       </p>
     </section>
@@ -193,7 +194,7 @@ export default async function BrandPage({
 }
 
 /** Rotation over time. Hand-drawn SVG: no chart library for one polyline. */
-function Sparkline({ history }: { history: Array<{ date: string; rotation: number }> }) {
+function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
   const W = 720;
   const H = 72;
   const pad = 4;
@@ -202,24 +203,27 @@ function Sparkline({ history }: { history: Array<{ date: string; rotation: numbe
     const y = H - pad - h.rotation * (H - pad * 2);
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
-  const last = points[points.length - 1].split(",");
+  const line = points.map((p, i) => `${i === 0 || history[i].breakReason ? "M" : "L"}${p}`).join(" ");
+  const hasBreak = history.some(h => h.breakReason);
 
   return (
     <>
       <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>Rotation over time</h2>
+      <p>Points are evenly spaced by measurement.</p>
       <div className="panel" style={{ padding: "18px 20px" }}>
         <svg
           className="spark"
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Rotation across ${history.length} weeks, currently ${Math.round(history[history.length - 1].rotation * 100)} percent`}
+          aria-label={`Rotation across ${history.length} measurements, currently ${Math.round(history[history.length - 1].rotation * 100)} percent. Lines connect comparable measurements only.`}
         >
           <line className="spark-grid" x1="0" y1={H - pad} x2={W} y2={H - pad} />
           <line className="spark-grid" x1="0" y1={pad} x2={W} y2={pad} />
-          <polyline className="spark-line" points={points.join(" ")} />
-          <circle className="spark-dot" cx={last[0]} cy={last[1]} r="3.5" />
+          <path className="spark-line" d={line} />
+          {points.map((p, i) => <circle key={history[i].date} className="spark-dot" cx={p.split(",")[0]} cy={p.split(",")[1]} r="3.5" />)}
         </svg>
+        {hasBreak && <p>Lines break where measurements are not comparable. See the dated readings below.</p>}
       </div>
     </>
   );

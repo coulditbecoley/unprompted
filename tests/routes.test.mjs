@@ -129,6 +129,31 @@ test("held review follows explicit recovery chains and exposes corrupt files", a
   assert.ok(held.errors.some(e => e.includes("wrong.json: declares wrong-identity")));
 });
 
+test("brand history retains absent brands, dates rereads by measurement, and marks method breaks", async (t) => {
+  const { brandHistory, REPO_ROOT } = await import("../lib/data.ts");
+  const dir = path.join(REPO_ROOT, "data", "runs");
+  const records = [
+    ["2026-08-03", 1, true], ["2026-08-10", 1, false],
+    ["2026-08-17", 2, true], ["2026-08-18", 2, true],
+  ].map(([date, version, named]) => ({
+    category: "history-test", run_date: date, method_version: version, runs_per_question: 1,
+    ...(date === "2026-08-18" ? { measured_on: "2026-08-17", source_run: "2026-08-17" } : {}),
+    engines: ["offline"], extractions: [{ engine: "offline", question_id: "q1", run_index: 0,
+      brands: named ? [{ name: "Brand", position: 1 }] : [], sources: [], refused: false }],
+  }));
+  const files = new Map(records.map(r => [path.join(dir, r.run_date, "history-test.json"), JSON.stringify(r)]));
+  const originalExists = fs.existsSync, originalReadDir = fs.readdirSync, originalRead = fs.readFileSync;
+  t.mock.method(fs, "existsSync", p => p === dir || files.has(p) || originalExists(p));
+  t.mock.method(fs, "readdirSync", (p, ...args) => p === dir ? records.map(r => r.run_date) : originalReadDir(p, ...args));
+  t.mock.method(fs, "readFileSync", (p, ...args) => files.get(p) ?? originalRead(p, ...args));
+  const history = brandHistory("history-test", "Brand");
+  assert.deepEqual(history.map(h => h.date), ["2026-08-03", "2026-08-10", "2026-08-17"]);
+  assert.deepEqual(history.map(h => h.rotation), [1, 0, 1]);
+  assert.deepEqual(history.slice(0, 2).map(h => h.breakReason), [null, null]);
+  assert.match(history[2].breakReason, /methodology version changed/);
+  assert.equal(history[2].readingDate, "2026-08-18");
+});
+
 test("recorded absence of affiliations never falls back to today's ownership", async () => {
   const { loadAffiliations } = await import("../lib/data.ts");
   const category = "ai-coding-assistants";

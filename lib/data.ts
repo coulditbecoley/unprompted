@@ -18,6 +18,7 @@ import { CATEGORIES, getCategory as getCategoryFromRegistry } from "./categories
 // "@/lib/data" and the split is an implementation detail, not an API change.
 import {
   answered,
+  comparisonReason,
   standings,
   type BrandStanding,
   type Extraction,
@@ -201,11 +202,13 @@ export function loadQuestionText(category: string): Record<string, string> {
 export function brandHistory(
   category: string,
   brand: string,
-): Array<{ date: string; rotation: number; firstShare: number }> {
-  return loadHistory(category).map((run) => {
+): Array<{ date: string; readingDate: string; rotation: number; firstShare: number; breakReason: string | null }> {
+  return loadHistory(category).map((run, i, runs) => {
     const row = standings(run).find((s) => s.brand === brand);
     return {
-      date: run.run_date,
+      date: run.measured_on || run.run_date,
+      readingDate: run.run_date,
+      breakReason: i ? comparisonReason(run, runs[i - 1]) : null,
       rotation: row?.rotation ?? 0,
       firstShare: row?.firstShare ?? 0,
     };
