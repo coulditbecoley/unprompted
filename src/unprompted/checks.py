@@ -206,10 +206,10 @@ def run_checks(
     # replaced rather than added to.
     for engine in sorted(run.get("engines", [])):
         got = [e for e in extractions if e.get("engine") == engine]
-        # `got` empty means a hand-built record rather than a real run: the
-        # pipeline builds one task per engine per question, so a declared engine
-        # always has rows.
+        # Missing rows are not successful calls. Legacy re-reads may lack the
+        # frozen question manifest used by the full population check above.
         if not got:
+            reasons.append(f"{engine} has no recorded calls despite being declared in this run")
             continue
         failed = sum(1 for e in got if e.get("error"))
         rate = failed / len(got)

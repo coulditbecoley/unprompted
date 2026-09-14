@@ -290,6 +290,15 @@ def test_too_many_brands_holds_the_week_legacy():
 def test_run_with_no_extractions_at_all_holds():
     assert run_checks({"extractions": []}, [], []).held
 
+def test_declared_engine_cannot_disappear_from_a_legacy_reading():
+    run = _run([ex(engine=e, brands=["PSA", "CGC"]) for e in ("claude", "chatgpt")])
+    run["engines"] = ["claude", "chatgpt"]
+    assert run_checks(run, brand_week(run), []).passed
+    run["extractions"] = [row for row in run["extractions"] if row["engine"] != "chatgpt"]
+    # No frozen question manifest: legacy re-extraction can reach this path.
+    result = run_checks(run, brand_week(run), [])
+    assert result.held and any("chatgpt" in reason and "no recorded calls" in reason for reason in result.reasons)
+
 
 # --- engine failure behaviour ----------------------------------------------
 
@@ -991,13 +1000,14 @@ def test_adding_an_engine_without_a_method_bump_holds_the_week():
         "engines": ["chatgpt", "claude", "perplexity"],
         "method_version": 1,
     }
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in [*previous["engines"], "claude-code"] for i in range(50)])
     run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
     run["method_version"] = 1
 
     result = run_checks(run, brand_week(run), [], previous=previous)
     assert result.held
-    assert "claude-code" in " ".join(result.reasons)
+    assert any("engine list changed" in r and "claude-code" in r for r in result.reasons)
 
 
 def test_adding_an_engine_with_a_method_bump_passes():
@@ -1005,7 +1015,8 @@ def test_adding_an_engine_with_a_method_bump_passes():
         "engines": ["chatgpt", "claude", "perplexity"],
         "method_version": 1,
     }
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in [*previous["engines"], "claude-code"] for i in range(50)])
     run["engines"] = ["chatgpt", "claude", "claude-code", "perplexity"]
     run["method_version"] = 2
 
@@ -1014,7 +1025,8 @@ def test_adding_an_engine_with_a_method_bump_passes():
 
 def test_an_unchanged_engine_list_is_not_flagged():
     previous = {"engines": ["chatgpt", "claude"], "method_version": 1}
-    run = _run([ex(engine="claude", run=i, brands=["PSA", "CGC"]) for i in range(50)])
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"])
+                for e in previous["engines"] for i in range(50)])
     run["engines"] = ["claude", "chatgpt"]  # order must not matter
     run["method_version"] = 1
 

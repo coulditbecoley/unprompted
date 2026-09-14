@@ -80,3 +80,18 @@ Verification: 142 Python tests passed in the isolated worktree. The actual CLI
 prepared and scored the 75-answer packet as awaiting_review with null metrics;
 an attempted overwrite was refused. Three error/empty answers were excluded.
 Historical data and the scheduled checkout were unchanged.
+
+## Cycle 3: reject disappeared engines in legacy recovery
+
+Confirmed with a failing regression: deleting every answer from one declared
+engine in a legacy record still passed the publication checks. The full population
+check depends on a frozen question manifest, which those older records lack.
+The shared per-engine check now holds any declared engine with no recorded calls.
+Fresh measurement and re-extraction use that same gate. Version-change fixtures
+now include rows for every engine they declare, preserving their intended tests.
+
+Verification: regression failed before the fix; 143 Python tests pass afterward.
+All nine current archived held/published records retain at least one row for each
+declared engine. This closes an exposed validation gap; it does not claim that
+an existing archived record suffered it. No historical records were changed.
+The fix is isolated on upgrade/extraction-review pending the scheduled run.
