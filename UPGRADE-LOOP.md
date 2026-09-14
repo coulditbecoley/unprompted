@@ -425,3 +425,20 @@ Verification: the in-process admin render check confirms the link targets the
 actual held date/category, and typecheck passed. No data, CSS, routes, or provider
 calls changed. Live GitHub navigation and browser interaction remain unverified;
 local unpushed records become remotely available only after the scheduler pushes.
+
+## Cycle 21: retain each answer's measurement revision across restarts
+
+New answer checkpoints carry measurement_git_sha, captured from the measurement
+invocation. Reused answers retain that value while newly requested answers receive
+the new invocation's revision. Extraction and recovery copy it into the final
+answer record. Legacy answers remain null rather than acquiring the rereader's
+commit. The final reading's git_sha still identifies its own invocation. These
+fields do not prove clean working trees or upstream provider model identity.
+
+Verification: all 158 Python tests, 31 Node tests, and typecheck passed. The
+partial-restart case checks old and newly requested answers keep different
+revisions; the measurement/recovery integration test uses the actual extraction
+base converter and verifies the final stored field. Legacy checkpoint construction
+without the new field remains supported. No archive records or active-run code
+changed. At 14:10 local, the scheduled task remained Running with 375 extraction
+results pending after its latest 29-minute batch update.

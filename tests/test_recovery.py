@@ -36,6 +36,8 @@ def test_atomic_publication_and_lock(tmp_path, monkeypatch):
 
 def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(run, "ROOT", tmp_path)
+    revision = {"sha": "initial-code"}
+    monkeypatch.setattr(run, "git_sha", lambda: revision["sha"])
     (tmp_path / "aliases").mkdir()
     (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
     spec = {"category": "alpha", "method_version": 1, "runs_per_question": 3,
@@ -70,6 +72,8 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     answer_path = saved / "fake-q1-0.json"
     answer = json.loads(answer_path.read_text())
     assert answer["text"] == "Alpha"
+    assert answer["measurement_git_sha"] == "initial-code"
+    revision["sha"] = "resumed-code"
     answer_path.unlink()  # emulate one call that never reached its durable checkpoint
     with pytest.raises(RuntimeError, match="extraction outage"):
         run.run_category("alpha", "2026-09-14")
@@ -77,6 +81,10 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     assert "reused 2/3 saved calls; 1 calls remaining" in progress
     assert "3/3 calls (0 failed)" in progress
     assert calls.count(0) == 2 and len(calls) == 4
+    assert json.loads(answer_path.read_text())["measurement_git_sha"] == "resumed-code"
+    assert json.loads((saved / "fake-q1-1.json").read_text())["measurement_git_sha"] == "initial-code"
+    legacy = {k: v for k, v in answer.items() if k != "measurement_git_sha"}
+    assert EngineAnswer(**legacy).measurement_git_sha is None
     answer["run_index"] = 99
     write_json(answer_path, answer, replace=True)
     with pytest.raises(ValueError, match="answer identity differs"):
@@ -293,11 +301,13 @@ def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monke
         monkeypatch.setattr(module, "all_engines", configured_engines)
 
     def extract(*args, **kwargs):
+        from unprompted.extract import _base_for
         aliases.write_text("canonical:\n  Changed: [Old]\n  Beta: []\n")
         questions.write_text(questions.read_text().replace("max_brands: 3", "max_brands: 1"))
         commit["sha"] = "after-calls"
-        return [Extraction("offline", "q1", 0, answer="Old and Beta",
-            brands=[BrandMention("Old", 1), BrandMention("Beta", 2)])]
+        base, _ = _base_for(args[0][0])
+        base.brands = [BrandMention("Old", 1), BrandMention("Beta", 2)]
+        return [base]
 
     for module in (run, reextract):
         monkeypatch.setattr(module, "extract_run", extract)
@@ -308,13 +318,14 @@ def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monke
         assert not reasons
     else:
         write_json(source, RunRecord("alpha", "2026-09-01", 1, 1, ["offline"], extractions=[
-            Extraction("offline", "q1", 0, answer="Old and Beta")]).to_dict())
+            Extraction("offline", "q1", 0, answer="Old and Beta", measurement_git_sha="source-measurement")]).to_dict())
         original = source.read_bytes()
         monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
         assert reextract.main() == 0
         assert source.read_bytes() == original
     saved = json.loads((tmp_path / "data/runs/2026-09-14/alpha.json").read_text())
     assert saved["git_sha"] == "before-calls"
+    assert saved["extractions"][0]["measurement_git_sha"] == ("before-calls" if mode == "measurement" else "source-measurement")
     assert saved["methodology"]["aliases"]["canonical"] == {"Original": ["Old"], "Beta": []}
     assert [b["name"] for b in saved["extractions"][0]["brands"]] == ["Original", "Beta"]
 

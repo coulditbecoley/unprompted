@@ -245,6 +245,13 @@ corrected alias map produces a **new** file that carries the original
 measurement date and a pointer to the run it was read from, so a re-reading is
 never mistaken for a fresh week.
 
+New answers also carry `measurement_git_sha`, the measurement invocation's code
+revision. A resumed run can contain answers from multiple revisions, and each
+retains its own value through extraction and rereading. Older answers without
+this field remain unknown; the final reading's `git_sha` does not reconstruct
+their original code revision. These fields identify repository revisions, not
+provider model internals or proof that a working tree was unchanged.
+
 The past is never edited. `data/runs/` is append-only and the tooling refuses to
 write over anything in it, including on a re-read. The repository's public git
 history is the audit trail.

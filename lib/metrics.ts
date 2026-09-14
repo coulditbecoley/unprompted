@@ -38,6 +38,7 @@ export type Usage = {
 };
 
 export type Extraction = {
+  measurement_git_sha?: string | null;
   answer?: string;
   fetched_at?: string;
   source_kind?: string;

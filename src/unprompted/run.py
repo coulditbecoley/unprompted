@@ -243,6 +243,7 @@ def _run_category(
         print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):
         answer = engine.ask_one(qid, text, run_index)
+        answer.measurement_git_sha = measurement_commit
         write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
         return answer
 
