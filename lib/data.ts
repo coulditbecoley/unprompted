@@ -434,99 +434,50 @@ export function quarantineKey(name: string): string {
 }
 
 /**
- * Unrecognised names from the most recent run of each live category.
- *
- * Deliberately not every file ever written. Quarantine is a to-do list, not an
- * archive: flattening all history produced hundreds of names, most of them
- * one-off hallucinations from categories that no longer exist, which buried the
- * handful that were real brands missing from the alias map.
- *
- * Sorted by how often each name appeared, because that is the triage signal. A
- * name seen forty times is a brand we are failing to count; a name seen once is
- * noise.
+ * Unrecognised names from each live category's latest readable record.
+ * Sidecars are written only for nonempty quarantine, so they cannot establish
+ * whether a newer reading cleared it. Use the immutable source and its own
+ * answered-call denominator. Frequency prioritizes review, not product identity.
  */
-export function loadQuarantine(): QuarantineEntry[] {
-  const dir = path.join(REPO_ROOT, "data", "quarantine");
-  if (!fs.existsSync(dir)) return [];
-
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
+export function loadQuarantine(): { entries: QuarantineEntry[]; errors: string[] } {
+  const archive = loadAllRuns(true);
+  const errors = [...archive.errors];
   const found = new Map<string, { count: number; categories: Set<string>; material: boolean }>();
 
   for (const category of CATEGORIES) {
-    // File names are `<date>-<category>.json`, so the newest sorts last.
-    const latest = files
-      .filter((f) => f.endsWith(`-${category.slug}.json`))
-      .sort()
-      .pop();
+    const readings = archive.runs.filter(r => r.category === category.slug);
+    const latest = readings.at(-1);
     if (!latest) continue;
-
-    const date = latest.slice(0, 10);
-
-    /*
-      The denominator belongs to the run this file came from, which may be one
-      the checks held rather than published -- a held run still produced these
-      names, and holding it is often why they are worth looking at.
-    */
-    const answered = answeredCount(category.slug, date);
-    // The same floor checks.py uses, and never below two: one sighting of a
-    // thing is not evidence of anything at any sample size.
-    const floor = answered ? Math.ceil(answered * QUARANTINE_MATERIAL) : Infinity;
-
-    let names: unknown;
-    try {
-      names = JSON.parse(fs.readFileSync(path.join(dir, latest), "utf-8"));
-    } catch {
-      continue; // A corrupt file must not take the dashboard down.
+    const where = `${latest.run_date}/${category.slug}`;
+    if (readings.filter(r => r.run_date === latest.run_date).length !== 1) {
+      errors.push(`${where}: ambiguous held/published identity`);
+      continue;
     }
-    if (!Array.isArray(names)) continue;
-
+    const names = latest.quarantined;
+    if (!Array.isArray(names) || names.some(n => typeof n !== "string" || !n.trim())) {
+      errors.push(`${where}: quarantine names are missing or malformed`);
+      continue;
+    }
+    const total = answered(latest).length;
+    if (names.length && !total) {
+      errors.push(`${where}: quarantine has no answered-call denominator`);
+      continue;
+    }
     const here = new Map<string, number>();
     for (const raw of names) {
-      if (typeof raw !== "string" || !raw.trim()) continue;
       const key = quarantineKey(raw);
-      here.set(key, (here.get(key) ?? 0) + 1);
+      if (key) here.set(key, (here.get(key) ?? 0) + 1);
     }
-
     for (const [name, count] of here) {
       const at = found.get(name) ?? { count: 0, categories: new Set<string>(), material: false };
       at.count += count;
       at.categories.add(category.slug);
-      // Material where it was actually seen that often, not where the pooled
-      // total happens to cross a floor borrowed from somewhere else.
-      if (count >= floor) at.material = true;
+      if (total && count / total >= QUARANTINE_MATERIAL) at.material = true;
       found.set(name, at);
     }
   }
 
-  return [...found.entries()]
-    .map(([name, at]) => ({
-      name,
-      count: at.count,
-      categories: [...at.categories].sort(),
-      material: at.material,
-    }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-}
-
-/**
- * How many calls a given run actually answered, published or held.
- *
- * Held runs live in a separate directory and are exactly the ones whose
- * quarantine is most worth reading, so both are checked. Returns 0 when the run
- * cannot be found, which the caller reads as "no denominator" rather than as a
- * denominator of zero.
- */
-function answeredCount(category: string, date: string): number {
-  for (const base of ["runs", "held"]) {
-    const file = path.join(REPO_ROOT, "data", base, date, `${category}.json`);
-    if (!fs.existsSync(file)) continue;
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf-8"));
-      if (!isRunRecord(parsed)) continue;
-      return parsed.extractions.filter((e) => !e.error).length;
-    } catch {
-      return 0;
-    }
-  }
-  return 0;
+  return { entries: [...found.entries()]
+    .map(([name, at]) => ({ name, count: at.count, categories: [...at.categories].sort(), material: at.material }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)), errors };
 }

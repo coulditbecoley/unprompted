@@ -194,7 +194,42 @@ test("admin server component remains readable when a published category is corru
   assert.match(html, /not valid JSON/);
   assert.ok(html.includes(`data/runs/${reading.run_date}/${category}.json`));
   assert.match(html, /Published readings are unavailable/);
+  assert.match(html, /Quarantine review is incomplete/);
   assert.match(html, /PUBLISHED/); // healthy categories remain visible
+});
+
+test("quarantine uses latest records, excludes refusals from the floor, and exposes missing evidence", async (t) => {
+  const { loadQuarantine, REPO_ROOT } = await import("../lib/data.ts");
+  const records = new Map();
+  const categories = ["ai-coding-assistants", "ai-writing-tools", "ai-image-generators"];
+  const add = (bucket, date, category, quarantined, extractions = [{ brands: [], error: null, refused: false }]) => {
+    const record = { category, run_date: date, method_version: 1, runs_per_question: 1, engines: ["offline"], extractions, quarantined };
+    records.set(path.join(REPO_ROOT, "data", bucket, date, `${category}.json`), JSON.stringify(record));
+  };
+  add("held", "2026-09-01", categories[0], ["Stale"]);
+  add("runs", "2026-09-07", categories[0], []);
+  add("held", "2026-09-07", categories[1], ["Unmapped", "unmapped"], Array.from({ length: 200 }, (_, i) => ({ brands: [], error: null, refused: i >= 100 })));
+  add("held", "2026-09-07", categories[2], null);
+  const roots = ["runs", "held"].map(bucket => path.join(REPO_ROOT, "data", bucket));
+  const original = { list: fs.readdirSync, stat: fs.statSync, read: fs.readFileSync };
+  t.mock.method(fs, "readdirSync", (p, ...args) => {
+    if (roots.includes(p)) return ["2026-09-01", "2026-09-07"];
+    if (roots.includes(path.dirname(p))) return [...records.keys()].filter(f => path.dirname(f) === p).map(f => path.basename(f));
+    assert.notEqual(p, path.join(REPO_ROOT, "data", "quarantine"), "stale sidecars must not supply current quarantine");
+    return original.list(p, ...args);
+  });
+  t.mock.method(fs, "statSync", (p, ...args) => roots.includes(path.dirname(p)) ? { isDirectory: () => true } : original.stat(p, ...args));
+  t.mock.method(fs, "readFileSync", (p, ...args) => records.get(p) ?? original.read(p, ...args));
+  const review = loadQuarantine();
+  assert.deepEqual(review.entries, [{ name: "unmapped", count: 2, categories: [categories[1]], material: true }]);
+  assert.equal(review.errors.length, 1);
+  assert.match(review.errors[0], /quarantine names are missing or malformed/);
+  add("runs", "2026-09-07", categories[1], []);
+  assert.equal(loadQuarantine().entries.length, 0);
+  assert.ok(loadQuarantine().errors.some(e => e.includes("ambiguous held/published identity")));
+  records.delete(path.join(REPO_ROOT, "data", "runs", "2026-09-07", `${categories[1]}.json`));
+  add("held", "2026-09-07", categories[1], ["Unknown"], []);
+  assert.ok(loadQuarantine().errors.some(e => e.includes("no answered-call denominator")));
 });
 
 test("brand history retains absent brands, dates rereads by measurement, and marks method breaks", async (t) => {

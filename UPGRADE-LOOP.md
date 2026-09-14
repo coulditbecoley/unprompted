@@ -261,3 +261,23 @@ entries, a readable sibling, denied root access, and an absent root. The final
 explicit path and strict-public-reader assertions. Python is unchanged from its
 156-test pass. At 13:17 local the scheduled task remained Running and reported
 150/375 coding calls with zero failures. Main remains clean and frozen.
+
+## Cycle 13: derive current quarantine from immutable readings
+
+The writer creates quarantine sidecars only for nonempty results. Reading the
+latest sidecar therefore left stale names on the admin page after a clean run.
+The admin now reads the latest archived record per category, including an
+explicit empty quarantine, and uses that record's answered-call denominator.
+Refusals no longer dilute the displayed materiality threshold. Missing or
+malformed quarantine, a missing denominator, duplicate held/published identity,
+and archive read failures make the review explicitly incomplete. Readable
+categories remain visible; an incomplete result never claims nothing needs review.
+Frequency is described as a review priority rather than proof of product identity.
+
+Verification: all 30 Node tests and the 77-page build passed. Fixtures cover a
+clean reading after an older hold, a material name with refused answers, malformed
+quarantine, ambiguous identity, and absent denominator. The actual admin server
+component check also verifies the incomplete-review message. Removed the obsolete
+sidecar denominator reader; no archives or sidecars were changed. The Python
+source remains at its 156-test pass. At 13:21 local the scheduled coding log reached
+180/375 calls, zero failures; publication and later categories remain pending.

@@ -73,7 +73,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const run = history.at(-1);
   const board = run ? standings(run) : [];
 
-  const quarantine = loadQuarantine();
+  const { entries: quarantine, errors: quarantineErrors } = loadQuarantine();
 
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
@@ -263,15 +263,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       label: "Held last run",
-      value: String(materialQuarantine),
+      value: quarantineErrors.length ? "incomplete" : String(materialQuarantine),
       note:
-        materialQuarantine === 0
+        quarantineErrors.length ? "review unreadable quarantine evidence" : materialQuarantine === 0
           ? "nothing material"
           : `of ${quarantine.length} names, at the map of that day`,
       // Not marked. These are a record of the last run, not a queue: alias
       // edits since then already cover most of them and the count only moves
       // when the next Monday is measured.
-      attention: false,
+      attention: quarantineErrors.length > 0,
     },
   ];
 
@@ -368,9 +368,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <div className="cmp-pick">
           <TrimTop />
           <h3 style={{ marginTop: 6 }}>Quarantine</h3>
+          {quarantineErrors.length > 0 && <div><p>Quarantine review is incomplete. These sources could not be assessed:</p><ul>{quarantineErrors.map(error => <li key={error}>{error}</li>)}</ul></div>}
           {quarantine.length === 0 ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              Empty. Nothing is waiting on you.
+              {quarantineErrors.length ? "No names are available from the readable records." : "No unresolved names in the latest archived readings."}
             </p>
           ) : (
             <>
@@ -382,7 +383,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 the next run is measured.
               */}
               <div className="cmp-stat">
-                <span>Material at the last run</span>
+                <span>{quarantineErrors.length ? "Material in readable records" : "Material at the last run"}</span>
                 <span>{materialQuarantine}</span>
               </div>
               <div className="cmp-stat">
@@ -390,9 +391,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span style={{ color: "var(--fg-3)" }}>{quarantine.length}</span>
               </div>
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
-                Latest run of each category, most frequent first. A name seen
-                often is a brand the alias map is missing. A name seen once is
-                usually a hallucination and should stay out.
+                Latest readable record of each category, most frequent first.
+                Unresolved names need contextual review; frequency does not establish product identity.
               </p>
 
               {/* Only the names worth acting on are visible. The tail is real
