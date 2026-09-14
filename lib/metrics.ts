@@ -28,6 +28,15 @@ export type BrandMention = { name: string; position: number; sentiment: string }
  * missing rather than being backfilled with a guess.
  */
 export type Usage = {
+  batch_billed?: number;
+  cached_input_tokens?: number;
+  reasoning_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_creation_1h_input_tokens?: number;
+  extract_cache_read_input_tokens?: number;
+  extract_cache_creation_input_tokens?: number;
+  extract_cache_creation_1h_input_tokens?: number;
   input_tokens?: number;
   output_tokens?: number;
   web_searches?: number;
@@ -577,14 +586,20 @@ export type LineItem = {
 function price(
   rates: Rates,
   engine: string,
-  usage: { input_tokens?: number; output_tokens?: number; web_searches?: number; requests?: number },
+  usage: Usage,
 ): number {
   const rate = rates.engines[engine];
   if (!rate) return 0;
   const searches = usage.web_searches || usage.requests || 0;
+  const cached = usage.cached_input_tokens ?? 0;
+  const created = usage.cache_creation_input_tokens ?? 0;
+  const hour = usage.cache_creation_1h_input_tokens ?? 0;
+  const inputEquivalent = (usage.input_tokens ?? 0) - cached + cached * 0.1
+    + (usage.cache_read_input_tokens ?? 0) * 0.1 + (created - hour) * 1.25 + hour * 2;
+  const discount = engine === "claude" && usage.batch_billed === 1 ? rates.batch_discount : 1;
   return (
-    ((usage.input_tokens ?? 0) / 1_000_000) * rate.input_per_m +
-    ((usage.output_tokens ?? 0) / 1_000_000) * rate.output_per_m +
+    discount * ((inputEquivalent / 1_000_000) * rate.input_per_m +
+    ((usage.output_tokens ?? 0) / 1_000_000) * rate.output_per_m) +
     searches * rate.per_search
   );
 }
@@ -619,7 +634,8 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
     const item = bucket(engine, engine);
     if (!run.source_run) {
       item.calls += 1;
-      item.inputTokens += usage.input_tokens ?? 0;
+      item.inputTokens += (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0)
+        + (usage.cache_creation_input_tokens ?? 0);
       item.outputTokens += usage.output_tokens ?? 0;
       item.searches += usage.web_searches || usage.requests || 0;
       item.dollars += price(rates, engine, usage);
@@ -627,13 +643,17 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
 
     const ein = usage.extract_input_tokens ?? 0;
     const eout = usage.extract_output_tokens ?? 0;
-    if (ein || eout) {
+    const read = usage.extract_cache_read_input_tokens ?? 0;
+    const created = usage.extract_cache_creation_input_tokens ?? 0;
+    if (ein || eout || read || created) {
       const ei = bucket("_extract", "extract");
       ei.calls += 1;
-      ei.inputTokens += ein;
+      ei.inputTokens += ein + read + created;
       ei.outputTokens += eout;
       ei.dollars +=
-        extractRate * price(rates, "_extract", { input_tokens: ein, output_tokens: eout });
+        extractRate * price(rates, "_extract", { input_tokens: ein, output_tokens: eout,
+          cache_read_input_tokens: read, cache_creation_input_tokens: created,
+          cache_creation_1h_input_tokens: usage.extract_cache_creation_1h_input_tokens });
     }
   }
 

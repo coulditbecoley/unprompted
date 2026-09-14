@@ -373,6 +373,25 @@ test("Python and TypeScript round an exact half the same way", () => {
   assert.equal(ours, 0.0313);
 });
 
+test("batch and cached usage have the same explicit price in Python and TypeScript", () => {
+  const run = { extractor: "claude-api-extract", extractions: [
+    { engine: "claude", usage: { batch_billed: 1, input_tokens: 1_000_000,
+      output_tokens: 100_000, cache_read_input_tokens: 1_000_000,
+      cache_creation_input_tokens: 1_000_000, cache_creation_1h_input_tokens: 400_000,
+      web_searches: 4, extract_cache_read_input_tokens: 500_000 } },
+    { engine: "chatgpt", usage: { input_tokens: 1_000_000, cached_input_tokens: 400_000,
+      output_tokens: 100_000, reasoning_tokens: 10_000, web_searches: 2 } },
+  ] };
+  const script = ["import json, sys", SRC_PATH_LINE,
+    "from unprompted.cost import cost_of_run",
+    "print(cost_of_run(json.loads(sys.argv[1]))[1])"].join(NEWLINE);
+  const ours = costOfRun(run, rates);
+  assert.equal(ours.total, 9.86);
+  assert.equal(ours.items.find(i => i.label === "claude").inputTokens, 3_000_000);
+  assert.equal(ours.items.find(i => i.label === "extract").inputTokens, 500_000);
+  assert.equal(Number(execFileSync(PYTHON, ["-c", script, JSON.stringify(run)], { encoding: "utf-8" })), ours.total);
+});
+
 /**
  * The published week that says so.
  *

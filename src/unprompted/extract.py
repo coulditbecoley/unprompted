@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field
 from .cli_provider import CliProvider, ProviderError, parse_json_reply
 from .models import BrandMention, EngineAnswer, Extraction
 from .storage import write_json
+from .engines.anthropic_engine import _usage as anthropic_usage
 
 # Letters and digits only, for checking that an extracted name occurs in the
 # answer. Deliberately a local copy rather than an import from normalize: this
@@ -201,8 +202,7 @@ def extract_one(
         # in extractor cost never hides inside an engine's line item.
         u = getattr(result, "usage", None)
         if u is not None:
-            base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
-            base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+            base.usage.update({f"extract_{k}": v for k, v in anthropic_usage(result).items()})
         if getattr(result, "stop_reason", "end_turn") != "end_turn" or parsed is None:
             raise ValueError("incomplete extraction response")
     except Exception as exc:  # noqa: BLE001 - recorded, not raised
@@ -536,8 +536,7 @@ def extract_all_batch(
             message = entry.result.message
             u = getattr(message, "usage", None)
             if u is not None:
-                base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
-                base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+                base.usage.update({f"extract_{k}": v for k, v in anthropic_usage(message).items()})
             if getattr(message, "stop_reason", "end_turn") != "end_turn":
                 base.error = "extract failed: incomplete response"
                 continue

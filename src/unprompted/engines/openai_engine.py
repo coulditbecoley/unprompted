@@ -42,13 +42,16 @@ class OpenAIEngine(Engine):
             {
                 "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
                 "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
+                "cached_input_tokens": int(getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0),
+                "reasoning_tokens": int(getattr(getattr(u, "output_tokens_details", None), "reasoning_tokens", 0) or 0),
             }
             if u
             else {}
         )
-        # Every call in this category uses the web search tool, and OpenAI bills
-        # it per call rather than reporting it in usage.
-        usage["web_searches"] = 1
+        usage["web_searches"] = sum(
+            getattr(item, "type", None) == "web_search_call"
+            for item in getattr(response, "output", None) or []
+        )
         if getattr(response, "status", None) not in {None, "completed"}:
             usage["incomplete_response"] = 1
         return text, sources, usage

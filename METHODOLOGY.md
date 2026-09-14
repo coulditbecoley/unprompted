@@ -318,6 +318,67 @@ Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
 
+### Claude engine batching (September 14, 2026)
+
+New weekly runs submit Claude's questions through the Messages Batch API.
+The model, question wording, system prompt, search tool, four-search limit,
+4,096-token output ceiling, and five independent repetitions stay unchanged.
+Each question/repetition is a separate request, not a combined conversation.
+The batch wait overlaps the other engines. Coding moves to method version 3;
+images and writing move to version 4. The frozen engine configuration records
+`transport: messages-batch`, so these readings do not manufacture movement
+against a previous transport.
+
+Anthropic documents server-side web search support and a 50% token discount:
+https://platform.claude.com/docs/en/build-with-claude/batch-processing
+Batch loops can run more iterations before returning `pause_turn`. An incomplete
+turn remains an engine error with its text and usage retained; it never silently
+falls back to another paid request. This preserves the existing completeness
+and grounding gates, but is not proof of identical answer distributions.
+
+Each successful batch response carries `usage.batch_billed: 1`. Both Python and
+the website apply the discount only to that Claude answer's token charges.
+Search charges remain undiscounted conservatively. Historical records retain
+their original prices. Future budget estimates apply batch token prices to the
+historical usage baseline without changing recorded spending or the $150 ceiling.
+Applied to September 14's two categories, this estimates $39.88 instead of
+$55.91 (28.7% less); actual future usage and invoices may differ.
+
+Cache reads, cache writes (including one-hour writes), and OpenAI's cached-input
+and reasoning counts are recorded when reported. Reasoning is already part of
+output tokens and is not charged twice. OpenAI searches are counted from actual
+`web_search_call` output items instead of assuming one search per answer.
+Pricing follows the current configured Opus 5 and GPT-5 cache multipliers:
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+https://developers.openai.com/api/docs/models/gpt-5
+New prompt caching and compact extraction formats are not enabled: those need
+cache-hit measurements and independent extraction-quality validation first.
+
+Before submission, the pipeline saves request intent under
+`.unprompted/<date>/<category>/claude-batch/state.json`; after acceptance it
+saves the provider batch ID. A connection loss between those writes requires
+reconciling the ID and exact requests in the provider console, never deleting
+the intent and trying again. Results are downloaded atomically before parsing;
+missing, duplicate, or unexpected result identities keep spending blocked.
+`fetched_at` is the saved retrieval timestamp for batch answers, not an exact
+provider inference timestamp. Submission time is retained in the local job.
+
+After one hour of polling, the local wait stops, but the job may still finish
+and incur charges. All new paid work is blocked until it is collected. Collect
+an existing job without submitting another request:
+
+```powershell
+.\.venv\Scripts\python.exe -m unprompted.engines.anthropic_batch .unprompted/<date>/<category>/claude-batch/state.json
+```
+
+Then resume the original category/date if it has not been archived. The normal
+run also collects its existing batch before its budget check. Existing answer
+checkpoints are reused; batch failures/refusals remain observations, not retries.
+Offline tests cover this path, evidence and usage retention, ambiguous POSTs,
+timeout recovery, malformed result populations, and Python/TypeScript pricing.
+No paid qualification run or independent distribution-equivalence study was
+performed for this change; the first scheduled batch remains the live acceptance.
+
 Recovery currently requires the supported hosted extractor. Local CLI extraction
 is disabled pending isolation qualification; enabling a registry entry does not
 make it available. No independent cross-extractor validation is claimed.

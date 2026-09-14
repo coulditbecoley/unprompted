@@ -188,26 +188,12 @@ def _run_category(
     ]
     print(f"  {len(tasks)} calls across {len(engines)} engine(s)", file=sys.stderr)
 
-    # The last pre-flight, and the only one that needs to know how big the run
-    # is. Placed here for the same reason as the two above: everything it can
-    # refuse, it refuses before a single call is billed. The expensive failure
-    # is not a run that does not happen, it is one that stops halfway -- which
-    # is what a spend cap did on 2026-08-24, leaving a category measured on two
-    # and two-thirds engines and a chart that had to be caveated in public.
-    verdict = check_budget(category, len(tasks))
-    print(f"  budget: {verdict.message.splitlines()[0]}", file=sys.stderr)
-    if not verdict.ok:
-        if ignore_budget:
-            print("  --ignore-budget: running anyway", file=sys.stderr)
-        else:
-            raise SystemExit(f"Refusing to start {category}.\n{verdict.message}")
-
     # as_completed rather than map: a twenty-minute run that prints nothing until
     # it finishes looks identical to a hung one, both here and in CI logs.
     checkpoint = ROOT / ".unprompted" / run_date / category
     methodology = {
         "questions": spec,
-        "engines": {name: {"model": getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds}
+        "engines": {name: {"model": getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {})}
                     for name, e in engines.items()},
         "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
         "system_prompt": SYSTEM_PROMPT,
@@ -226,7 +212,28 @@ def _run_category(
     if manifest.exists():
         if json.loads(manifest.read_text(encoding="utf-8")) != methodology:
             raise ValueError("checkpoint methodology differs; preserve it and use a new run date")
-    else:
+    # Collect previously submitted work before pricing a restart. This only
+    # downloads an existing batch; it cannot create another billable request.
+    batch_state = checkpoint / "claude-batch" / "state.json"
+    if batch_state.exists():
+        from .engines.anthropic_batch import collect
+        collect(batch_state, engines["claude"].api_key)
+
+    # The last pre-flight, and the only one that needs to know how big the run
+    # is. Placed here for the same reason as the two above: everything it can
+    # refuse, it refuses before a single call is billed. The expensive failure
+    # is not a run that does not happen, it is one that stops halfway -- which
+    # is what a spend cap did on 2026-08-24, leaving a category measured on two
+    # and two-thirds engines and a chart that had to be caveated in public.
+    verdict = check_budget(category, len(tasks))
+    print(f"  budget: {verdict.message.splitlines()[0]}", file=sys.stderr)
+    if not verdict.ok:
+        if ignore_budget:
+            print("  --ignore-budget: running anyway", file=sys.stderr)
+        else:
+            raise SystemExit(f"Refusing to start {category}.\n{verdict.message}")
+
+    if not manifest.exists():
         write_json(manifest, methodology)
     answers = []
     pending = []
@@ -248,13 +255,19 @@ def _run_category(
         return answer
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {
-            pool.submit(ask_and_save, engine, qid, text, run_index): engine.name
-            for engine, qid, text, run_index in pending
-        }
+        from .engines.anthropic_batch import ask_batch
+        batched = [task for task in pending if getattr(task[0], "transport", None) == "messages-batch"]
+        # Submit first so the batch wait overlaps the other engines' calls.
+        futures = {}
+        if batched:
+            futures[pool.submit(ask_batch, batched[0][0], batched, checkpoint, measurement_commit)] = True
+        futures.update({
+            pool.submit(ask_and_save, engine, qid, text, run_index): False
+            for engine, qid, text, run_index in pending if getattr(engine, "transport", None) != "messages-batch"
+        })
         for future in as_completed(futures):
-            answer = future.result()
-            answers.append(answer)
+            result = future.result()
+            answers.extend(result if futures[future] else [result])
             done = len(answers)
             if done % 10 == 0 or done == len(tasks):
                 failed = sum(1 for a in answers if a.error)

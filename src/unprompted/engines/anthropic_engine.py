@@ -12,7 +12,13 @@ TIMEOUT_SECONDS = 180
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 4}
 
 
+def request_params(question: str) -> dict:
+    return dict(model=MODEL, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
+                tools=[WEB_SEARCH_TOOL], messages=[{"role": "user", "content": question}])
+
+
 class AnthropicEngine(Engine):
+    transport = "messages-batch"
     source_kind = "retrieved"
     name = "claude"
     # CLAUDE_API accepted as an alias: it is a natural name to reach for.
@@ -22,41 +28,37 @@ class AnthropicEngine(Engine):
         from anthropic import Anthropic
 
         client = Anthropic(api_key=self.api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            tools=[WEB_SEARCH_TOOL],
-            messages=[{"role": "user", "content": question}],
-        )
+        response = client.messages.create(**request_params(question))
+        return read_response(response)
 
-        # A refusal is a real outcome, not an error. Surface it as empty text so
-        # the extractor records it rather than the pipeline retrying blindly.
-        usage = _usage(response)
+def read_response(response: object) -> tuple[str, list[str], dict[str, int]]:
+    # A refusal is a real outcome, not an error. Surface it as empty text so
+    # the extractor records it rather than the pipeline retrying blindly.
+    usage = _usage(response)
 
-        if getattr(response, "stop_reason", None) == "refusal":
-            return "", [], usage
-        if getattr(response, "stop_reason", None) not in {None, "end_turn", "stop_sequence"}:
-            usage["incomplete_response"] = 1
+    if getattr(response, "stop_reason", None) == "refusal":
+        return "", [], usage
+    if getattr(response, "stop_reason", None) not in {None, "end_turn", "stop_sequence"}:
+        usage["incomplete_response"] = 1
 
-        text_parts: list[str] = []
-        sources: list[str] = []
+    text_parts: list[str] = []
+    sources: list[str] = []
 
-        for block in response.content:
-            btype = getattr(block, "type", None)
-            if btype == "text":
-                text_parts.append(block.text)
-            elif btype == "web_search_tool_result":
-                # On error, `content` is a single object rather than a list.
-                # Branch on that before indexing.
-                content = getattr(block, "content", None)
-                if isinstance(content, list):
-                    for result in content:
-                        url = getattr(result, "url", None)
-                        if url:
-                            sources.append(url)
+    for block in response.content:
+        btype = getattr(block, "type", None)
+        if btype == "text":
+            text_parts.append(block.text)
+        elif btype == "web_search_tool_result":
+            # On error, `content` is a single object rather than a list.
+            # Branch on that before indexing.
+            content = getattr(block, "content", None)
+            if isinstance(content, list):
+                for result in content:
+                    url = getattr(result, "url", None)
+                    if url:
+                        sources.append(url)
 
-        return "\n".join(text_parts).strip(), sources, usage
+    return "\n".join(text_parts).strip(), sources, usage
 
 
 def _usage(response: object) -> dict[str, int]:
@@ -67,6 +69,9 @@ def _usage(response: object) -> dict[str, int]:
     out = {
         "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
         "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
+        "cache_read_input_tokens": int(getattr(u, "cache_read_input_tokens", 0) or 0),
+        "cache_creation_input_tokens": int(getattr(u, "cache_creation_input_tokens", 0) or 0),
+        "cache_creation_1h_input_tokens": int(getattr(getattr(u, "cache_creation", None), "ephemeral_1h_input_tokens", 0) or 0),
     }
     # Web search is billed per search, separately from tokens.
     tool = getattr(u, "server_tool_use", None)

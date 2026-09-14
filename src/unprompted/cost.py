@@ -87,9 +87,18 @@ def _price(engine: str, usage: dict[str, int]) -> float:
     if not rate:
         return 0.0
     searches = usage.get("web_searches", 0) or usage.get("requests", 0)
+    # OpenAI cached tokens are included in input_tokens; Anthropic cache
+    # reads/writes are separate. Reasoning tokens already belong to output.
+    cached = usage.get("cached_input_tokens", 0)
+    created = usage.get("cache_creation_input_tokens", 0)
+    hour = usage.get("cache_creation_1h_input_tokens", 0)
+    input_equivalent = (usage.get("input_tokens", 0) - cached + cached * 0.1
+                        + usage.get("cache_read_input_tokens", 0) * 0.1
+                        + (created - hour) * 1.25 + hour * 2)
+    discount = BATCH_DISCOUNT if engine == "claude" and usage.get("batch_billed") == 1 else 1.0
     return (
-        usage.get("input_tokens", 0) / 1_000_000 * rate["input_per_m"]
-        + usage.get("output_tokens", 0) / 1_000_000 * rate["output_per_m"]
+        discount * (input_equivalent / 1_000_000 * rate["input_per_m"]
+        + usage.get("output_tokens", 0) / 1_000_000 * rate["output_per_m"])
         + searches * rate["per_search"]
     )
 
@@ -111,7 +120,8 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
         )
         if not run.get("source_run"):
             item.calls += 1
-            item.input_tokens += usage.get("input_tokens", 0)
+            item.input_tokens += (usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+                                  + usage.get("cache_creation_input_tokens", 0))
             item.output_tokens += usage.get("output_tokens", 0)
             item.searches += usage.get("web_searches", 0) or usage.get("requests", 0)
             item.dollars += _price(engine, usage)
@@ -120,15 +130,17 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
         # so it gets its own line rather than inflating the engine it read.
         ein = usage.get("extract_input_tokens", 0)
         eout = usage.get("extract_output_tokens", 0)
-        if ein or eout:
+        eread = usage.get("extract_cache_read_input_tokens", 0)
+        ecreated = usage.get("extract_cache_creation_input_tokens", 0)
+        if ein or eout or eread or ecreated:
             ex_item = buckets.setdefault(
                 "_extract", LineItem("extract", 0, 0, 0, 0, 0.0)
             )
             ex_item.calls += 1
-            ex_item.input_tokens += ein
+            ex_item.input_tokens += ein + eread + ecreated
             ex_item.output_tokens += eout
             ex_item.dollars += extract_rate * _price(
-                "_extract", {"input_tokens": ein, "output_tokens": eout}
+                "_extract", {k.removeprefix("extract_"): v for k, v in usage.items() if k.startswith("extract_")}
             )
 
     items = sorted(buckets.values(), key=lambda i: -i.dollars)

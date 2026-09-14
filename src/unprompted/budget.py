@@ -89,6 +89,9 @@ def _archived_runs() -> list[dict]:
     # A crash before publication does not make checkpointed engine calls free.
     completed = {(r.get("run_date"), r.get("category")) for r in out if not r.get("source_run")}
     state = RUNS_DIR.parent.parent / ".unprompted"
+    for job in state.glob("????-??-??/*/claude-batch/state.json"):
+        if not json.loads(job.read_text(encoding="utf-8")).get("collected"):
+            raise ValueError(f"unaccounted Claude batch: collect {job} before new paid work")
     for manifest in state.glob("????-??-??/*/methodology.json"):
         day, category = manifest.parent.parent.name, manifest.parent.name
         if (day, category) in completed:
@@ -140,11 +143,16 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     if extraction_only:
         priced = [(r, sum(i.dollars for i in cost_of_run(r)[0] if i.label == "extract")) for r in runs]
     else:
-        priced = [(r, cost_of_run(r)[1]) for r in runs if not r.get("source_run")]
+        # Price the NEXT run's transport without restating historical spending.
+        # Search fees stay full-price; only Claude's tokens earn the discount.
+        priced = [(r, cost_of_run({**r, "extractions": [
+            {**e, "usage": {**(e.get("usage") or {}), "batch_billed": 1}}
+            if e.get("engine") == "claude" else e for e in r.get("extractions", [])
+        ]})[1]) for r in runs if not r.get("source_run")]
     priced = [(r, c) for r, c in priced if c > 0]
 
     def per_answer(record: dict, dollars: float) -> float:
-        got = ([e for e in record.get("extractions", []) if any((e.get("usage") or {}).get(k, 0) for k in ("extract_input_tokens", "extract_output_tokens"))]
+        got = ([e for e in record.get("extractions", []) if any((e.get("usage") or {}).get(k, 0) for k in ("extract_input_tokens", "extract_output_tokens", "extract_cache_read_input_tokens", "extract_cache_creation_input_tokens"))]
                if extraction_only else [e for e in record.get("extractions", []) if not e.get("error")])
         return dollars / len(got) if got else FALLBACK_PER_ANSWER
 
@@ -156,7 +164,7 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
         rate = per_answer(record, dollars)
         return Estimate(
             round(rate * answers, 2),
-            f"{category} on {record.get('run_date')}, ${rate:.3f} per {operation}",
+            f"{category} on {record.get('run_date')}, ${rate:.3f} per {operation}" + (" with Claude batch token pricing" if not extraction_only else ""),
             True,
         )
 
