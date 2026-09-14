@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
@@ -471,23 +472,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           ))}
 
-          {held.map((h) => (
+          {held.runs.map((h) => (
             <div className="seq-row" key={`${h.date}-${h.category}`} style={{ gridTemplateColumns: "1fr auto" }}>
               <span className="seq-brand" style={{ gap: 3 }}>
                 {h.category}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {h.date} · held, {Math.round(h.errorRate * 100)}% of calls errored ·
+                  {h.date} · held, {h.errorRate === null ? "call error rate unavailable" : `${Math.round(h.errorRate * 100)}% of calls errored`} ·
                   kept in data/held, never published
                 </small>
                 <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
                   {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
                 </small>
+                {h.recoveredOn && <small><Link href={`/chart/${h.category}/${h.recoveredOn}`}>View published rereading from {h.recoveredOn}</Link></small>}
               </span>
-              <span className="mono seq-delta is-down" style={{ fontSize: 11 }}>
-                HELD
+              <span className={`mono seq-delta${h.recoveredOn ? "" : " is-down"}`} style={{ fontSize: 11 }}>
+                {h.recoveredOn ? "REREAD PUBLISHED" : "HELD"}
               </span>
             </div>
           ))}
+          {held.errors.length > 0 && <div>
+            <p>Some held or published recovery records could not be read. Review these files before treating this list as complete:</p>
+            <ul>{held.errors.map(error => <li key={error}>{error}</li>)}</ul>
+          </div>}
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 10 }}>
           A held run is the checks working, not a crash. Its answers are kept, so

@@ -327,7 +327,7 @@ export function selfPreference(
   return out;
 }
 
-export type HeldRun = { category: string; date: string; errorRate: number; reasons: string[] };
+export type HeldRun = { category: string; date: string; errorRate: number | null; reasons: string[]; recoveredOn?: string };
 
 /**
  * Runs that failed their checks and were withheld.
@@ -337,34 +337,45 @@ export type HeldRun = { category: string; date: string; errorRate: number; reaso
  * that needs a person: it is the pipeline saying it would rather print nothing
  * than print something wrong.
  */
-export function loadHeld(): HeldRun[] {
+export function loadHeld(): { runs: HeldRun[]; errors: string[] } {
   const dir = path.join(REPO_ROOT, "data", "held");
-  if (!fs.existsSync(dir)) return [];
-
-  const out: HeldRun[] = [];
-  for (const date of fs.readdirSync(dir).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))) {
-    for (const file of fs.readdirSync(path.join(dir, date))) {
-      if (!file.endsWith(".json")) continue;
-      try {
-        const run = JSON.parse(
-          fs.readFileSync(path.join(dir, date, file), "utf-8"),
-        ) as RunRecord;
-        const total = run.extractions.length;
-        const errored = run.extractions.filter((e) => e.error).length;
-        out.push({
-          category: run.category,
-          date: run.run_date,
-          errorRate: total ? errored / total : 0,
-          reasons: Array.isArray(run.publication_checks?.reasons)
-            ? run.publication_checks.reasons.filter((r): r is string => typeof r === "string" && !!r.trim())
-            : [],
-        });
-      } catch {
-        // A corrupt held file must not take the dashboard down.
+  const held = scanRuns(dir);
+  const published = loadAllRuns();
+  const key = (r: RunRecord) => `${r.run_date}/${r.category}`;
+  const index = new Map<string, RunRecord | null>();
+  for (const record of [...held.runs, ...published.runs]) {
+    // Legacy paths present in both buckets cannot identify a unique source.
+    index.set(key(record), index.has(key(record)) ? null : record);
+  }
+  const recoveries = new Map<string, string>();
+  for (const reading of published.runs) {
+    const ancestors: string[] = [];
+    let cursor = reading;
+    let valid = reading.publication_checks?.passed !== false;
+    while (valid && cursor.source_run) {
+      const parent = index.get(cursor.source_run);
+      if (!parent || parent.category !== reading.category || parent.run_date >= cursor.run_date
+        || (parent.measured_on || parent.run_date) !== (reading.measured_on || reading.run_date)) {
+        valid = false;
+        break;
       }
+      ancestors.push(key(parent));
+      cursor = parent;
+    }
+    if (valid) for (const ancestor of ancestors) {
+      if ((recoveries.get(ancestor) ?? "") < reading.run_date) recoveries.set(ancestor, reading.run_date);
     }
   }
-  return out.sort((a, b) => b.date.localeCompare(a.date));
+  const runs = held.runs.map((run): HeldRun => ({
+    category: run.category,
+    date: run.run_date,
+    errorRate: run.extractions.length ? run.extractions.filter(e => e.error).length / run.extractions.length : null,
+    reasons: Array.isArray(run.publication_checks?.reasons)
+      ? run.publication_checks.reasons.filter((r): r is string => typeof r === "string" && !!r.trim()) : [],
+    recoveredOn: recoveries.get(key(run)),
+  }));
+  return { runs: runs.sort((a, b) => b.date.localeCompare(a.date)),
+    errors: [...held.errors.map(e => `data/held/${e}`), ...published.errors.map(e => `data/runs/${e}`)] };
 }
 
 /**

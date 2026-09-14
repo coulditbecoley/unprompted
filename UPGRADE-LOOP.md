@@ -151,3 +151,19 @@ Report integration checks both method-change suppression and dated comparisons.
 The production build passed with 77 pages; generated homepage and chart HTML
 contain the no-baseline explanation. This is generated-output evidence, not a
 browser interaction or hosted deployment pass. Main remains frozen for 13:00.
+
+## Cycle 7: make the held review list actionable
+
+The admin held list now uses the archive's existing validated scanner. Invalid
+JSON and mismatched file identities remain visible as explicit file errors;
+records with zero calls have an unavailable error rate, not 0%. Published rereads
+link back from their held ancestors, including multi-step recovery chains.
+An unrelated newer measurement does not resolve an older hold. Missing parents,
+cross-category links, inconsistent measurement dates, cycles, and ambiguous
+source identities do not produce a recovery link. Historical attempts remain
+visible alongside the link to the latest published rereading.
+
+Verification: 26 Node tests and the 77-page production build passed. Offline
+archive fixtures cover each refusal and recovery case without writing to data/.
+The Python source is unchanged from its preceding 148-test pass. Actual admin
+browser rendering is still unverified; this cycle is isolated from the runner.

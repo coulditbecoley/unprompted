@@ -73,15 +73,60 @@ test("held review reads recorded reasons and tolerates legacy or malformed reaso
   const originalExists = fs.existsSync;
   const originalReadDir = fs.readdirSync;
   const originalRead = fs.readFileSync;
+  const originalStat = fs.statSync;
   t.mock.method(fs, "existsSync", (p) => p === dir || originalExists(p));
   t.mock.method(fs, "readdirSync", (p, ...args) => p === dir ? ["2026-09-14"] : p === day ? Object.keys(records) : originalReadDir(p, ...args));
+  t.mock.method(fs, "statSync", (p, ...args) => p === day ? { isDirectory: () => true } : originalStat(p, ...args));
   t.mock.method(fs, "readFileSync", (p, ...args) => path.dirname(String(p)) === day
-    ? JSON.stringify({ category: path.basename(String(p), ".json"), run_date: "2026-09-14", extractions: [], ...records[path.basename(String(p))] })
+    ? JSON.stringify({ category: path.basename(String(p), ".json"), run_date: "2026-09-14", method_version: 1, runs_per_question: 1, engines: ["offline"], extractions: [], ...records[path.basename(String(p))] })
     : originalRead(p, ...args));
-  const held = loadHeld();
+  const held = loadHeld().runs;
   assert.deepEqual(held.find(r => r.category === "recorded").reasons, ["Missing engine answers", "Unknown alias"]);
   assert.deepEqual(held.find(r => r.category === "legacy").reasons, []);
   assert.deepEqual(held.find(r => r.category === "malformed").reasons, ["Coverage failed"]);
+  assert.equal(held.find(r => r.category === "legacy").errorRate, null);
+});
+
+test("held review follows explicit recovery chains and exposes corrupt files", async (t) => {
+  const { loadHeld, REPO_ROOT } = await import("../lib/data.ts");
+  const records = new Map();
+  const add = (bucket, date, category, extra = {}) => records.set(path.join(REPO_ROOT, "data", bucket, date, `${category}.json`),
+    JSON.stringify({ category, run_date: date, method_version: 1, runs_per_question: 1,
+      engines: ["offline"], extractions: [], ...extra }));
+  for (const category of ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"]) add("held", "2026-09-01", category);
+  add("held", "2026-09-02", "alpha", { source_run: "2026-09-01/alpha", measured_on: "2026-09-01" });
+  add("runs", "2026-09-03", "alpha", { source_run: "2026-09-02/alpha", measured_on: "2026-09-01" });
+  add("runs", "2026-09-04", "alpha", { source_run: "2026-09-03/alpha", measured_on: "2026-09-01" });
+  add("runs", "2026-09-05", "beta"); // a newer measurement is not a recovery
+  add("runs", "2026-09-03", "gamma", { source_run: "2026-09-01/alpha", measured_on: "2026-09-01" });
+  add("runs", "2026-09-01", "delta"); // ambiguous parent identity in both buckets
+  add("runs", "2026-09-03", "delta", { source_run: "2026-09-01/delta", measured_on: "2026-09-01" });
+  add("runs", "2026-09-03", "epsilon", { source_run: "2026-09-01/epsilon" }); // different measured date
+  add("runs", "2026-09-03", "zeta", { source_run: "2026-09-02/zeta", measured_on: "2026-09-01" }); // missing parent
+  add("held", "2026-09-01", "eta", { source_run: "2026-09-03/eta" });
+  add("runs", "2026-09-03", "eta", { source_run: "2026-09-01/eta", measured_on: "2026-09-01" }); // cycle
+  add("held", "2026-09-01", "wrong", { category: "wrong-identity" });
+  records.set(path.join(REPO_ROOT, "data/held/2026-09-01/broken.json"), "not JSON");
+  const directories = new Map();
+  for (const file of records.keys()) {
+    for (const child of [file, path.dirname(file)]) {
+      const parent = path.dirname(child);
+      if (!directories.has(parent)) directories.set(parent, new Set());
+      directories.get(parent).add(path.basename(child));
+    }
+  }
+  const original = { exists: fs.existsSync, read: fs.readFileSync, list: fs.readdirSync, stat: fs.statSync };
+  t.mock.method(fs, "existsSync", p => directories.has(p) || records.has(p) || original.exists(p));
+  t.mock.method(fs, "readdirSync", (p, ...args) => directories.has(p) ? [...directories.get(p)] : original.list(p, ...args));
+  t.mock.method(fs, "statSync", (p, ...args) => directories.has(p) ? { isDirectory: () => true } : original.stat(p, ...args));
+  t.mock.method(fs, "readFileSync", (p, ...args) => records.has(p) ? records.get(p) : original.read(p, ...args));
+  const held = loadHeld();
+  assert.equal(held.runs.length, 8);
+  assert.ok(held.runs.filter(r => r.category === "alpha").every(r => r.recoveredOn === "2026-09-04"));
+  assert.ok(held.runs.filter(r => r.category !== "alpha").every(r => r.recoveredOn === undefined));
+  assert.equal(held.errors.length, 2);
+  assert.ok(held.errors.some(e => e.includes("data/held/2026-09-01/broken.json")));
+  assert.ok(held.errors.some(e => e.includes("wrong.json: declares wrong-identity")));
 });
 
 test("recorded absence of affiliations never falls back to today's ownership", async () => {
