@@ -2,5 +2,5 @@
   "status": "held",
   "detail": "At least one category was held and did not publish. The reasons are in the log above and the data is in data\\held\\.",
   "exit_code": 2,
-  "at": "2026-09-07T18:50:48+00:00"
+  "at": "2026-09-14T19:08:39+00:00"
 }
