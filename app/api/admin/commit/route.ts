@@ -193,6 +193,7 @@ function validate(target: Target, content: string): string | null {
     const spec = parsed as Record<string, unknown>;
     const canonical = spec.canonical;
     if (!canonical || typeof canonical !== "object" || Array.isArray(canonical)) return "aliases needs a canonical mapping";
+    if (spec.exclude != null && (!Array.isArray(spec.exclude) || spec.exclude.some(x => typeof x !== "string" || !x.trim()))) return "exclude must be a list of non-empty strings";
     const owners = new Map<string, string>();
     for (const [name, list] of Object.entries(canonical as Record<string, unknown>)) {
       if (!name.trim()) return "canonical names cannot be empty";

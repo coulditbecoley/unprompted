@@ -22,6 +22,18 @@ from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
 from unprompted.normalize import AliasMap, normalize
 
 
+def test_alias_configuration_rejects_collisions_and_malformed_exclusions():
+    for exclude in ("Alpha", [42], [" "]):
+        with pytest.raises(ValueError, match="exclude must be"):
+            AliasMap({"Alpha": []}, exclude=exclude)
+    for canonical in ({"Alpha": ["shared"], "Beta": ["Shared Inc."]}, {"Alpha": ["Beta"], "Beta": []}):
+        with pytest.raises(ValueError, match="alias collision"):
+            AliasMap(canonical)
+    with pytest.raises(ValueError, match="canonical mapping"):
+        AliasMap([])
+    assert AliasMap({"Alpha": ["alpha", "Alpha Inc."]}, exclude=None).resolve("alpha") == "Alpha"
+
+
 ALIASES = AliasMap(
     {
         "PSA": ["psa", "professional sports authenticator", "psa grading"],

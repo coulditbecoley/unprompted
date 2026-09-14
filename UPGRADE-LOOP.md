@@ -52,8 +52,8 @@ release acceptance. Remaining work is:
    before claiming those external contracts are qualified. No test outreach or
    additional paid measurements are authorized by this checklist.
 
-Potential implementation follow-ups still need evidence: code provenance across
-resumed checkpoints, complete cross-language configuration validation, and reader
+Potential implementation follow-ups still need evidence: complete cross-language
+configuration validation and reader
 feedback on evidence navigation. Avoid adding new categories or personalization
 without evidence that they improve the service.
 
@@ -442,3 +442,23 @@ base converter and verifies the final stored field. Legacy checkpoint constructi
 without the new field remains supported. No archive records or active-run code
 changed. At 14:10 local, the scheduled task remained Running with 375 extraction
 results pending after its latest 29-minute batch update.
+
+Follow-up verification: the production build at 4fdfed4 passed with 77 generated
+pages and exit 0. This is local build evidence, not browser or hosted acceptance.
+
+## Cycle 22: refuse malformed exclusions and ambiguous alias ownership
+
+The admin commit route accepted scalar or non-string exclusion entries, which
+the Python normalizer could misread or fail to load. Both boundaries now reject
+those values. The shared AliasMap constructor also rejects two canonical brands
+claiming the same folded alias instead of silently assigning it to the last one;
+admin already rejected that collision. Repeated spellings for the same brand
+and absent/null exclusion lists remain valid.
+
+Verification: 159 Python tests, 31 Node tests, and typecheck passed. Checks cover
+scalar, numeric and blank exclusions, folded collisions, canonical-name collisions,
+and same-brand duplicates; the admin check confirms refusal before any GitHub
+request. Existing alias-map regression checks remain green. This does not establish
+complete configuration-parser equivalence. At 14:24 local the scheduled task was
+still Running, with 0 of 375 batch results ready after 42 minutes. Main remains
+untouched while that job runs.

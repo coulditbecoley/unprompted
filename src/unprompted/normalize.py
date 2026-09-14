@@ -128,17 +128,23 @@ class AliasMap:
     """
 
     def __init__(self, canonical: dict[str, list[str]], exclude: list[str] | None = None):
+        if not isinstance(canonical, dict):
+            raise ValueError("aliases needs a canonical mapping")
+        if exclude is not None and (not isinstance(exclude, list) or any(not isinstance(x, str) or not x.strip() for x in exclude)):
+            raise ValueError("exclude must be a list of non-empty strings")
         self._lookup: dict[str, str] = {}
         self._excluded: set[str] = {_key(x) for x in (exclude or [])}
-        self.canonical_names: list[str] = sorted(canonical)
         for name, aliases in canonical.items():
             if not isinstance(name, str) or not name.strip() or (aliases is not None and not isinstance(aliases, list)):
                 raise ValueError("canonical aliases must be lists of strings")
-            self._lookup[_key(name)] = name
-            for alias in aliases or []:
+            for alias in [name, *(aliases or [])]:
                 if not isinstance(alias, str) or not alias.strip():
                     raise ValueError("aliases must be non-empty strings")
-                self._lookup[_key(alias)] = name
+                key = _key(alias)
+                if key in self._lookup and self._lookup[key] != name:
+                    raise ValueError(f"alias collision: {alias}")
+                self._lookup[key] = name
+        self.canonical_names: list[str] = sorted(canonical)
 
     @classmethod
     def load(cls, path: str | Path) -> "AliasMap":

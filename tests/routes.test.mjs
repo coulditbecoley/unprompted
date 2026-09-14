@@ -329,6 +329,9 @@ test("route integration: analytics and stale editor protection", async (t) => {
     const provider = { id: "chatgpt", label: "ChatGPT", kind: "api", role: "engine", enabled: true, env: "GITHUB_TOKEN" };
     assert.equal((await commit(request("/api/admin/commit", { target: "providers", baseline: "", content: JSON.stringify({ providers: [provider] }) }, { cookie }))).status, 400);
     assert.equal((await commit(request("/api/admin/commit", { target: "aliases", baseline: "", content: "canonical:\n  Alpha: [same]\n  Beta: [same]\n" }, { cookie }))).status, 400);
+    for (const exclude of ["Alpha", [42], [" "]]) {
+      assert.equal((await commit(request("/api/admin/commit", { target: "aliases", baseline: "", content: JSON.stringify({ canonical: { Alpha: [] }, exclude }) }, { cookie }))).status, 400);
+    }
     assert.equal(calls.length, 0);
   });
 });
