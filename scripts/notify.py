@@ -102,9 +102,9 @@ def open_issue(status: str, detail: str, exit_code: int) -> None:
             "",
             "The log is at `%TEMP%\\unprompted-weekly.log` on the machine that runs it.",
             "",
-            "A held week is the checks working: the data is in `data/held/` and",
-            "nothing was published. Re-read stored answers without re-querying the",
-            "engines with `python -m unprompted.reextract <date> --category <slug>`.",
+            "Categories can have different outcomes. Passed readings are in `data/runs/`;",
+            "held readings are in `data/held/`. A failed or refused category may have",
+            "only local checkpoints, or no new answers. A passed check does not prove deployment.",
             "",
             "_Opened by `scripts/notify.py`._",
         ]
@@ -130,6 +130,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--status", required=True, choices=sorted(HEADLINE))
     parser.add_argument("--detail", default="")
+    parser.add_argument("--summary-file", type=Path, help="use the completed pipeline's category summary")
     parser.add_argument("--exit-code", type=int, default=0)
     parser.add_argument(
         "--no-issue",
@@ -137,6 +138,15 @@ def main() -> int:
         help="write the status file but do not open an issue",
     )
     args = parser.parse_args()
+
+    if args.summary_file:
+        try:
+            summary = json.loads(args.summary_file.read_text(encoding="utf-8"))
+            if not isinstance(summary.get("detail"), str) or not summary["detail"].strip():
+                raise ValueError("summary detail is missing")
+            args.detail = summary["detail"]
+        except (OSError, ValueError, AttributeError) as exc:
+            args.detail += f" Category summary unavailable: {exc}"
 
     # Everything below is best effort. This script exists to report a problem,
     # and it must never become one.

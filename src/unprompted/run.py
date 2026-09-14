@@ -457,6 +457,7 @@ def main() -> int:
         help="category slug, or 'all' for every category in questions/",
     )
     parser.add_argument("--date", default=date.today().isoformat())
+    parser.add_argument("--summary-file", type=Path, help="write category outcomes for the scheduler notification")
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
     parser.add_argument(
@@ -480,6 +481,7 @@ def main() -> int:
         return 2 if result["issues"] else 0
 
     held: dict[str, list[str]] = {}
+    outcomes: list[str] = []
     total = 0.0
 
     for category in categories:
@@ -502,6 +504,7 @@ def main() -> int:
             print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc()
             held[category] = [f"the run raised {type(exc).__name__}: {exc}"]
+            outcomes.append(f"{category}: failed or refused — {type(exc).__name__}: {exc}")
             continue
 
         print("\nCOST", file=sys.stderr)
@@ -510,14 +513,20 @@ def main() -> int:
 
         if reasons:
             held[category] = reasons
+            outcomes.append(f"{category}: held — {'; '.join(reasons)}")
             print(f"\nHELD: {category} will not publish:", file=sys.stderr)
             for reason in reasons:
                 print(f"  - {reason}", file=sys.stderr)
         else:
+            outcomes.append(f"{category}: passed local publication checks")
             print(f"\n{category}: all checks passed.", file=sys.stderr)
 
     if len(categories) > 1:
         print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)
+
+    if args.summary_file and not args.dry_run:
+        write_json(args.summary_file, {"run_date": args.date,
+                   "detail": "\n".join(outcomes) + "\nCommit and push follow; deployment is not verified."}, replace=True)
 
     # One held category must not suppress the others. Everything that passed is
     # in data/runs and will publish; everything held is in data/held and will

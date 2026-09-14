@@ -65,7 +65,7 @@ if not "%METHOD_SIZE%"=="0" (
   exit /b 1
 )
 
-"%UNPROMPTED_PYTHON%" -m unprompted.run --category all >> "%TEMP%\unprompted-weekly.log" 2>&1
+"%UNPROMPTED_PYTHON%" -m unprompted.run --category all --summary-file .unprompted\weekly-summary.json >> "%TEMP%\unprompted-weekly.log" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
 
 REM 0 = every category published. 2 = at least one was held, which is the
@@ -90,9 +90,9 @@ REM top of this script then refused to start the NEXT run. One completed run
 REM disabled the schedule until somebody committed the file by hand. First bit
 REM on 2026-09-07, which is why 2026-09-14 would not have measured anything.
 if "%RUN_EXIT%"=="2" (
-  "%UNPROMPTED_PYTHON%" scripts\notify.py --status held --exit-code 2 --detail "At least one category was held and did not publish. The reasons are in the log above and the data is in data\held\." >> "%TEMP%\unprompted-weekly.log" 2>&1
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status held --exit-code 2 --summary-file .unprompted\weekly-summary.json --detail "At least one category was held, failed or refused. See the run log for details." >> "%TEMP%\unprompted-weekly.log" 2>&1
 ) else (
-  "%UNPROMPTED_PYTHON%" scripts\notify.py --status published --exit-code 0 --detail "Every category measured and passed local checks. Commit and push follow; deployment is not verified." >> "%TEMP%\unprompted-weekly.log" 2>&1
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status published --exit-code 0 --summary-file .unprompted\weekly-summary.json --detail "Every category measured and passed local checks. Commit and push follow; deployment is not verified." >> "%TEMP%\unprompted-weekly.log" 2>&1
 )
 
 REM Written with labels rather than one parenthesised block on purpose: cmd

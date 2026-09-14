@@ -1,5 +1,22 @@
 # Upgrade loop
 
+## Cycle 26: preserve mixed category outcomes in weekly status
+
+The scheduled pipeline now writes a local summary after completing its category
+loop. The existing notifier uses it for the durable status detail and its normal
+scheduled notice: each category is identified as passing local checks, held with
+reasons, or failed/refused with its exception. The aggregate exit code stays 2
+for partial outcomes so completed readings are still committed. Notice copy no
+longer claims a held category means nothing else published.
+
+Verification: 159 Python tests passed. The existing independent-category test
+now drives pass, budget refusal and hold through the actual CLI summary writer
+and notifier status writer in a temporary directory with outreach disabled.
+The wrapper passes the same summary path only after pipeline exit 0 or 2.
+Preflight and dry-run do not write this summary. No scheduled or paid run and no
+notification was triggered during verification; today's archived status was not
+rewritten. Live execution of the changed Windows wrapper remains unverified.
+
 ## Cycle 25: reject contradictory alias exclusions
 
 Both admin validation and the shared Python AliasMap constructor now reject an

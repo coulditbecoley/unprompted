@@ -155,8 +155,9 @@ def test_reread_cost_does_not_price_a_new_measurement():
     assert not estimate_category("alpha", 10, [reread]).confident
 
 
-def test_category_refusal_preserves_other_categories(monkeypatch):
-    monkeypatch.setattr(run.sys, "argv", ["run"])
+def test_category_refusal_preserves_other_categories(monkeypatch, tmp_path):
+    summary_file = tmp_path / "summary.json"
+    monkeypatch.setattr(run.sys, "argv", ["run", "--summary-file", str(summary_file)])
     monkeypatch.setattr(run, "load_local_env", lambda: None)
     monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta", "gamma"])
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
@@ -166,11 +167,26 @@ def test_category_refusal_preserves_other_categories(monkeypatch):
         visited.append(name)
         if name == "beta":
             raise SystemExit("budget refused")
-        return RunRecord(name, day, 1, 1, []), []
+        return RunRecord(name, day, 1, 1, []), ["unknown name"] if name == "gamma" else []
 
     monkeypatch.setattr(run, "run_category", category)
     assert run.main() == 2
     assert visited == ["alpha", "beta", "gamma"]
+    detail = json.loads(summary_file.read_text())["detail"]
+    assert "alpha: passed local publication checks" in detail
+    assert "beta: failed or refused" in detail and "budget refused" in detail
+    assert "gamma: held" in detail and "unknown name" in detail
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("notify", run.ROOT / "scripts" / "notify.py")
+    notify = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(notify)
+    monkeypatch.setattr(notify, "REPO", tmp_path)
+    monkeypatch.setattr(notify, "STATUS_FILE", tmp_path / "data" / "last-run.json")
+    monkeypatch.setattr(notify, "open_issue", lambda *args: pytest.fail("unexpected outreach"))
+    monkeypatch.setattr(run.sys, "argv", ["notify", "--status", "held", "--exit-code", "2", "--summary-file", str(summary_file), "--no-issue"])
+    assert notify.main() == 0
+    assert json.loads(notify.STATUS_FILE.read_text())["detail"] == detail
 
 
 def test_batch_resume_binds_input_and_keeps_invalid_output_usage(tmp_path, monkeypatch):
