@@ -238,8 +238,13 @@ def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monke
         def ask_one(self, qid, text, index):
             return EngineAnswer(self.name, qid, text, index, text="Old and Beta")
 
+    def configured_engines():
+        engine = Engine()
+        engine.grounds = commit["sha"] == "after-calls"
+        return {"offline": engine}
+
     for module in (run, reextract):
-        monkeypatch.setattr(module, "all_engines", lambda: {"offline": Engine()})
+        monkeypatch.setattr(module, "all_engines", configured_engines)
 
     def extract(*args, **kwargs):
         aliases.write_text("canonical:\n  Changed: [Old]\n  Beta: []\n")
@@ -308,6 +313,25 @@ def test_recovery_rejects_impossible_reading_dates_before_calls(tmp_path, monkey
         monkeypatch.setattr(run.sys, "argv", ["reextract", source, "--category", "alpha", "--out-date", target])
         with pytest.raises(SystemExit, match="YYYY-MM-DD|rereading date"):
             reextract.main()
+
+
+def test_recovery_refuses_ambiguous_source_before_calls(tmp_path, monkeypatch):
+    from unprompted import reextract
+    from unprompted.models import Extraction
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "resolve_extractor", lambda: pytest.fail("extractor reached for ambiguous source"))
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    record = RunRecord("alpha", "2026-09-01", 1, 1, ["offline"], extractions=[Extraction("offline", "q1", 0, answer="Alpha")]).to_dict()
+    paths = [tmp_path / "data" / bucket / "2026-09-01/alpha.json" for bucket in ("runs", "held")]
+    for path in paths:
+        write_json(path, record)
+    originals = [path.read_bytes() for path in paths]
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
+    with pytest.raises(SystemExit, match="ambiguous source"):
+        reextract.main()
+    assert [path.read_bytes() for path in paths] == originals
 
 
 def test_budget_counts_unpublished_checkpoints_once(tmp_path, monkeypatch):

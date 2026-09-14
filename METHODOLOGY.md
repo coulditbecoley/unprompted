@@ -273,15 +273,12 @@ Claude model was the one counting.
 Which reader ran is no longer implicit: every run record carries an `extractor`
 field naming it, and the weekly note prints it in its frontmatter.
 
-We think the effect is small, because extraction is a mechanical reading task
-and the raw answers are published alongside the counts, so anyone can check a
-row by hand. But "we think it is small" is not evidence, and the honest position
-is that this figure carries a conflict until it has been checked with a
-different model doing the extraction.
+The size and direction of any extraction bias have not been established.
+Missed or unsupported brand mentions can affect standings and self-preference
+figures for every engine. A second model agreeing with Claude would measure
+agreement, not establish accuracy.
 
-That check is now runnable rather than hypothetical. A second local harness
-(Codex) is registered as an extractor, and because every raw answer is stored, a
-past week can be re-read by the other harness without re-querying any engine:
+Stored answers can be reread without querying the engines again:
 
     python -m unprompted.reextract <date> --category <slug>
 
@@ -290,22 +287,27 @@ extraction usage. Use `--out-date YYYY-MM-DD` to choose an unused output date.
 The output date must be later than the source reading and cannot be in the future.
 An empty source, a missing declared engine, or a frozen population mismatch
 refuses before extractor resolution: rereading cannot recreate missing answers.
+If the source identity exists in both held and published storage, recovery
+refuses rather than silently selecting one. Both records remain for review.
+Grounding requirements use the source's recorded engine configuration when
+available. Legacy sources fall back to current configuration captured before
+extraction; this does not establish their original grounding requirements.
 The former `--in-place` option now refuses before paid work. Recovery runs under
 the same process lock and conservative budget preflight as a new measurement.
 Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
 
-with the other extractor enabled in `providers.json`. Comparing the two
-resulting records is the cross-extractor check. Until it has been run over a
-full week and published, treat any self-preference number involving Claude as
-provisional. The raw answers behind every count are in `data/runs/`, which is
-exactly why they are published.
+Recovery currently requires the supported hosted extractor. Local CLI extraction
+is disabled pending isolation qualification; enabling a registry entry does not
+make it available. No independent cross-extractor validation is claimed.
 
-Two things that are *not* affected by this: the standings themselves, which do
-not depend on whose product is whose, and the ChatGPT figure, where a Claude
-extractor finding that ChatGPT under-names its own product runs against the
-direction any bias would push.
+A reproducible, blinded review packet can be prepared and scored using
+`scripts/review_extractions.py`, as described in
+[READING-REVIEW.md](https://github.com/coulditbecoley/unprompted/blob/main/READING-REVIEW.md).
+It binds labels to exact saved answers and withholds accuracy metrics until all
+sampled answers are reviewed. Human adjudication is still pending. Published
+answers in `data/runs/` allow readers to inspect the evidence behind each count.
 
 ---
 

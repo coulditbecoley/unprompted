@@ -219,3 +219,25 @@ then started coding with all five engines and the hosted batch extractor. At
 13:07 the log reached 60/375 calls with zero failures. This confirms startup and
 partial progress only; publication, remaining categories, and push are pending.
 Main remains at af06305 with no tracked changes; the budget remains $150.
+
+## Cycle 11: resolve recovery inputs before extraction costs accrue
+
+Recovery now refuses a source identity present in both published and held
+storage. Neither record is selected or changed. Grounding requirements and the
+brand limit are resolved before extraction; edits to legacy fallback engine
+configuration during a batch cannot change the publication decision afterward.
+Recorded engine declarations retain priority. A legacy fallback remains current
+policy, not proof of the original engine configuration.
+
+The public methodology also now matches the hosted-only extraction restriction.
+Removed unsupported claims that standings and ChatGPT figures were immune to
+extractor bias. The method distinguishes model agreement from accuracy and states
+that human adjudication of the saved-answer review packet is pending.
+
+Verification: the new grounding mutation and ambiguous-source checks failed
+before the fix. All 156 Python tests passed afterward. The 77-page build passed;
+generated methodology HTML contains the corrected uncertainty and pending-review
+statements and omits the obsolete local-harness availability claim. No provider
+calls, source-record edits, or changes to the running main checkout were made.
+At 13:11 local the scheduled log reported 100/375 coding calls, zero failures;
+publication and the remaining categories are still pending.

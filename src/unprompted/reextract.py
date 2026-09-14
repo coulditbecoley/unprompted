@@ -72,10 +72,12 @@ def _main() -> int:
             raise SystemExit(f"refusing existing destination before extraction: {target}")
 
     path = ROOT / "data" / "runs" / args.date / f"{args.category}.json"
+    held = ROOT / "data" / "held" / args.date / f"{args.category}.json"
+    if path.exists() and held.exists():
+        raise SystemExit(f"ambiguous source: both {path} and {held} exist; preserve both for review")
     if not path.exists():
         # A held run is a re-extraction's most common subject: it was held
         # *because* something needed re-reading.
-        held = ROOT / "data" / "held" / args.date / f"{args.category}.json"
         if not held.exists():
             raise SystemExit(f"no run at {path} or {held}")
         path = held
@@ -94,6 +96,13 @@ def _main() -> int:
         (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
     )
     reading_commit = git_sha()
+    # Legacy readings lack the original grounding declaration. Retain the
+    # existing current-policy fallback, but resolve it before any paid work.
+    recorded_engines = record.get("methodology", {}).get("engines")
+    grounding_engines = ({name for name, settings in recorded_engines.items() if settings.get("grounds")}
+                        if recorded_engines else
+                        {name for name, engine in all_engines().items() if engine.grounds})
+    max_brands = int(spec.get("max_brands", 15))
 
     answers = [
         EngineAnswer(
@@ -187,15 +196,13 @@ def _main() -> int:
         fresh.to_dict(),
         this_week,
         brand_week(history[-1]) if history else [],
-        max_brands=int(spec.get("max_brands", 15)),
+        max_brands=max_brands,
         previous=history[-1] if history else None,
         # Re-extraction re-reads stored answers and never re-queries an engine,
         # so the sources in the record are the ones the engine gave on the day.
-        # The grounding rule applies exactly as it did then, and reading the
-        # flag off the live engines keeps one definition of who searches.
-        grounding_engines=({name for name, settings in record["methodology"]["engines"].items() if settings.get("grounds")}
-                           if record.get("methodology", {}).get("engines") else
-                           {name for name, e in all_engines().items() if e.grounds}),
+        # Use the recorded declaration where available, otherwise the legacy
+        # fallback captured before extraction. That fallback is not historical proof.
+        grounding_engines=grounding_engines,
     )
 
     # Same gate as a live run: a re-extraction that still fails its checks is
