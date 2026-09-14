@@ -133,7 +133,8 @@ def _run_category(
 ) -> tuple[RunRecord, list[str]]:
     """Execute one full run. Returns the record and any hold reasons."""
     spec = load_questions(category)
-    date.fromisoformat(run_date)
+    if date.fromisoformat(run_date).isoformat() != run_date:
+        raise ValueError("run date must use YYYY-MM-DD")
     for bucket in ("runs", "held"):
         target = ROOT / "data" / bucket / run_date / f"{category}.json"
         if target.exists():

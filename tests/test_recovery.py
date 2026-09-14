@@ -88,6 +88,17 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     assert len(calls) == 4
 
 
+def test_measurement_refuses_noncanonical_dates_before_provider_resolution(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_questions", lambda category: {})
+    monkeypatch.setattr(run, "all_engines", lambda: pytest.fail("provider resolution reached for invalid date"))
+    for day in ("20260914", "2026-W38-1", "2026-13-01"):
+        with pytest.raises(ValueError):
+            run.run_category("alpha", day)
+    assert not list(tmp_path.rglob("*.json"))
+    assert not (tmp_path / "data").exists()
+
+
 def test_preflight_combines_budget_without_measurement_or_output_writes(tmp_path, monkeypatch, capsys):
     from unprompted import budget
     monkeypatch.setattr(run, "ROOT", tmp_path)

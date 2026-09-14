@@ -317,3 +317,17 @@ methodology HTML contains the corrected recovery, credential, cost, and comparis
 statements. Node source is unchanged from its 31-test pass. At 13:27 local the
 scheduled coding log reached 250/375 calls with zero failures; its main checkout
 remains untouched and publication is pending.
+
+## Cycle 16: reject noncanonical measurement dates before paid work
+
+The main measurement entry accepted compact and ISO week dates through Python's
+date parser, although the final archive writer requires YYYY-MM-DD. It now checks
+the canonical representation before provider resolution, preventing a late refusal
+after measurement and extraction costs. Existing canonical dates, including
+dates used for checkpoint recovery, retain their behavior.
+
+Verification: all 21 recovery tests passed. The added check submits compact,
+ISO-week, and invalid calendar dates through the public run_category entry;
+provider resolution is trapped and no JSON checkpoints or data directory appear.
+Only the guard changed in production code; the previous full Python pass was 156
+tests before adding this case. Node and build inputs are unchanged.
