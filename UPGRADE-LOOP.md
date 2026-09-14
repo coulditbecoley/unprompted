@@ -167,3 +167,18 @@ Verification: 26 Node tests and the 77-page production build passed. Offline
 archive fixtures cover each refusal and recovery case without writing to data/.
 The Python source is unchanged from its preceding 148-test pass. Actual admin
 browser rendering is still unverified; this cycle is isolated from the runner.
+
+## Cycle 8: refuse irreparable recovery inputs before spending
+
+The structural checks now have one shared entry point, used by the publication
+gate and by recovery before extractor resolution. Empty sources, absent declared
+engines, and frozen population mismatches cannot consume another extraction
+batch in an attempt to repair missing answers. Legacy records without a frozen
+question manifest still cannot prove full question/repetition coverage; this
+change does not invent it. Recovery output dates must be canonical YYYY-MM-DD,
+later than their source reading, and no later than today.
+
+Verification: 154 Python tests and 26 Node tests passed. Offline refusal cases
+cover missing/duplicate/unexpected rows, empty sources, missing engines, compact
+dates, backdating and future dates. The extractor is never resolved in those
+cases, and source bytes remain unchanged. No measurement or paid recovery ran.

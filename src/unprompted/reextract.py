@@ -22,7 +22,7 @@ from datetime import date
 import yaml
 
 from .aggregate import brand_week, load_history
-from .checks import run_checks
+from .checks import population_reasons, run_checks
 from .budget import check as check_budget
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .engines import all_engines
@@ -44,7 +44,7 @@ def _main() -> int:
     parser.add_argument("--category", required=True)
     parser.add_argument(
         "--out-date",
-        help="date to write the re-extracted run under (default: today)",
+        help="unused YYYY-MM-DD after the source reading, not in the future (default: today)",
     )
     parser.add_argument(
         "--in-place",
@@ -57,11 +57,15 @@ def _main() -> int:
         raise SystemExit("In-place recovery would erase earlier usage. Use --out-date to create a new reading; the source is preserved.")
 
     load_local_env()
-    date.fromisoformat(args.date)
+    source_date = date.fromisoformat(args.date)
     if args.category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
         raise SystemExit("unknown category")
     out_date = args.out_date or date.today().isoformat()
-    date.fromisoformat(out_date)
+    reading_date = date.fromisoformat(out_date)
+    if source_date.isoformat() != args.date or reading_date.isoformat() != out_date:
+        raise SystemExit("source and output dates must use YYYY-MM-DD")
+    if reading_date <= source_date or reading_date > date.today():
+        raise SystemExit("a rereading date must be after its source reading and cannot be in the future")
     for bucket in ("runs", "held"):
         target = ROOT / "data" / bucket / out_date / f"{args.category}.json"
         if target.exists():
@@ -78,6 +82,9 @@ def _main() -> int:
     record = json.loads(path.read_text(encoding="utf-8"))
     if record.get("category") != args.category or record.get("run_date") != args.date:
         raise SystemExit("source record identity does not match its path")
+    structural_failures = population_reasons(record)
+    if structural_failures:
+        raise SystemExit("Cannot recover an incomplete source by rereading: " + "; ".join(structural_failures))
 
     # Freeze and validate the actual alias policy before extraction can cost
     # anything. An operator edit during a batch must not change this reading.

@@ -52,6 +52,25 @@ class CheckResult:
         return not self.passed
 
 
+def population_reasons(run: dict) -> list[str]:
+    """Structural failures that another extraction cannot repair."""
+    extractions = run.get("extractions", [])
+    if not extractions:
+        return ["run produced no extractions at all"]
+    reasons = []
+    for engine in sorted(run.get("engines", [])):
+        if not any(e.get("engine") == engine for e in extractions):
+            reasons.append(f"{engine} has no recorded calls despite being declared in this run")
+    spec = run.get("methodology", {}).get("questions", {})
+    if spec:
+        expected = {(e, q["id"], i) for e in run.get("engines", [])
+                    for q in spec["questions"] for i in range(run["runs_per_question"])}
+        rows = [(e.get("engine"), e.get("question_id"), e.get("run_index")) for e in extractions]
+        if set(rows) != expected or len(rows) != len(expected):
+            reasons.append("measurement population has missing, duplicate or unexpected rows")
+    return reasons
+
+
 def run_checks(
     run: dict,
     this_week: list[BrandWeek],
@@ -61,7 +80,7 @@ def run_checks(
     grounding_engines: set[str] | None = None,
 ) -> CheckResult:
     """Return pass/fail plus every human-readable reason it failed."""
-    reasons: list[str] = []
+    reasons = population_reasons(run)
 
     # 0. The series rule, enforced rather than merely written down.
     #
@@ -71,14 +90,6 @@ def run_checks(
     # engine — a local CLI harness, say — would silently produce a week that
     # was not comparable to the one before it and publish it as if it were.
     snapshot = run.get("methodology", {})
-    spec = snapshot.get("questions", {})
-    if spec:
-        expected = {(e, q["id"], i) for e in run.get("engines", [])
-                    for q in spec["questions"] for i in range(run["runs_per_question"])}
-        rows = [(e.get("engine"), e.get("question_id"), e.get("run_index"))
-                for e in run.get("extractions", [])]
-        if set(rows) != expected or len(rows) != len(expected):
-            reasons.append("measurement population has missing, duplicate or unexpected rows")
     if previous and previous.get("method_version") == run.get("method_version"):
         before_method = previous.get("methodology", {})
         if before_method and snapshot and any(before_method.get(k) != snapshot.get(k) for k in ("questions", "engines")):
@@ -171,8 +182,6 @@ def run_checks(
                 f"{rate:.0%} of engine calls errored "
                 f"({errored} of {len(extractions)}), over the {MAX_ERROR_RATE:.0%} limit"
             )
-    else:
-        reasons.append("run produced no extractions at all")
 
     # 4. Brand count outside the expected band, ignoring the one-mention tail.
     count = sum(1 for b in this_week if b.rotation >= MIN_ROTATION_TO_COUNT)
@@ -207,11 +216,8 @@ def run_checks(
     # replaced rather than added to.
     for engine in sorted(run.get("engines", [])):
         got = [e for e in extractions if e.get("engine") == engine]
-        # Missing rows are not successful calls. Legacy re-reads may lack the
-        # frozen question manifest used by the full population check above.
         if not got:
-            reasons.append(f"{engine} has no recorded calls despite being declared in this run")
-            continue
+            continue  # population_reasons already reports the missing engine
         failed = sum(1 for e in got if e.get("error"))
         rate = failed / len(got)
         if rate > MAX_ENGINE_ERROR_RATE:

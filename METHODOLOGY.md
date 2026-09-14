@@ -287,6 +287,9 @@ past week can be re-read by the other harness without re-querying any engine:
 
 Recovery writes a new dated reading and retains its source, including previous
 extraction usage. Use `--out-date YYYY-MM-DD` to choose an unused output date.
+The output date must be later than the source reading and cannot be in the future.
+An empty source, a missing declared engine, or a frozen population mismatch
+refuses before extractor resolution: rereading cannot recreate missing answers.
 The former `--in-place` option now refuses before paid work. Recovery runs under
 the same process lock and conservative budget preflight as a new measurement.
 Saved batch IDs are bound to their exact inputs and extraction configuration;

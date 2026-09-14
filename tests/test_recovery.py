@@ -153,6 +153,7 @@ def test_held_readings_are_immutable_and_rereads_add_only_extraction(tmp_path, m
 
 def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):
     from unprompted import reextract
+    from unprompted.models import Extraction
     monkeypatch.setattr(reextract, "ROOT", tmp_path)
     monkeypatch.setattr(reextract, "load_local_env", lambda: None)
     monkeypatch.setattr(reextract, "resolve_extractor", lambda: SimpleNamespace(id="offline", label="offline"))
@@ -162,7 +163,8 @@ def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):
     (tmp_path / "questions/alpha.yml").write_text("category: alpha")
     (tmp_path / "aliases").mkdir()
     (tmp_path / "aliases/alpha.yml").write_text("canonical: {}")
-    write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, []).to_dict())
+    write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, ["offline"],
+        extractions=[Extraction("offline", "q1", 0, answer="Alpha")]).to_dict())
     monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
     with pytest.raises(SystemExit, match="offline ceiling"):
         reextract.main()
@@ -223,6 +225,48 @@ def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monke
     assert saved["git_sha"] == "before-calls"
     assert saved["methodology"]["aliases"]["canonical"] == {"Original": ["Old"], "Beta": []}
     assert [b["name"] for b in saved["extractions"][0]["brands"]] == ["Original", "Beta"]
+
+
+@pytest.mark.parametrize("problem", ["empty", "missing_engine", "missing_row", "duplicate_row", "unexpected_row"])
+def test_unrecoverable_population_refuses_before_extractor_resolution(tmp_path, monkeypatch, problem):
+    from unprompted import reextract
+    from unprompted.models import Extraction
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "resolve_extractor", lambda: pytest.fail("extractor resolved for irreparable input"))
+    monkeypatch.setattr(reextract, "extract_run", lambda *a, **k: pytest.fail("paid extraction for irreparable input"))
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    record = RunRecord("alpha", "2026-09-01", 1, 2, ["offline"], extractions=[Extraction("offline", "q1", 0, answer="Alpha")]).to_dict()
+    if problem == "empty": record["extractions"] = []
+    elif problem == "missing_engine": record["engines"].append("absent")
+    else:
+        record["methodology"] = {"questions": {"questions": [{"id": "q1", "text": "Which?"}]}}
+        if problem == "duplicate_row": record["extractions"] *= 2
+        if problem == "unexpected_row": record["extractions"].append({**record["extractions"][0], "question_id": "q2", "run_index": 1})
+    source = tmp_path / "data/held/2026-09-01/alpha.json"
+    write_json(source, record)
+    original = source.read_bytes()
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
+    with pytest.raises(SystemExit, match="Cannot recover an incomplete source"):
+        reextract.main()
+    assert source.read_bytes() == original and not (tmp_path / "data/runs").exists()
+
+
+def test_recovery_rejects_impossible_reading_dates_before_calls(tmp_path, monkeypatch):
+    from datetime import date, timedelta
+    from unprompted import reextract
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "resolve_extractor", lambda: pytest.fail("extractor reached with invalid dates"))
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    for source, target in [("2026-09-01", "2026-08-31"), ("2026-09-01", "2026-09-01"),
+                           ("20260901", "2026-09-14"), ("2026-09-01", "20260914"),
+                           ("2026-09-01", (date.today() + timedelta(days=1)).isoformat())]:
+        monkeypatch.setattr(run.sys, "argv", ["reextract", source, "--category", "alpha", "--out-date", target])
+        with pytest.raises(SystemExit, match="YYYY-MM-DD|rereading date"):
+            reextract.main()
 
 
 def test_budget_counts_unpublished_checkpoints_once(tmp_path, monkeypatch):
