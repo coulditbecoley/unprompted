@@ -84,6 +84,19 @@ test("held review reads recorded reasons and tolerates legacy or malformed reaso
   assert.deepEqual(held.find(r => r.category === "malformed").reasons, ["Coverage failed"]);
 });
 
+test("recorded absence of affiliations never falls back to today's ownership", async () => {
+  const { loadAffiliations } = await import("../lib/data.ts");
+  const category = "ai-coding-assistants";
+  const live = loadAffiliations(category);
+  assert.ok(Object.keys(live).length > 0);
+  assert.deepEqual(loadAffiliations(category, { methodology: {} }), live);
+  assert.deepEqual(loadAffiliations(category, { methodology: { aliases: {} } }), {});
+  assert.deepEqual(loadAffiliations(category, { methodology: { aliases: { affiliations: {} } } }), {});
+  assert.deepEqual(loadAffiliations("missing-category", { methodology: { aliases: {
+    affiliations: { Archived: "old-engine", Shared: ["one", "two"] },
+  } } }), { Archived: ["old-engine"], Shared: ["one", "two"] });
+});
+
 test("route integration: analytics and stale editor protection", async (t) => {
   await t.test("a brand click never becomes a brand view or referral", async () => {
     calls.length = 0;

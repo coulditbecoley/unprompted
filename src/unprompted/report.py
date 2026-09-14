@@ -45,9 +45,7 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
     move_for = {m.brand: m for m in moves}
     snub = the_snub(moves)
 
-    frozen = run.get("methodology", {}).get("aliases", {}).get("affiliations")
-    affiliations = ({brand: [owner] if isinstance(owner, str) else owner for brand, owner in frozen.items()}
-                    if frozen is not None else load_affiliations(aliases_path))
+    affiliations = load_affiliations(aliases_path, run=run)
     preference = self_preference(run, affiliations)
     sources = source_counts(run)[:10]
     _, cost = cost_of_run(run)

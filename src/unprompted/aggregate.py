@@ -315,7 +315,7 @@ def self_preference(
     return out
 
 
-def load_affiliations(path: str | Path) -> dict[str, list[str]]:
+def load_affiliations(path: str | Path, *, run: dict | None = None) -> dict[str, list[str]]:
     """Read the brand -> owning-engines map from a category's alias file.
 
     A value may be one engine name or a list of them. A list is needed because
@@ -326,7 +326,9 @@ def load_affiliations(path: str | Path) -> dict[str, list[str]]:
     """
     import yaml
 
-    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    frozen = (run or {}).get("methodology", {}).get("aliases")
+    # A recorded empty map is evidence of no affiliations, not missing history.
+    data = frozen if frozen is not None else yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     raw = data.get("affiliations", {}) or {}
     return {
         brand: [owner] if isinstance(owner, str) else list(owner)

@@ -271,12 +271,13 @@ export type SelfPreference = {
  * replaces could only ever see a flat "Brand: engine" line, so it silently
  * returned nothing for a list and the ownership simply vanished.
  */
-export function loadAffiliations(category: string): Record<string, string[]> {
-  const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
-  if (!fs.existsSync(file)) return {};
-  const parsed = loadYaml(fs.readFileSync(file, "utf-8")) as
-    | { affiliations?: Record<string, string | string[]> }
-    | undefined;
+export function loadAffiliations(category: string, run?: RunRecord): Record<string, string[]> {
+  let parsed = run?.methodology?.aliases;
+  if (parsed == null) {
+    const file = path.join(REPO_ROOT, "aliases", `${category}.yml`);
+    if (!fs.existsSync(file)) return {};
+    parsed = loadYaml(fs.readFileSync(file, "utf-8")) as typeof parsed;
+  }
   const raw = parsed?.affiliations;
   if (!raw || typeof raw !== "object") return {};
 

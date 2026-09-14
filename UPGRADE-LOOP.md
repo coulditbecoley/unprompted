@@ -114,3 +114,17 @@ were made and the main scheduler checkout remains unchanged.
 Follow-up: audit consumers' handling of an explicit alias snapshot with no
 affiliations. Falling back to current affiliations in that case would reinterpret
 an intentional absence of ownership metadata.
+
+## Cycle 5: retain recorded ownership metadata, including its absence
+
+The report and chart previously fell back to current affiliations when a saved
+alias snapshot lacked that field. Both now read through their existing shared
+affiliation loaders, where an explicit snapshot wins even if empty. Only a legacy
+record with no alias snapshot uses the current-map fallback. This prevents later
+ownership-map edits from adding self-preference claims to frozen readings.
+
+Verification: 146 Python tests, 23 Node tests, and the isolated production build
+passed (77 generated pages, including TypeScript checks). Tests cover missing
+versus empty snapshots, archived scalar/list ownership, and the report's actual
+self-preference section. Browser rendering remains unverified. Dependencies were
+installed from the existing lockfile in the isolated worktree; main was untouched.

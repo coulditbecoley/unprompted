@@ -80,10 +80,7 @@ export function ChartBoard({
   const snub = theSnub(moves);
   const sources = sourceCounts(run).slice(0, 10);
   const leader = board[0];
-  const frozenAffiliations = run.methodology?.aliases?.affiliations;
-  const preference = selfPreference(run, frozenAffiliations
-    ? Object.fromEntries(Object.entries(frozenAffiliations).map(([brand, owners]) => [brand, typeof owners === "string" ? [owners] : owners]))
-    : loadAffiliations(category.slug));
+  const preference = selfPreference(run, loadAffiliations(category.slug, run));
 
   // Read once. Called inside the map below, this re-read and re-parsed the
   // whole question file for every question on the board.

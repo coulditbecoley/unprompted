@@ -588,6 +588,21 @@ def test_report_renders_without_em_dashes():
     assert pretty("ai-coding-assistants") == "AI Coding Assistants"
 
 
+def test_report_does_not_invent_affiliations_for_a_frozen_empty_map(tmp_path):
+    from unprompted.report import build_report
+    from unprompted.aggregate import load_affiliations
+    aliases = tmp_path / "alpha.yml"
+    aliases.write_text("affiliations:\n  PSA: claude\n")
+    run = _run([ex(engine="claude", brands=["PSA"]), ex(engine="chatgpt", brands=["CGC"])])
+    run.update(category="alpha", run_date="2026-09-14", method_version=1,
+               runs_per_question=1, engines=["claude", "chatgpt"])
+    assert "## Does an engine favour its own tool?" in build_report(run, [], aliases)
+    run["methodology"] = {"aliases": {}}
+    assert "## Does an engine favour its own tool?" not in build_report(run, [], aliases)
+    run["methodology"]["aliases"]["affiliations"] = {"Archived": "old", "Shared": ["one", "two"]}
+    assert load_affiliations(tmp_path / "missing.yml", run=run) == {"Archived": ["old"], "Shared": ["one", "two"]}
+
+
 def test_every_runnable_category_has_its_alias_map():
     """The runner picks categories up from questions/; a missing alias map there
     would quarantine every brand and hold the week for no good reason."""
