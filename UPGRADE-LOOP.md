@@ -25,6 +25,38 @@ notifications, or deployment.
    identify evidence usage and abandonment; validate usefulness with actual
    reader feedback before expanding categories or adding personalization.
 
+## Integration and acceptance gate — current isolated branch
+
+The cycle ledger below supersedes the original candidate list where work is
+already implemented. Local tests establish behavior in their stated scope, not
+release acceptance. Remaining work is:
+
+1. Observe the September 14 scheduled task through its terminal state. Record
+   each category's published/held/refused outcome, stored reasons, commit/push
+   result, and any budget refusal. A progress counter is not publication proof.
+2. After the task is terminal, inspect both worktrees and any new scheduler
+   commits. Preserve all new measurements and the runner's stamped code revision.
+   Integrate the isolated branch only then; resolve conflicts against the final
+   measurements and code, not the pre-run snapshot. Recheck scheduler guards and
+   an empty index after integration.
+3. Validate the integrated tree with its Python suite, Node agreement/route
+   checks, typecheck, and production build. The newly generated readings must
+   participate in the existing cross-language checks. Inspect hosted CI and
+   deployed revision separately from local build output when they exist.
+4. Complete desktop/mobile/keyboard and authenticated reader/operator journeys.
+   Local server launch was rejected by automatic approval review; do not treat
+   in-process server rendering as browser acceptance or bypass that rejection.
+5. Obtain independent labels for the saved-answer review packet and score it.
+   All 75 labels remain pending; no extraction-accuracy result is available.
+6. Reconcile real provider billing and namespaced analytics/delivery evidence
+   before claiming those external contracts are qualified. No test outreach or
+   additional paid measurements are authorized by this checklist.
+
+Potential implementation follow-ups still need evidence: code provenance across
+resumed checkpoints, complete cross-language configuration validation, and reader
+feedback on evidence navigation. Avoid adding new categories or personalization
+without evidence that they improve the service.
+
 ## Cycle 1: retain publication decisions — 2026-09-14
 
 Problem: publication checks choose held versus published storage, but their
@@ -331,3 +363,18 @@ ISO-week, and invalid calendar dates through the public run_category entry;
 provider resolution is trapped and no JSON checkpoints or data directory appear.
 Only the guard changed in production code; the previous full Python pass was 156
 tests before adding this case. Node and build inputs are unchanged.
+
+## Cycle 17: make web CI's Python dependency explicit
+
+The web job runs the cross-language publication-limit check, which imports the
+normalizer and PyYAML. Only the separate Python job installed those requirements.
+The web job now sets up Python 3.12 and installs the same pinned requirements
+before npm test; it no longer relies on incidental hosted-runner packages. The
+test's obsolete standard-library-only comment was corrected.
+
+Verification: an isolated Python import with site packages disabled failed at
+the expected missing yaml dependency. Parsed workflow inspection confirms Python
+setup and pinned installation precede npm test in the web job. Existing agreement
+tests already cover the import; no duplicate configuration test suite was added.
+This is a local workflow correction, not a hosted CI pass. The integration gate
+above records remaining live, browser, human-review, and external evidence work.

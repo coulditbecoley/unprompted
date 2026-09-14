@@ -89,8 +89,8 @@ const RUNS = path.join(REPO, "data", "runs");
  *
  * Windows installs `python`, the CI runner installs `python3`, and picking
  * either one would have made this pass on a laptop and fail on a build. The
- * modules it imports -- aggregate and models -- are pure standard library, so
- * nothing needs installing first.
+ * checks module imports the YAML normalizer too, so CI installs the project's
+ * pinned Python requirements before running these cross-language checks.
  */
 const PYTHON = (() => {
   for (const candidate of ["python3", "python"]) {
