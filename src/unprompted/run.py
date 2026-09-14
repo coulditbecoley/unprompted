@@ -238,6 +238,8 @@ def _run_category(
             answers.append(answer)
         else:
             pending.append((engine, qid, text, run_index))
+    if answers:
+        print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):
         answer = engine.ask_one(qid, text, run_index)
         write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
@@ -248,9 +250,10 @@ def _run_category(
             pool.submit(ask_and_save, engine, qid, text, run_index): engine.name
             for engine, qid, text, run_index in pending
         }
-        for done, future in enumerate(as_completed(futures), start=1):
+        for future in as_completed(futures):
             answer = future.result()
             answers.append(answer)
+            done = len(answers)
             if done % 10 == 0 or done == len(tasks):
                 failed = sum(1 for a in answers if a.error)
                 print(

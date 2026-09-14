@@ -298,3 +298,22 @@ is absent. Generated homepage, current chart, and dated-chart HTML contain the
 legacy caveat. Browser acceptance remains pending. No dependencies, CSS rules,
 or archive records changed. At 13:24 local the scheduled coding log reached
 210/375 calls with zero failures; main remains frozen for the live task.
+
+## Cycle 15: explain and report checkpoint recovery accurately
+
+Restart progress now includes saved answers in its completion total and explicitly
+reports how many calls were reused and remain. Previously a partial restart could
+finish all remaining calls without ever printing the full population. The method
+page now describes per-response checkpoints, crash-window limits, configuration
+refusal before calls, and actual snapshot/version enforcement. It distinguishes
+intermediate writes from final publication and usage estimates from subscription
+costs. Removed obsolete claims that interrupted runs recover nothing or missing
+credentials are deliberately queried.
+
+Verification: all 156 Python tests and the 77-page build passed. The existing
+restart test now covers full reuse plus a partial checkpoint set, confirms only
+the missing call repeats, and checks the final 3/3 progress message. Generated
+methodology HTML contains the corrected recovery, credential, cost, and comparison
+statements. Node source is unchanged from its 31-test pass. At 13:27 local the
+scheduled coding log reached 250/375 calls with zero failures; its main checkout
+remains untouched and publication is pending.

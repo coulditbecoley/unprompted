@@ -34,7 +34,7 @@ def test_atomic_publication_and_lock(tmp_path, monkeypatch):
         pass
 
 
-def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkeypatch):
+def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(run, "ROOT", tmp_path)
     (tmp_path / "aliases").mkdir()
     (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
@@ -64,20 +64,28 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
         with pytest.raises(RuntimeError, match="extraction outage"):
             run.run_category("alpha", "2026-09-14")
     assert sorted(calls) == [0, 1, 2]
+    assert "reused 3/3 saved calls; 0 calls remaining" in capsys.readouterr().err
     saved = tmp_path / ".unprompted/2026-09-14/alpha"
     assert len(list(saved.glob("fake-*.json"))) == 3
     answer_path = saved / "fake-q1-0.json"
     answer = json.loads(answer_path.read_text())
     assert answer["text"] == "Alpha"
+    answer_path.unlink()  # emulate one call that never reached its durable checkpoint
+    with pytest.raises(RuntimeError, match="extraction outage"):
+        run.run_category("alpha", "2026-09-14")
+    progress = capsys.readouterr().err
+    assert "reused 2/3 saved calls; 1 calls remaining" in progress
+    assert "3/3 calls (0 failed)" in progress
+    assert calls.count(0) == 2 and len(calls) == 4
     answer["run_index"] = 99
     write_json(answer_path, answer, replace=True)
     with pytest.raises(ValueError, match="answer identity differs"):
         run.run_category("alpha", "2026-09-14")
-    assert len(calls) == 3
+    assert len(calls) == 4
     spec["questions"][0]["text"] = "Changed question"
     with pytest.raises(ValueError, match="methodology differs"):
         run.run_category("alpha", "2026-09-14")
-    assert len(calls) == 3
+    assert len(calls) == 4
 
 
 def test_preflight_combines_budget_without_measurement_or_output_writes(tmp_path, monkeypatch, capsys):
