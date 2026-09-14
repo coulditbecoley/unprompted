@@ -162,6 +162,32 @@ test("archive scans expose directory failures and retain readable sibling record
   assert.deepEqual(loadAllRuns(), { runs: [], errors: [] });
 });
 
+test("dated chart metadata preserves reading identity and measurement date", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const categories = await import("../lib/categories.ts");
+  const source = fs.readFileSync(new URL("../app/chart/[category]/[date]/page.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, require: id => {
+    if (id === "@/lib/categories") return categories;
+    if (id === "@/lib/data") return { loadHistory: () => [{ run_date: "2026-09-14", measured_on: "2026-09-07", method_version: 3 }] };
+    if (id === "@/components/chart-board") return {};
+    if (id === "next/navigation") return { notFound: () => { throw new Error("not found"); } };
+    return nativeRequire(id);
+  } });
+  const params = { category: "ai-coding-assistants", date: "2026-09-14" };
+  const meta = await exports.generateMetadata({ params: Promise.resolve(params) });
+  assert.equal(meta.title, "AI Coding Assistants · 2026-09-14");
+  assert.match(meta.description, /measured on 2026-09-07/);
+  assert.match(meta.description, /Published reading 2026-09-14/);
+  assert.equal(meta.alternates.canonical, "/chart/ai-coding-assistants/2026-09-14");
+  assert.equal(meta.openGraph.url, meta.alternates.canonical);
+  await assert.rejects(exports.generateMetadata({ params: Promise.resolve({ ...params, date: "2026-09-15" }) }), /not found/);
+});
+
 test("admin server component remains readable when a published category is corrupt", async (t) => {
   const ts = await import("typescript");
   const { runInNewContext } = await import("node:vm");

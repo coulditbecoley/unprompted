@@ -1,5 +1,17 @@
 # Upgrade loop
 
+## Cycle 28: identify dated results in page and share metadata
+
+Permanent chart pages inherited the generic site title. They now supply the
+category and reading date, their own canonical/Open Graph URL, and a description
+that distinguishes measurement date from publication reading date. Missing
+readings return not-found instead of receiving plausible result metadata.
+
+Verification: 33 Node tests and the 84-page build passed, including TypeScript.
+The route metadata check covers a rereading with distinct dates and an absent
+reading. Generated September 14 HTML contains its category/date Open Graph title
+and exact canonical URL. Search indexing and external share caches are unverified.
+
 ## Cycle 27: retain the rival baseline on phones
 
 A browser check of the deployed dated coding chart at 390 by 844 showed that
