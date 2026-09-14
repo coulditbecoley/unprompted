@@ -211,13 +211,40 @@ def test_held_readings_are_immutable_and_rereads_add_only_extraction(tmp_path, m
     assert path.read_bytes() == original
 
 
+def test_recovery_budget_prices_only_new_extraction_without_erasing_prior_spend(monkeypatch):
+    from datetime import date
+    from unprompted import budget
+    from unprompted.cost import cost_of_run
+    record = {"category": "alpha", "run_date": date.today().isoformat(), "extractor": "claude-api-extract",
+              "extractions": [{"engine": "chatgpt", "error": None, "usage": {
+                  "input_tokens": 1_000_000, "extract_input_tokens": 1000, "extract_output_tokens": 500}}]}
+    spent = cost_of_run(record)[1]
+    extraction_cost = next(i.dollars for i in cost_of_run(record)[0] if i.label == "extract")
+    full = budget.estimate_category("alpha", 10, [record])
+    reread = budget.estimate_category("alpha", 10, [record], extraction_only=True)
+    assert reread.dollars == round(extraction_cost * 10, 2)
+    assert full.dollars > reread.dollars > 0
+    monkeypatch.setattr(budget, "_archived_runs", lambda: [record])
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", spent + (full.dollars + reread.dollars) / 2)
+    assert not budget.check("alpha", 10).ok
+    verdict = budget.check("alpha", 10, extraction_only=True)
+    assert verdict.ok and verdict.spent == spent
+    assert "per extraction" in verdict.message
+    unpriced = {**record, "extractions": [{"engine": "chatgpt", "usage": {"input_tokens": 1_000_000}}]}
+    fallback = budget.estimate_category("alpha", 10, [unpriced], extraction_only=True)
+    assert not fallback.confident and fallback.dollars == round(10 * budget.FALLBACK_PER_ANSWER, 2)
+
+
 def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):
     from unprompted import reextract
     from unprompted.models import Extraction
     monkeypatch.setattr(reextract, "ROOT", tmp_path)
     monkeypatch.setattr(reextract, "load_local_env", lambda: None)
     monkeypatch.setattr(reextract, "resolve_extractor", lambda: SimpleNamespace(id="offline", label="offline"))
-    monkeypatch.setattr(reextract, "check_budget", lambda *a: SimpleNamespace(ok=False, message="offline ceiling"))
+    def refuse(category, answers, *, extraction_only):
+        assert category == "alpha" and answers == 1 and extraction_only is True
+        return SimpleNamespace(ok=False, message="offline ceiling")
+    monkeypatch.setattr(reextract, "check_budget", refuse)
     monkeypatch.setattr(reextract, "extract_run", lambda *a, **kw: pytest.fail("paid call after refusal"))
     (tmp_path / "questions").mkdir()
     (tmp_path / "questions/alpha.yml").write_text("category: alpha")
@@ -238,7 +265,7 @@ def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monke
         monkeypatch.setattr(module, "ROOT", tmp_path)
         monkeypatch.setattr(module, "load_local_env", lambda: None)
         monkeypatch.setattr(module, "resolve_extractor", lambda: SimpleNamespace(id="offline", label="offline"))
-        monkeypatch.setattr(module, "check_budget", lambda *a: SimpleNamespace(ok=True, message="offline"))
+        monkeypatch.setattr(module, "check_budget", lambda *a, **kw: SimpleNamespace(ok=True, message="offline"))
     (tmp_path / "aliases").mkdir()
     aliases = tmp_path / "aliases/alpha.yml"
     aliases.write_text("canonical:\n  Original: [Old]\n  Beta: []\n")

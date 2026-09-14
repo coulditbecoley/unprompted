@@ -378,3 +378,22 @@ setup and pinned installation precede npm test in the web job. Existing agreemen
 tests already cover the import; no duplicate configuration test suite was added.
 This is a local workflow correction, not a hosted CI pass. The integration gate
 above records remaining live, browser, human-review, and external evidence work.
+
+## Cycle 18: reserve the cost recovery will actually incur
+
+Recovery used the fresh-measurement estimate even though it never re-queries
+engines. The shared estimator now has an extraction-only mode based on recorded
+extraction line items and billed extraction counts. Recovery requests that mode
+for eligible saved answers; genuine engine failures require no extractor call.
+All historical spend remains in the monthly total, and the existing conservative
+fallback applies when no extraction usage can price the operation. The ceiling
+is unchanged. This is an estimate, not a guarantee of provider balance or usage.
+
+Verification: all 158 Python tests passed. A case with costly engine calls proves
+fresh measurement refuses while an affordable extraction-only recovery fits the
+same ceiling without erasing historical spend. Missing extraction usage retains
+the unconfident fallback. The actual recovery-entry refusal check also verifies
+the mode and eligible-call count; both focused budget checks passed after that
+assertion was added. No paid recovery or live-checkout edits were performed.
+At 13:41 local the scheduled task remained Running, with all 375 coding answers
+submitted and pending in the extraction batch. Publication remains unproven.

@@ -302,7 +302,11 @@ Grounding requirements use the source's recorded engine configuration when
 available. Legacy sources fall back to current configuration captured before
 extraction; this does not establish their original grounding requirements.
 The former `--in-place` option now refuses before paid work. Recovery runs under
-the same process lock and conservative budget preflight as a new measurement.
+the same process lock and monthly ceiling as a new measurement. Its estimate
+prices only eligible extraction calls using recorded extraction usage; all prior
+engine and extraction spend still counts toward the month. If extraction usage
+is unavailable, the conservative per-answer fallback remains. These estimates
+cannot guarantee provider balances or the token usage of a changed reader.
 Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.

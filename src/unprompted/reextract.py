@@ -142,7 +142,7 @@ def _main() -> int:
     except ProviderError as exc:
         raise SystemExit(str(exc)) from exc
     hosted = isinstance(extractor, ApiExtractor)
-    verdict = check_budget(args.category, len(answers))
+    verdict = check_budget(args.category, sum(not a.error for a in answers), extraction_only=True)
     if not verdict.ok:
         raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
     print(

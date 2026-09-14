@@ -123,7 +123,7 @@ def spent_in_month(when: date, runs: list[dict] | None = None) -> float:
     )
 
 
-def estimate_category(category: str, answers: int, runs: list[dict] | None = None) -> Estimate:
+def estimate_category(category: str, answers: int, runs: list[dict] | None = None, *, extraction_only: bool = False) -> Estimate:
     """What one category is likely to cost, from what comparable runs did cost.
 
     Preference order, most specific first: this category's own most recent
@@ -134,12 +134,18 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     """
     runs = _archived_runs() if runs is None else runs
     # A re-read pays only extraction; it cannot price a fresh measurement.
-    priced = [(r, cost_of_run(r)[1]) for r in runs if not r.get("source_run")]
+    if extraction_only:
+        priced = [(r, sum(i.dollars for i in cost_of_run(r)[0] if i.label == "extract")) for r in runs]
+    else:
+        priced = [(r, cost_of_run(r)[1]) for r in runs if not r.get("source_run")]
     priced = [(r, c) for r, c in priced if c > 0]
 
     def per_answer(record: dict, dollars: float) -> float:
-        got = [e for e in record.get("extractions", []) if not e.get("error")]
+        got = ([e for e in record.get("extractions", []) if any((e.get("usage") or {}).get(k, 0) for k in ("extract_input_tokens", "extract_output_tokens"))]
+               if extraction_only else [e for e in record.get("extractions", []) if not e.get("error")])
         return dollars / len(got) if got else FALLBACK_PER_ANSWER
+
+    operation = "extraction" if extraction_only else "answer"
 
     same = [(r, c) for r, c in priced if r.get("category") == category]
     if same:
@@ -147,7 +153,7 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
         rate = per_answer(record, dollars)
         return Estimate(
             round(rate * answers, 2),
-            f"{category} on {record.get('run_date')}, ${rate:.3f} an answer",
+            f"{category} on {record.get('run_date')}, ${rate:.3f} per {operation}",
             True,
         )
 
@@ -156,18 +162,18 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
         rate = per_answer(record, dollars)
         return Estimate(
             round(rate * answers, 2),
-            f"{record.get('category')} on {record.get('run_date')}, ${rate:.3f} an answer",
+            f"{record.get('category')} on {record.get('run_date')}, ${rate:.3f} per {operation}",
             True,
         )
 
     return Estimate(
         round(FALLBACK_PER_ANSWER * answers, 2),
-        f"no priced run to compare against, assuming ${FALLBACK_PER_ANSWER:.2f} an answer",
+        f"no priced {operation} to compare against, assuming ${FALLBACK_PER_ANSWER:.2f} per {operation}",
         False,
     )
 
 
-def check(category: str, answers: int, when: date | None = None) -> Verdict:
+def check(category: str, answers: int, when: date | None = None, *, extraction_only: bool = False) -> Verdict:
     """May this category run without taking the month over its ceiling?
 
     A ceiling of zero means none is set, and this always allows the run. Opt-in
@@ -177,7 +183,7 @@ def check(category: str, answers: int, when: date | None = None) -> Verdict:
     when = when or date.today()
     runs = _archived_runs()
     spent = spent_in_month(when, runs)
-    estimate = estimate_category(category, answers, runs)
+    estimate = estimate_category(category, answers, runs, extraction_only=extraction_only)
 
     if MONTHLY_CEILING <= 0:
         return Verdict(
