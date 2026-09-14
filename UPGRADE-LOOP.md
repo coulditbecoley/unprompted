@@ -182,3 +182,18 @@ Verification: 154 Python tests and 26 Node tests passed. Offline refusal cases
 cover missing/duplicate/unexpected rows, empty sources, missing engines, compact
 dates, backdating and future dates. The extractor is never resolved in those
 cases, and source bytes remain unchanged. No measurement or paid recovery ran.
+
+## Cycle 9: inspect the whole week without making provider calls
+
+Added `python -m unprompted.run --preflight --category all`. It reports local
+provider configuration, destination collisions, category answer counts, and one
+combined budget projection from the existing cost estimator. It does not write
+measurements/checkpoints or GitHub output, and cannot combine with paid dry-run
+or budget-override flags. It does not claim live credential, checkpoint, Git or
+publication acceptance. Existing scheduled per-category behavior is unchanged.
+
+Verification: 155 Python tests passed, including a case where each category fits
+individually but the aggregate estimate exceeds the ceiling, plus existing output
+and unreadable budget cases. The isolated CLI correctly reports its absent API
+credentials and the $153.1127 aggregate projection against $150. No production
+credentials were copied into this worktree. Main and its budget remain unchanged.

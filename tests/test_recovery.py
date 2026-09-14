@@ -80,6 +80,47 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     assert len(calls) == 3
 
 
+def test_preflight_combines_budget_without_measurement_or_output_writes(tmp_path, monkeypatch, capsys):
+    from unprompted import budget
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta"])
+    monkeypatch.setattr(run, "load_questions", lambda category: {"questions": [{"id": "q1"}], "runs_per_question": 2})
+    monkeypatch.setattr(run, "all_engines", lambda: {"offline": SimpleNamespace(is_configured=True)})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="offline"))
+    monkeypatch.setattr(run, "run_category", lambda *a, **kw: pytest.fail("preflight started a measurement"))
+    monkeypatch.setattr(run, "extract_run", lambda *a, **kw: pytest.fail("preflight made an extractor call"))
+    monkeypatch.setattr(budget, "_archived_runs", lambda: [])
+    monkeypatch.setattr(budget, "spent_in_month", lambda *a: 5)
+    monkeypatch.setattr(budget, "estimate_category", lambda *a: budget.Estimate(6, "offline basis", True))
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 15)
+    (tmp_path / "aliases").mkdir()
+    for category in ("alpha", "beta"):
+        (tmp_path / f"aliases/{category}.yml").write_text("canonical: {}")
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--preflight"])
+    assert run.main() == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["budget"]["projected_dollars"] == 17
+    assert result["budget"]["within_ceiling"] is False
+    assert result["status"] == "issues_found"
+    assert not output.exists() and not (tmp_path / ".unprompted").exists() and not (tmp_path / "data").exists()
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 20)
+    assert run.main() == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "checks_passed"
+    write_json(tmp_path / "data/held" / run.date.today().isoformat() / "alpha.json", {})
+    assert run.main() == 2
+    assert "already recorded" in " ".join(json.loads(capsys.readouterr().out)["issues"])
+
+    def unreadable():
+        raise ValueError("unreadable archive")
+
+    monkeypatch.setattr(budget, "_archived_runs", unreadable)
+    assert run.main() == 2
+    assert json.loads(capsys.readouterr().out)["budget"] is None
+
+
 def test_reread_cost_does_not_price_a_new_measurement():
     from unprompted.budget import estimate_category
     reread = {"category": "alpha", "run_date": "2026-09-14", "source_run": "2026-09-01/alpha",

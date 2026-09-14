@@ -22,6 +22,7 @@ from pathlib import Path
 import yaml
 
 from .aggregate import brand_week, load_history
+from . import budget
 from .checks import run_checks
 from .budget import check as check_budget
 from .cost import cost_of_run, format_report
@@ -389,6 +390,60 @@ def all_categories() -> list[str]:
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
 
 
+def preflight(categories: list[str], run_date: str) -> dict:
+    """Read-only configuration and aggregate budget inspection, not a paid dry run."""
+    if date.fromisoformat(run_date).isoformat() != run_date:
+        raise ValueError("run date must be YYYY-MM-DD")
+    issues, rows = [], []
+    try:
+        engines = all_engines()
+    except (ProviderError, OSError, ValueError) as exc:
+        issues.append(f"engine configuration cannot be read: {exc}")
+        engines = {}
+    if not engines:
+        issues.append("no engines are declared")
+    availability = {name: engine.is_configured for name, engine in engines.items()}
+    issues.extend(f"{name}: {engines[name].unavailable_reason}" for name, ready in availability.items() if not ready)
+    extractor_id = None
+    try:
+        extractor_id = resolve_extractor().id
+    except ProviderError as exc:
+        issues.append(str(exc))
+    for category in categories:
+        try:
+            spec = load_questions(category)
+            AliasMap.load(ROOT / "aliases" / f"{category}.yml")
+            for bucket in ("runs", "held"):
+                if (ROOT / "data" / bucket / run_date / f"{category}.json").exists():
+                    issues.append(f"{category}: already recorded in data/{bucket}/{run_date}")
+            rows.append({"category": category, "answers": len(spec["questions"]) * spec["runs_per_question"] * len(engines)})
+        except (OSError, ValueError, KeyError, yaml.YAMLError) as exc:
+            issues.append(f"{category}: {exc}")
+    projection = None
+    try:
+        archived = budget._archived_runs()
+        spent = budget.spent_in_month(date.today(), archived)
+        for row in rows:
+            estimate = budget.estimate_category(row["category"], row["answers"], archived)
+            row.update(estimated_dollars=estimate.dollars, estimate_basis=estimate.basis,
+                       historical_cost_basis=estimate.confident)
+        if len(rows) == len(categories) and engines:
+            additional = round(sum(row["estimated_dollars"] for row in rows), 2)
+            projected = round(spent + additional, 4)
+            within = budget.MONTHLY_CEILING <= 0 or projected <= budget.MONTHLY_CEILING
+            projection = {"month": date.today().strftime("%Y-%m"), "recorded_dollars": spent,
+                          "estimated_additional_dollars": additional, "projected_dollars": projected,
+                          "ceiling_dollars": budget.MONTHLY_CEILING, "within_ceiling": within}
+            if not within:
+                issues.append("combined category estimate exceeds the monthly ceiling; a later category may refuse after earlier spend")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        issues.append(f"budget cannot be calculated: {exc}")
+    return {"status": "issues_found" if issues else "checks_passed", "run_date": run_date,
+            "scope": "Local configuration, destination and estimated budget checks only. No provider calls, credential authentication, checkpoint compatibility, Git synchronization or publication acceptance is tested.",
+            "engines_configured": availability, "extractor": extractor_id,
+            "categories": rows, "budget": projection, "issues": issues}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one week of Unprompted.")
     parser.add_argument(
@@ -398,12 +453,15 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--dry-run", action="store_true", help="do not write files")
+    parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
         help="run even if the month's ceiling in data/rates.json would be passed",
     )
     args = parser.parse_args()
+    if args.preflight and (args.dry_run or args.ignore_budget):
+        parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
     load_local_env()
 
@@ -411,6 +469,10 @@ def main() -> int:
     if not categories:
         print("no categories to run", file=sys.stderr)
         return 1
+    if args.preflight:
+        result = preflight(categories, args.date)
+        print(json.dumps(result, indent=2))
+        return 2 if result["issues"] else 0
 
     held: dict[str, list[str]] = {}
     total = 0.0
