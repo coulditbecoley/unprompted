@@ -19,6 +19,8 @@ import json
 import sys
 from datetime import date
 
+import yaml
+
 from .aggregate import brand_week, load_history
 from .checks import run_checks
 from .budget import check as check_budget
@@ -77,6 +79,15 @@ def _main() -> int:
     if record.get("category") != args.category or record.get("run_date") != args.date:
         raise SystemExit("source record identity does not match its path")
 
+    # Freeze and validate the actual alias policy before extraction can cost
+    # anything. An operator edit during a batch must not change this reading.
+    alias_data = yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8")) or {}
+    aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
+    spec = record.get("methodology", {}).get("questions") or yaml.safe_load(
+        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
+    )
+    reading_commit = git_sha()
+
     answers = [
         EngineAnswer(
             engine=e["engine"],
@@ -132,14 +143,12 @@ def _main() -> int:
     )
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
-    aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
-    import yaml
     methodology = {**record.get("methodology", {}),
                    "extraction_prompt": EXTRACT_PROMPT,
                    "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
-                   "aliases": yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8"))}
+                   "aliases": alias_data}
 
     fresh = RunRecord(
         category=record["category"],
@@ -155,7 +164,7 @@ def _main() -> int:
         # re-reading against a real week.
         measured_on=record.get("measured_on") or record["run_date"],
         source_run=f"{record['run_date']}/{record['category']}",
-        git_sha=git_sha(),
+        git_sha=reading_commit,
         methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,
@@ -167,11 +176,6 @@ def _main() -> int:
         if (h.get("measured_on") or h["run_date"]) < (record.get("measured_on") or record["run_date"])
     ]
     this_week = brand_week(fresh.to_dict())
-    import yaml as _yaml
-
-    spec = record.get("methodology", {}).get("questions") or _yaml.safe_load(
-        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
-    )
     result = run_checks(
         fresh.to_dict(),
         this_week,

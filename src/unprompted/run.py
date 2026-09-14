@@ -212,6 +212,9 @@ def _run_category(
         "extraction_prompt": EXTRACT_PROMPT,
         "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
     }
+    alias_data = methodology["aliases"] or {}
+    aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
+    measurement_commit = git_sha()
     prior = load_history(ROOT / "data" / "runs", category)
     if prior and prior[-1].get("method_version") == spec["method_version"]:
         before = prior[-1].get("methodology", {})
@@ -276,7 +279,6 @@ def _run_category(
     # run file stays stable and diffable.
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
 
-    aliases = AliasMap.load(ROOT / "aliases" / f"{category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
     record = RunRecord(
@@ -290,7 +292,7 @@ def _run_category(
         extractor=extractor.id,
         extractor_model=extractor.model if hosted else "",
         measured_on=run_date,
-        git_sha=git_sha(),
+        git_sha=measurement_commit,
         methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,

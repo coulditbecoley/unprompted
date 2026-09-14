@@ -160,10 +160,69 @@ def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):
     monkeypatch.setattr(reextract, "extract_run", lambda *a, **kw: pytest.fail("paid call after refusal"))
     (tmp_path / "questions").mkdir()
     (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical: {}")
     write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, []).to_dict())
     monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
     with pytest.raises(SystemExit, match="offline ceiling"):
         reextract.main()
+
+
+@pytest.mark.parametrize("mode", ["measurement", "recovery"])
+def test_alias_edits_during_extraction_do_not_rewrite_provenance(tmp_path, monkeypatch, mode):
+    from unprompted import reextract
+    from unprompted.models import BrandMention, Extraction
+    for module in (run, reextract):
+        monkeypatch.setattr(module, "ROOT", tmp_path)
+        monkeypatch.setattr(module, "load_local_env", lambda: None)
+        monkeypatch.setattr(module, "resolve_extractor", lambda: SimpleNamespace(id="offline", label="offline"))
+        monkeypatch.setattr(module, "check_budget", lambda *a: SimpleNamespace(ok=True, message="offline"))
+    (tmp_path / "aliases").mkdir()
+    aliases = tmp_path / "aliases/alpha.yml"
+    aliases.write_text("canonical:\n  Original: [Old]\n  Beta: []\n")
+    (tmp_path / "questions").mkdir()
+    questions = tmp_path / "questions/alpha.yml"
+    questions.write_text("category: alpha\nmethod_version: 1\nruns_per_question: 1\nmax_brands: 3\nquestions:\n  - id: q1\n    text: Which brand?\n")
+    commit = {"sha": "before-calls"}
+    for module in (run, reextract):
+        monkeypatch.setattr(module, "git_sha", lambda: commit["sha"])
+
+    class Engine:
+        name = "offline"
+        is_configured = True
+        grounds = False
+
+        def ask_one(self, qid, text, index):
+            return EngineAnswer(self.name, qid, text, index, text="Old and Beta")
+
+    for module in (run, reextract):
+        monkeypatch.setattr(module, "all_engines", lambda: {"offline": Engine()})
+
+    def extract(*args, **kwargs):
+        aliases.write_text("canonical:\n  Changed: [Old]\n  Beta: []\n")
+        questions.write_text(questions.read_text().replace("max_brands: 3", "max_brands: 1"))
+        commit["sha"] = "after-calls"
+        return [Extraction("offline", "q1", 0, answer="Old and Beta",
+            brands=[BrandMention("Old", 1), BrandMention("Beta", 2)])]
+
+    for module in (run, reextract):
+        monkeypatch.setattr(module, "extract_run", extract)
+    monkeypatch.setattr(run, "write_report", lambda data, root: root / "report.md")
+    source = tmp_path / "data/held/2026-09-01/alpha.json"
+    if mode == "measurement":
+        _, reasons = run.run_category("alpha", "2026-09-14")
+        assert not reasons
+    else:
+        write_json(source, RunRecord("alpha", "2026-09-01", 1, 1, ["offline"], extractions=[
+            Extraction("offline", "q1", 0, answer="Old and Beta")]).to_dict())
+        original = source.read_bytes()
+        monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14"])
+        assert reextract.main() == 0
+        assert source.read_bytes() == original
+    saved = json.loads((tmp_path / "data/runs/2026-09-14/alpha.json").read_text())
+    assert saved["git_sha"] == "before-calls"
+    assert saved["methodology"]["aliases"]["canonical"] == {"Original": ["Old"], "Beta": []}
+    assert [b["name"] for b in saved["extractions"][0]["brands"]] == ["Original", "Beta"]
 
 
 def test_budget_counts_unpublished_checkpoints_once(tmp_path, monkeypatch):

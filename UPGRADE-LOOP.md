@@ -95,3 +95,22 @@ All nine current archived held/published records retain at least one row for eac
 declared engine. This closes an exposed validation gap; it does not claim that
 an existing archived record suffered it. No historical records were changed.
 The fix is isolated on upgrade/extraction-review pending the scheduled run.
+
+## Cycle 4: use the alias policy that the reading records
+
+Measurement previously saved an early alias snapshot but reloaded the live file
+after extraction. Recovery loaded its aliases and publication threshold only
+after extraction. An operator edit during the wait could therefore change the
+interpretation after spending, and measurement could record different aliases
+from those actually used. Both paths now validate and retain the alias map before
+calls; recovery also retains its check threshold. Both stamp the starting commit.
+
+Verification: 145 Python tests passed. Two offline integration cases deliberately
+edit aliases, the question-bank threshold, and the reported Git revision during
+extraction. Measurement and recovery both retain the starting alias provenance,
+canonical names and commit; recovery preserves its source file. No paid calls
+were made and the main scheduler checkout remains unchanged.
+
+Follow-up: audit consumers' handling of an explicit alias snapshot with no
+affiliations. Falling back to current affiliations in that case would reinterpret
+an intentional absence of ownership metadata.
