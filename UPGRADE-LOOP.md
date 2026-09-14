@@ -27,6 +27,24 @@ notifications, or deployment.
 
 ## Integration and acceptance gate — current isolated branch
 
+September 14 integration update: the task reached Ready with LastTaskResult 2.
+The scheduler committed and pushed cc69704f5c31b7440b0140d32ac5951f1b202b50;
+git ls-remote independently confirmed that remote revision. Coding passed and
+was saved under data/runs (375 rows, one extraction failure, $27.33 recorded).
+Images were held (375 rows, no extraction failures, $28.58 recorded) because
+Photoroom and Flux Kontext exceeded the unknown-name floor. Writing never started:
+$132.37 recorded monthly spend plus $22.66 estimated exceeded the $150 ceiling.
+The scheduler also logged issue 4 and successful vault/analytics synchronization.
+
+After terminal-state and clean-tree checks, merge 6ea5b04 integrated the queued
+upgrades. No data or reports differ from cc69704, including the image reading's
+original af06305-dirty provenance stamp. Integrated verification passed: 159
+Python tests, 32 Node tests (including today's coding record), typecheck, and
+production build with 84 generated pages, exit 0. Method guard and index were
+empty afterward. Thus steps 1–3 below are locally satisfied; hosted CI, deployment,
+browser acceptance, independent review and external contracts remain unverified.
+The integrated upgrades have not been pushed; the remote remains cc69704.
+
 The cycle ledger below supersedes the original candidate list where work is
 already implemented. Local tests establish behavior in their stated scope, not
 release acceptance. Remaining work is:
