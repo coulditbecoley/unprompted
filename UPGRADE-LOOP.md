@@ -61,3 +61,22 @@ a guarantee that the next run publishes. Tests: 140 Python, 22 Node passed.
 Freeze method/code edits during the scheduled measurement. Resume the broader
 upgrade queue after the task finishes; do not make the runner's stamped commit
 diverge from the code it executes.
+
+## Cycle 2: make reading accuracy reviewable — isolated worktree
+
+Added a stdlib-only preparation/scoring workflow and a blinded 75-answer baseline
+from the September 7 held records. Sampling is deterministic within category and
+engine groups. Error/empty rows are counted separately. Scoring regenerates the
+sample against source hashes, rejects edited evidence and invalid labels, and
+withholds metrics until review is complete. It evaluates the saved normalized
+readings, not the current extractor in isolation. No human accuracy result exists
+yet. Instructions: READING-REVIEW.md.
+
+This cycle lives on upgrade/extraction-review while the scheduled checkout stays
+at af06305. Do not merge it during the scheduled run. No paid calls or historical
+data changes are needed to prepare or score the review.
+
+Verification: 142 Python tests passed in the isolated worktree. The actual CLI
+prepared and scored the 75-answer packet as awaiting_review with null metrics;
+an attempted overwrite was refused. Three error/empty answers were excluded.
+Historical data and the scheduled checkout were unchanged.
