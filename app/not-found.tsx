@@ -13,7 +13,7 @@ import Link from "next/link";
  */
 export default function NotFound() {
   return (
-    <section className="shell section">
+    <section className="shell section" data-not-found>
       <p className="label">404</p>
       <h1 className="display" style={{ maxWidth: "18ch" }}>
         That page is not here.

@@ -84,6 +84,61 @@ def test_duplicate_mentions_collapse_to_earliest_position():
 
 # --- aggregate -------------------------------------------------------------
 
+def test_writing_ambiguities_require_answer_level_evidence():
+    aliases = AliasMap.load(Path(__file__).resolve().parents[1] / "aliases/ai-writing-tools.yml")
+    cases = [
+        ("Writer", "Writer: brand governance. https://support.writer.com/guide", ["Writer.com"], []),
+        ("Writer", "Every writer needs help. https://support.writer.com/guide", [], ["Writer"]),
+        ("Writer", "Writer: enterprise tooling. https://support.writer.com.evil.test/guide", [], ["Writer"]),
+        ("Writer", "Writer: enterprise tooling.", [], ["Writer"]),
+        ("Superhuman", "Grammarly (now part of the Superhuman suite).", [], []),
+        ("Superhuman", "Grammarly's parent company renamed itself Superhuman in October 2025.", [], []),
+        ("Superhuman", "Superhuman is an email client.", ["Superhuman Mail"], []),
+        ("Superhuman", "Superhuman Mail drafts replies. Grammarly (now part of Superhuman).", ["Superhuman Mail"], []),
+        ("Superhuman", "Grammarly (now part of Superhuman). Also consider Superhuman.", [], ["Superhuman"]),
+        ("Superhuman", "Superhuman is useful.", [], ["Superhuman"]),
+    ]
+    for name, answer, expected, unknown in cases:
+        row = ex(brands=[name])
+        row.answer = answer
+        row.sources = ["https://support.writer.com/guide"]  # sources alone never resolve it
+        cleaned, quarantined = normalize([row], aliases)
+        assert [b.name for b in cleaned[0].brands] == expected, answer
+        assert quarantined == unknown, answer
+    # The rule does not create rows in other categories or merge duplicate aliases.
+    row = ex(brands=["Writer", "Writer.com"])
+    row.answer = "Writer: governance. https://writer.com/brand"
+    cleaned, unknown = normalize([row], aliases)
+    assert [(b.name, b.position) for b in cleaned[0].brands] == [("Writer.com", 1)]
+    assert unknown == []
+    assert ALIASES.resolve_in_context("Writer", row.answer) is None
+
+@pytest.mark.parametrize("category,names,expected,unknown", [
+    ("ai-coding-assistants", ["Devin Desktop", "Windsurf", "Devin"],
+     ["Windsurf", "Devin"], []),
+    ("ai-image-generators", [
+        "FLUX.2 Klein (4B)", "FLUX.2 [klein] 4B", "FLUX.2 klein 4B",
+        "FLUX.2-klein-4B", "Microsoft Bing Image Creator", "Stable Diffusion XL",
+        "Higgsfield AI", "Fooocus", "Alibaba", "Google AI Studio", "Alibaba Qwen",
+    ], ["Flux", "Bing Image Creator", "Stable Diffusion", "Higgsfield", "Qwen-Image"], []),
+    ("ai-writing-tools", [
+        "Claude by Anthropic", "Claude", "NovelCrafter", "Mintlify", "NovelAI",
+        "Document360", "Lavender", "Paperpal", "LanguageTool", "Trinka",
+        "Shortwave", "Writer.com", "Writer AI", "Superhuman Mail",
+        "Writer", "Superhuman", "Google Workspace", "Grammarly",
+    ], ["Claude", "NovelCrafter", "Mintlify", "NovelAI", "Document360", "Lavender",
+        "Paperpal", "LanguageTool", "Trinka", "Shortwave", "Writer.com",
+        "Superhuman Mail", "Grammarly"], ["Writer", "Superhuman"]),
+])
+def test_september_alias_decisions_keep_products_separate(category, names, expected, unknown):
+    aliases = AliasMap.load(Path(__file__).resolve().parents[1] / "aliases" / f"{category}.yml")
+    cleaned, quarantined = normalize([ex(brands=names)], aliases)
+    assert [(b.name, b.position) for b in cleaned[0].brands] == list(
+        zip(expected, range(1, len(expected) + 1))
+    )
+    assert quarantined == unknown
+
+
 def _run(extractions):
     return {"extractions": [e.to_dict() for e in extractions]}
 
@@ -594,22 +649,12 @@ def test_a_cli_provider_refuses_an_unsafe_command():
         CliProvider("bad", "Bad", "../../evil", ()).resolve()
 
 
-def test_registry_picks_one_enabled_cli_extractor():
-    """Two enabled extractors would make the week depend on which one ran."""
-    from unprompted.cli_provider import cli_extractor
+def test_registry_requires_hosted_extraction(monkeypatch):
+    from unprompted.cli_provider import resolve_extractor, ProviderError
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(ProviderError, match="isolated"):
+        resolve_extractor()
 
-    chosen = cli_extractor()
-    if chosen is not None:
-        assert chosen.command
-        assert chosen.args
-
-
-# --- the publish gate -------------------------------------------------------
-#
-# The rule these cover: a run that fails its checks must not reach data/runs,
-# because the weekly workflow commits everything under data/. A 100%-error week
-# once published as "no brand was named" because the checks ran, returned their
-# reasons, and were then ignored by the writer.
 
 def test_a_held_run_is_written_outside_the_published_directory(tmp_path, monkeypatch):
     from unprompted import run as run_module
@@ -712,7 +757,7 @@ def test_a_run_that_names_nothing_at_all_is_held():
 
 # --- extractor availability -------------------------------------------------
 
-def test_an_available_cli_extractor_is_still_selected(monkeypatch):
+def test_an_available_cli_extractor_is_not_an_implicit_sandbox(monkeypatch):
     from unprompted import cli_provider
 
     monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
@@ -730,8 +775,8 @@ def test_an_available_cli_extractor_is_still_selected(monkeypatch):
             }
         ],
     )
-    chosen = cli_provider.cli_extractor()
-    assert chosen is not None and chosen.id == "claude-cli"
+    with pytest.raises(cli_provider.ProviderError, match="isolated"):
+        cli_provider.cli_extractor()
 
 
 def test_a_cli_entry_with_rewritten_arguments_is_refused(monkeypatch):
@@ -1640,7 +1685,7 @@ def test_a_hosted_extractor_is_chosen_by_its_registry_id(monkeypatch):
     assert chosen.model  # the week records which model read it
 
 
-def test_a_hosted_extractor_with_no_key_falls_through_to_the_cli(monkeypatch):
+def test_a_hosted_extractor_with_no_key_refuses_unisolated_fallback(monkeypatch):
     """The registry, the README and the dashboard all call the CLIs fallbacks.
 
     Selection used to stop at the first API entry, so with the key absent the
@@ -1663,10 +1708,8 @@ def test_a_hosted_extractor_with_no_key_falls_through_to_the_cli(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(cli_provider.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
 
-    chosen = cli_provider.resolve_extractor()
-
-    assert isinstance(chosen, cli_provider.CliProvider)
-    assert chosen.id == "claude-cli"
+    with pytest.raises(cli_provider.ProviderError, match="isolated"):
+        cli_provider.resolve_extractor()
 
 
 def test_an_unknown_hosted_extractor_is_refused_rather_than_substituted(monkeypatch):
@@ -2131,7 +2174,7 @@ def test_watchdog_looks_back_to_the_monday_that_should_have_run(monkeypatch, tmp
     assert wd.most_recent_monday(monday) in {date(2026, 8, 24), monday}
 
 
-def test_watchdog_does_not_alarm_about_a_category_that_never_started(
+def test_watchdog_does_not_exempt_unstarted_categories_forever(
     monkeypatch, tmp_path
 ):
     """A category added to the bank on a Tuesday has not missed a Monday.
@@ -2146,5 +2189,5 @@ def test_watchdog_does_not_alarm_about_a_category_that_never_started(
     )
     produced, missing, unstarted = wd.week_status(date(2026, 8, 24))
 
-    assert missing == ["alpha"], "alpha has run before, so its silence is real"
-    assert unstarted == ["brand-new"], "never measured is not the same as missed"
+    assert missing == ["alpha", "brand-new"]
+    assert unstarted == [], "never measured is not the same as missed"

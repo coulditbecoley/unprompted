@@ -36,15 +36,19 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
     """Render one run as markdown."""
     category = run["category"]
     date = run["run_date"]
+    measured = run.get("measured_on") or date
     board = brand_week(run)
 
-    prior = [h for h in history if h["run_date"] < date]
+    prior = [h for h in history if (h.get("measured_on") or h["run_date"]) < (run.get("measured_on") or date)]
     last = brand_week(prior[-1]) if prior else []
     moves = movement(board, last)
     move_for = {m.brand: m for m in moves}
     snub = the_snub(moves)
 
-    preference = self_preference(run, load_affiliations(aliases_path))
+    frozen = run.get("methodology", {}).get("aliases", {}).get("affiliations")
+    affiliations = ({brand: [owner] if isinstance(owner, str) else owner for brand, owner in frozen.items()}
+                    if frozen is not None else load_affiliations(aliases_path))
+    preference = self_preference(run, affiliations)
     sources = source_counts(run)[:10]
     _, cost = cost_of_run(run)
     leader = board[0] if board else None
@@ -54,12 +58,15 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
     out.append("type: unprompted-week")
     out.append(f"category: {category}")
     out.append(f"date: {date}")
+    out.append(f"measured_on: {measured}")
     out.append(f"method_version: {run['method_version']}")
     out.append(f"engines: {', '.join(run['engines'])}")
     out.append(f"extractor: {run.get('extractor', 'api')}")
     out.append("---")
     out.append("")
-    out.append(f"# {pretty(category)}, week of {date}")
+    out.append(f"# {pretty(category)}, measured {measured}")
+    if run.get("source_run"):
+        out.append(f"Re-read on {date}; original reading: {run['source_run']}.")
     out.append("")
 
     if leader:
@@ -122,13 +129,13 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
         out.append("")
         out.append(
             "A gap is a measurement, not an accusation. The extraction step "
-            "runs on Claude, so any figure involving a Claude product is "
-            "provisional until re-checked with a different extractor."
+            f"used {run.get('extractor', 'an unrecorded reader')}. Extractor bias "
+            "has not been ruled out by an independent re-read."
         )
         out.append("")
 
     if sources:
-        out.append("## What the answers were built from")
+        out.append("## Recorded source URLs (citations or retrieved results)")
         out.append("")
         for host, count in sources:
             out.append(f"- {host} ({count})")
@@ -138,7 +145,7 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
     out.append("")
     out.append(
         f"Raw data: `data/runs/{date}/{category}.json` · "
-        f"[unprompted.report](https://unprompted.report/chart/{category})"
+        f"[unprompted.report](https://unprompted.report/chart/{category}/{date})"
     )
     return "\n".join(out) + "\n"
 

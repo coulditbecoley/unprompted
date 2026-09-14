@@ -17,14 +17,15 @@ import { REPO_ROOT } from "@/lib/data";
  */
 
 type Status = {
-  status: "published" | "held" | "failed" | "unknown";
+  status: "published" | "measured" | "held" | "failed" | "unknown";
   detail: string;
   exit_code: number;
   at: string;
 };
 
 const WORD: Record<Status["status"], string> = {
-  published: "published",
+  published: "recorded (legacy status)",
+  measured: "measured; deployment not verified",
   held: "held for review",
   failed: "did not finish",
   unknown: "has not reported yet",

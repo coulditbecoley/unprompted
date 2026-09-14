@@ -30,20 +30,23 @@ export function Freshness({ runDate }: { runDate: string }) {
   // Rendered only after mount: server and client clocks differ, and a
   // countdown baked into static HTML is stale the moment it is built.
   const [when, setWhen] = useState<string | null>(null);
+  const [age, setAge] = useState<number | null>(null);
 
   useEffect(() => {
     const tick = () => {
       const now = new Date();
+      setAge(Math.floor((now.getTime() - new Date(`${runDate}T00:00:00Z`).getTime()) / 86400000));
       setWhen(relative(nextRun(now), now));
     };
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [runDate]);
 
   return (
     <div className="freshness">
       <span>MEASURED {runDate}</span>
+      {age !== null && age > 8 && <span role="status">STALE: {age} DAYS OLD · NO NEWER MEASUREMENT SHOWN</span>}
       <span className="next" suppressHydrationWarning>
         {when ? `NEXT RUN ${when}` : "UPDATES EVERY MONDAY"}
       </span>
@@ -59,12 +62,12 @@ export function Freshness({ runDate }: { runDate: string }) {
  * Sharing is this publication's growth engine, so it gets a real affordance
  * rather than relying on the visitor to copy the address bar.
  */
-export function ShareRow({ headline }: { headline: string }) {
+export function ShareRow({ headline, url = "https://unprompted.report" }: { headline: string; url?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(`${headline} — unprompted.report`);
+      await navigator.clipboard.writeText(`${headline} — ${url}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch {
@@ -75,7 +78,7 @@ export function ShareRow({ headline }: { headline: string }) {
 
   const intent = `https://x.com/intent/post?text=${encodeURIComponent(
     headline,
-  )}&url=${encodeURIComponent("https://unprompted.report")}`;
+  )}&url=${encodeURIComponent(url)}`;
 
   return (
     <div className="share-row">

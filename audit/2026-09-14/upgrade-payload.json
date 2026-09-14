@@ -1,0 +1,29 @@
+{
+  "scope": "Serialized standings only, not total HTTP or RSC response bytes",
+  "results": [
+    {
+      "record": "2026-08-21/pokemon-grading.json",
+      "before": 37265,
+      "after": 5760,
+      "saved": 31505
+    },
+    {
+      "record": "2026-08-22/ai-coding-assistants.json",
+      "before": 28310,
+      "after": 4965,
+      "saved": 23345
+    },
+    {
+      "record": "2026-08-22/ai-writing-tools.json",
+      "before": 26618,
+      "after": 4567,
+      "saved": 22051
+    },
+    {
+      "record": "2026-08-24/ai-image-generators.json",
+      "before": 28452,
+      "after": 5187,
+      "saved": 23265
+    }
+  ]
+}

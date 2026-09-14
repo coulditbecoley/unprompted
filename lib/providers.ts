@@ -190,6 +190,7 @@ export function resolveOnPath(command: string): string | null {
  */
 export function providerStatus(p: Provider): { ready: boolean; detail: string } {
   if (!p.enabled) return { ready: false, detail: "DISABLED" };
+  if (p.kind === "cli" && p.role === "extractor") return { ready: false, detail: "ISOLATION NOT QUALIFIED" };
   if (p.kind === "api") {
     return process.env[p.env ?? ""]
       ? { ready: true, detail: "READY" }

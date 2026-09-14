@@ -15,7 +15,7 @@ const LABEL = "unprompted-admin-session-v1";
 
 export const ADMIN_COOKIE = "unprompted_admin";
 
-export async function deriveSessionToken(secret: string): Promise<string> {
+export async function deriveSessionToken(secret: string, expires = Math.floor(Date.now() / 1000) + 8 * 3600): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -24,8 +24,28 @@ export async function deriveSessionToken(secret: string): Promise<string> {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, enc.encode(LABEL));
-  return toHex(new Uint8Array(signature));
+  const signature = await crypto.subtle.sign("HMAC", key, enc.encode(`${LABEL}:${expires}`));
+  return `${expires}.${toHex(new Uint8Array(signature))}`;
+}
+
+export async function validSession(token: string, secret: string, now = Math.floor(Date.now() / 1000)): Promise<boolean> {
+  if (!/^\d{10}\.[a-f0-9]{64}$/.test(token)) return false;
+  const expires = Number(token.split(".")[0]);
+  return expires > now && expires <= now + 8 * 3600 && safeEqual(token, await deriveSessionToken(secret, expires));
+}
+
+// ponytail: process-local login throttle; deployment-wide limits need shared edge protection.
+const attempts = new Map<string, { until: number; count: number }>();
+export async function allowLogin(request: Request): Promise<boolean> {
+  const now = Date.now();
+  for (const [key, item] of attempts) if (item.until <= now) attempts.delete(key);
+  const address = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
+  const key = toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${process.env.ADMIN_PASSWORD}:${address}`))));
+  const item = attempts.get(key) ?? { until: now + 60_000, count: 0 };
+  if (!attempts.has(key) && attempts.size >= 1000) return false;
+  item.count++;
+  attempts.set(key, item);
+  return item.count <= 10;
 }
 
 /** Length-independent comparison, so a wrong guess leaks no timing signal. */
@@ -65,6 +85,6 @@ export async function isAuthorised(request: Request): Promise<boolean> {
     .find((part) => part.startsWith(prefix))
     ?.slice(prefix.length);
   if (!value) return false;
-  const expected = await deriveSessionToken(secret);
-  return safeEqual(decodeURIComponent(value), expected);
+  try { return await validSession(decodeURIComponent(value), secret); }
+  catch { return false; }
 }

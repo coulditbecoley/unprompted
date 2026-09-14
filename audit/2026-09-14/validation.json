@@ -1,0 +1,44 @@
+{
+  "audited_head": "5dbcabce5e8dac711678f40e64991a32e3438590",
+  "checks": {
+    "python_existing": "126 passed",
+    "node_existing": "12 passed",
+    "typecheck": "passed",
+    "production_build": "passed; 74 generated pages",
+    "python_audit_probes": 9,
+    "metric_audit_probes": 3
+  },
+  "dependency_scan": {
+    "command": "npm audit --omit=dev --json",
+    "vulnerable_packages": {
+      "next": {
+        "installed": "16.3.2",
+        "severity": "critical",
+        "advisories": [
+          "GHSA-p293-qw3h-jr36",
+          "GHSA-2xp9-vwfh-vxw4"
+        ]
+      },
+      "sharp": {
+        "installed": "0.35.3",
+        "severity": "high",
+        "advisories": [
+          "GHSA-rgj7-g3m4-5g8c"
+        ]
+      }
+    }
+  },
+  "priority_counts": {
+    "P0": 1,
+    "P1": 13,
+    "P2": 15,
+    "P3": 1
+  },
+  "tracked_files_changed_during_audit": [],
+  "limitations": [
+    "Local server launch rejected by automatic approval review; public-site browser observations instead",
+    "No live model calls or newsletter submissions",
+    "No production Redis tests",
+    "No deployment or scheduler acceptance proof"
+  ]
+}

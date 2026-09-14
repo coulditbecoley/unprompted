@@ -132,8 +132,12 @@ class AliasMap:
         self._excluded: set[str] = {_key(x) for x in (exclude or [])}
         self.canonical_names: list[str] = sorted(canonical)
         for name, aliases in canonical.items():
+            if not isinstance(name, str) or not name.strip() or (aliases is not None and not isinstance(aliases, list)):
+                raise ValueError("canonical aliases must be lists of strings")
             self._lookup[_key(name)] = name
             for alias in aliases or []:
+                if not isinstance(alias, str) or not alias.strip():
+                    raise ValueError("aliases must be non-empty strings")
                 self._lookup[_key(alias)] = name
 
     @classmethod
@@ -204,6 +208,49 @@ class AliasMap:
                 return found
         return None
 
+    def resolve_in_context(self, name: str, answer: str) -> str | None:
+        """Resolve two reviewed writing ambiguities; empty string means context-only.
+
+        ponytail: narrow literal evidence rules, not general entity recognition.
+        Unmatched wording stays quarantined until reviewed. Source lists alone
+        cannot establish what a particular mention meant.
+        """
+        key = _key(name)
+        if key == "writer" and "Writer.com" in self.canonical_names:
+            for line in answer.splitlines():
+                # A product-shaped label plus its own cited domain on the same
+                # line. A generic noun elsewhere or an unrelated source fails.
+                visible = re.sub(r"https?://\S+", "", line)
+                if re.search(r"\bWriter\b", visible) and re.search(
+                    r"https?://(?:support\.)?writer\.com(?:/|[)\s]|$)", line, re.I
+                ):
+                    return "Writer.com"
+            return None
+        if key != "superhuman" or "Superhuman Mail" not in self.canonical_names:
+            return None
+
+        # Ignore URL spellings; a link is not another recommendation. Explicit
+        # Mail or an email-client description supports the product, including
+        # answers which ALSO mention its parent company.
+        visible = re.sub(r"https?://\S+", "", answer)
+        if re.search(r"\bSuperhuman Mail\b", visible):
+            return "Superhuman Mail"
+        if any(re.search(r"\bSuperhuman\b", line) and re.search(
+            r"\bemail clients?\b", line, re.I
+        ) for line in visible.splitlines()):
+            return "Superhuman Mail"
+
+        # Exclude only when every occurrence is accounted for by these reviewed
+        # parent-company phrases. Any additional ambiguous use keeps the hold.
+        remainder = re.sub(
+            r"\bGrammarly\s*\(now part of (?:the )?Superhuman(?: suite| platform)?\s*\)"
+            r"|\bGrammarly['’]s parent company renamed itself Superhuman\b",
+            "", visible, flags=re.I,
+        )
+        if remainder != visible and not re.search(r"\bSuperhuman\b", remainder, re.I):
+            return ""
+        return None
+
 
 def normalize(
     extractions: list[Extraction], aliases: AliasMap
@@ -230,6 +277,10 @@ def normalize(
             if aliases.is_excluded(brand.name):
                 continue  # known, deliberately not charted
             canonical = aliases.resolve(brand.name)
+            if canonical is None:
+                canonical = aliases.resolve_in_context(brand.name, ex.answer)
+            if canonical == "":
+                continue
             if canonical is None:
                 if not aliases.is_excluded_loosely(brand.name):
                     quarantined.append(brand.name.strip())

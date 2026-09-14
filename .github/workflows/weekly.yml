@@ -38,7 +38,7 @@ jobs:
     # Every category is measured in one job so the week lands as a single
     # commit. Categories run in sequence, roughly 20 minutes each, so the
     # ceiling has to clear the whole set with room to spare.
-    timeout-minutes: 180
+    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install -e .
+        run: pip install -r requirements.lock -e .
 
       - name: Measure
         id: measure

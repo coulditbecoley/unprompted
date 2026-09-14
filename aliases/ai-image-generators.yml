@@ -25,6 +25,7 @@ canonical:
     - stable diffusion
     - stability ai
     - sdxl
+    - stable diffusion xl
     - sd3
   Flux:
     - flux
@@ -33,6 +34,9 @@ canonical:
     - bfl
     - bfl flux
     - flux.1
+    - flux.2 klein
+    - flux.2 klein 4b
+    - flux klein
   Ideogram:
     - ideogram
   Adobe Firefly:
@@ -75,6 +79,7 @@ canonical:
     - nightcafe
   Bing Image Creator:
     - bing image creator
+    - microsoft bing image creator
     - microsoft designer
     - image creator
   Seedream:
@@ -106,6 +111,8 @@ canonical:
     - hunyuan image
     - tencent hunyuan
     - tencent hunyuanimage
+  Higgsfield:
+    - higgsfield ai
 
 # Only OpenAI competes here. Anthropic makes no image generator and neither
 # does Perplexity, so both act as genuinely neutral baselines — which is what
@@ -128,11 +135,13 @@ exclude:
   - stability
   - bytedance
   - tencent
+  - alibaba
   # Cloud platforms and API surfaces. The generator is reached through them;
   # they are not the thing a shopper chooses.
   - vertex ai
   - google vertex ai
   - google cloud
+  - google ai studio
   - azure openai
   - azure
   - gemini api
@@ -149,6 +158,7 @@ exclude:
   - adobe premiere
   # Interfaces and runtimes rather than generators
   - comfyui
+  - fooocus
   - automatic1111
   - a1111
   - controlnet

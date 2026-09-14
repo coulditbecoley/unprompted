@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
@@ -31,12 +32,15 @@ import {
 export function ChartBoard({
   category,
   sector,
+  date,
 }: {
   category: Category;
   sector?: Sector;
+  date?: string;
 }) {
-  const run = latestRun(category.slug);
-  const history = loadHistory(category.slug);
+  const history = loadHistory(category.slug, true);
+  const run = date ? history.find(r => r.run_date === date) : latestRun(category.slug);
+  if (date && !run) notFound();
 
   if (!run) {
     return (
@@ -69,17 +73,21 @@ export function ChartBoard({
   }));
 
   const board = standings(run);
-  const prev = history.length > 1 ? standings(history[history.length - 2]) : [];
+  const older = loadHistory(category.slug).filter(r => (r.measured_on || r.run_date) < (run.measured_on || run.run_date)).at(-1);
+  const prev = older ? standings(older) : [];
   const moves = movement(board, prev);
   const moveFor = new Map(moves.map((m) => [m.brand, m]));
   const snub = theSnub(moves);
   const sources = sourceCounts(run).slice(0, 10);
   const leader = board[0];
-  const preference = selfPreference(run, loadAffiliations(category.slug));
+  const frozenAffiliations = run.methodology?.aliases?.affiliations;
+  const preference = selfPreference(run, frozenAffiliations
+    ? Object.fromEntries(Object.entries(frozenAffiliations).map(([brand, owners]) => [brand, typeof owners === "string" ? [owners] : owners]))
+    : loadAffiliations(category.slug));
 
   // Read once. Called inside the map below, this re-read and re-parsed the
   // whole question file for every question on the board.
-  const text = loadQuestionText(category.slug);
+  const text = run.methodology?.questions ? Object.fromEntries(run.methodology.questions.questions.map(q => [q.id, q.text])) : loadQuestionText(category.slug);
   const questionText = questionOrder(run).map((id) => text[id] ?? id);
 
   return (
@@ -142,13 +150,16 @@ export function ChartBoard({
         methodVersion={run.method_version}
         runsPerQuestion={run.runs_per_question}
       />
-      <Freshness runDate={run.run_date} />
+      <Freshness runDate={run.measured_on || run.run_date} />
+      <p><Link href={`/chart/${category.slug}/${run.run_date}`}>Permanent link to this result</Link> · <Link href={`/questions?c=${category.slug}&date=${run.run_date}`}>Read the supporting answers</Link></p>
+      <details><summary>Published readings</summary><ul>{history.map(r => <li key={r.run_date}><Link href={`/chart/${category.slug}/${r.run_date}`}>{r.run_date}{r.source_run ? " (reprocessed)" : ""}</Link></li>)}</ul></details>
 
       <LiveBoard
+        evidenceUrl={`/questions?c=${category.slug}&date=${run.run_date}`}
         questions={questionText}
         denominators={answeredPerQuestion(run)}
         rows={board.map((b, i) => ({
-          standing: b,
+          standing: { ...b, cells: [] },
           rank: i + 1,
           move: moveFor.get(b.brand),
           href: brandHref(category.slug, b.brand),
@@ -156,6 +167,7 @@ export function ChartBoard({
       />
 
       <ShareRow
+        url={`https://unprompted.report/chart/${category.slug}/${run.run_date}`}
         headline={
           leader
             ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${category.label.toLowerCase()}.`
@@ -232,7 +244,7 @@ export function ChartBoard({
           </h2>
           <p className="section-lead">
             The domains these assistants cited most while answering. This is where
-            the recommendations actually come from.
+            the recorded citations or search results point to. This does not establish what caused a recommendation.
           </p>
           <div className="seq-board">
             <TrimTop />

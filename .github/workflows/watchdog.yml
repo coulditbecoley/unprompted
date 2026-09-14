@@ -49,6 +49,8 @@ jobs:
           # The token the `gh` CLI uses to open the issue. Nothing else here
           # needs a secret: the check reads the repository it just checked out.
           GH_TOKEN: ${{ github.token }}
+          CHECK_DATE: ${{ inputs.date }}
         run: |
-          python scripts/watchdog.py --issue \
-            ${{ inputs.date && format('--date {0}', inputs.date) || '' }}
+          args=()
+          if [ -n "$CHECK_DATE" ]; then args+=(--date "$CHECK_DATE"); fi
+          python scripts/watchdog.py --issue "${args[@]}"

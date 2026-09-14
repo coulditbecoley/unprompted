@@ -1,0 +1,51 @@
+{
+  "tied_question_reported_settled": {
+    "questionId": "q1",
+    "text": "Example?",
+    "picks": [
+      {
+        "engine": "a",
+        "brand": "Alpha",
+        "share": 0.5
+      },
+      {
+        "engine": "b",
+        "brand": "Alpha",
+        "share": 0.5
+      },
+      {
+        "engine": "c",
+        "brand": "Alpha",
+        "share": 0.5
+      }
+    ],
+    "majority": "Alpha",
+    "agree": 3,
+    "settled": true
+  },
+  "no_majority_divergence": [
+    {
+      "engine": "b",
+      "differs": 1,
+      "of": 1
+    },
+    {
+      "engine": "c",
+      "differs": 1,
+      "of": 1
+    },
+    {
+      "engine": "a",
+      "differs": 0,
+      "of": 1
+    }
+  ],
+  "one_sample_dropout_called_significant": {
+    "brand": "Rare",
+    "rotationDelta": -100,
+    "firstShareDelta": -100,
+    "isNew": false,
+    "isDropout": true,
+    "significant": true
+  }
+}

@@ -69,6 +69,7 @@ export async function POST(request: Request) {
 
   try {
     const res = await fetch(ENDPOINT, {
+      signal: AbortSignal.timeout(10000),
       method: "POST",
       headers: {
         Authorization: `Token ${token}`,
@@ -92,4 +93,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not reach the email provider." }, { status: 502 });
   }
 }
-

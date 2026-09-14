@@ -81,11 +81,31 @@ def _archived_runs() -> list[dict]:
             for file in sorted(day.glob("*.json")):
                 try:
                     out.append(json.loads(file.read_text(encoding="utf-8")))
-                except (OSError, json.JSONDecodeError):
+                except (OSError, json.JSONDecodeError) as exc:
                     # Unreadable is not free, but it is unknowable. The caller
                     # is told the estimate is unconfident rather than given a
                     # total that silently omits it.
-                    continue
+                    raise ValueError(f"cannot account for unreadable run: {file}") from exc
+    # A crash before publication does not make checkpointed engine calls free.
+    completed = {(r.get("run_date"), r.get("category")) for r in out if not r.get("source_run")}
+    state = RUNS_DIR.parent.parent / ".unprompted"
+    for manifest in state.glob("????-??-??/*/methodology.json"):
+        day, category = manifest.parent.parent.name, manifest.parent.name
+        if (day, category) in completed:
+            continue
+        rows = []
+        for file in manifest.parent.glob("*.json"):
+            if file.name in {"methodology.json", "batch.json"}:
+                continue
+            try:
+                answer = json.loads(file.read_text(encoding="utf-8"))
+                if not isinstance(answer.get("engine"), str) or not isinstance(answer.get("usage"), dict):
+                    raise ValueError("invalid checkpoint usage")
+                rows.append(answer)
+            except (OSError, ValueError, AttributeError) as exc:
+                raise ValueError(f"cannot account for unreadable checkpoint: {file}") from exc
+        if rows:
+            out.append({"category": category, "run_date": day, "extractions": rows})
     return out
 
 
@@ -113,12 +133,13 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     will override it, and then the guard has achieved nothing.
     """
     runs = _archived_runs() if runs is None else runs
-    priced = [(r, cost_of_run(r)[1]) for r in runs]
+    # A re-read pays only extraction; it cannot price a fresh measurement.
+    priced = [(r, cost_of_run(r)[1]) for r in runs if not r.get("source_run")]
     priced = [(r, c) for r, c in priced if c > 0]
 
     def per_answer(record: dict, dollars: float) -> float:
         got = [e for e in record.get("extractions", []) if not e.get("error")]
-        return dollars / len(got) if got else 0.0
+        return dollars / len(got) if got else FALLBACK_PER_ANSWER
 
     same = [(r, c) for r, c in priced if r.get("category") == category]
     if same:

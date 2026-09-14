@@ -204,9 +204,21 @@ def load_registry() -> list[dict]:
     providers = data.get("providers") if isinstance(data, dict) else None
     if not isinstance(providers, list):
         raise ProviderError(f"{REGISTRY} has no 'providers' list")
+    ids = set()
     for entry in providers:
         if not isinstance(entry, dict) or not entry.get("id"):
             raise ProviderError(f"{REGISTRY} has a provider entry with no id: {entry!r}")
+        if not isinstance(entry["id"], str) or not re.fullmatch(r"[a-z0-9_-]+", entry["id"]) or entry["id"] in ids:
+            raise ProviderError("invalid or duplicate provider id")
+        ids.add(entry["id"])
+        if entry.get("kind") not in {"api", "cli"} or entry.get("role") not in {"engine", "extractor"} or type(entry.get("enabled")) is not bool:
+            raise ProviderError("provider kind, role and enabled must be valid")
+        contracts = {"chatgpt": ("engine", "OPENAI_API_KEY"), "claude": ("engine", "ANTHROPIC_API_KEY"),
+                     "perplexity": ("engine", "PERPLEXITY_API_KEY"), "gemini": ("engine", "GEMINI_API_KEY"),
+                     "claude-api-extract": ("extractor", "ANTHROPIC_API_KEY")}
+        contract = contracts.get(entry["id"])
+        if entry["kind"] == "api" and contract and (entry["role"] != contract[0] or entry.get("env", contract[1]) != contract[1]):
+            raise ProviderError("unsupported API role or credential variable")
     return providers
 
 
@@ -297,14 +309,9 @@ def resolve_extractor() -> CliProvider | ApiExtractor:
             continue
 
         if entry.get("kind") == "cli":
-            provider = _provider_from(entry)
-            if is_available(provider):
-                return provider
-            print(
-                f"  extractor unavailable: {provider.id} "
-                f"({provider.command} is not on PATH)",
-                file=sys.stderr,
-            )
+            # CLI engines remain available. Untrusted extraction must not silently
+            # fall back to a harness with the operator's filesystem/network access.
+            print(f"  extractor disabled: {entry.get('id')} lacks qualified isolation", file=sys.stderr)
             continue
 
         name = entry.get("id", "")
@@ -324,8 +331,8 @@ def resolve_extractor() -> CliProvider | ApiExtractor:
 
     raise ProviderError(
         "no extractor in providers.json is both enabled and available on this "
-        "machine. Set the hosted extractor's key, put a local CLI on PATH, or "
-        "enable one that is."
+        "machine. Configure a supported hosted extractor. CLI extraction is "
+        "disabled until an isolated execution profile is qualified."
     )
 
 

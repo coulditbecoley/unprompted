@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { identifyAgent } from "@/lib/agents";
 import { record } from "@/lib/analytics";
 import { rateLimit } from "@/lib/rate-limit";
+import { isAuthorised } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,13 @@ export const dynamic = "force-dynamic";
  */
 
 const MAX_PATH = 300;
+
+export function GET() {
+  const namespace = process.env.ANALYTICS_NAMESPACE;
+  return namespace?.startsWith("test-")
+    ? NextResponse.json({ namespace })
+    : new NextResponse(null, { status: 404 });
+}
 const MAX_EVENT = 80;
 const MAX_QUERY = 300;
 
@@ -86,6 +94,9 @@ function referrerHost(raw: unknown): string | null {
 }
 
 export async function POST(request: Request) {
+  if (await isAuthorised(request)) return new NextResponse(null, { status: 204 });
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) return new NextResponse(null, { status: 204 });
   // The only unauthenticated write on the site, and it costs Redis commands on
   // a metered quota, so a script pointed at it burns the budget the real
   // numbers depend on and inflates them on the way. The ceiling is set well
@@ -98,11 +109,14 @@ export async function POST(request: Request) {
 
   let payload: unknown;
   try {
-    payload = await request.json();
+    const text = await request.text();
+    if (text.length > 2048) return new NextResponse(null, { status: 204 });
+    payload = JSON.parse(text);
   } catch {
     return new NextResponse(null, { status: 204 });
   }
 
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return new NextResponse(null, { status: 204 });
   const body = payload as {
     path?: unknown;
     referrer?: unknown;

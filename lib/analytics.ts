@@ -21,6 +21,7 @@
  */
 
 import { Redis } from "@upstash/redis";
+import { cache } from "react";
 
 import { identifyAgent, type Agent } from "./agents";
 
@@ -93,9 +94,25 @@ const FEED_MAX = 200;
  */
 export const PAIR_SEP = "\u0000";
 
-const dayKey = (date: string) => `a:d:${date}`;
-const FEED_KEY = "a:feed";
-const SEEN_KEY = "a:seen";
+const namespace = process.env.ANALYTICS_NAMESPACE ?? "a";
+if (namespace !== "a" && !/^test-[a-z0-9-]{8,64}$/.test(namespace)) throw new Error("Invalid analytics namespace");
+const dayKey = (date: string) => `${namespace}:d:${date}`;
+const FEED_KEY = `${namespace}:feed`;
+const SEEN_KEY = `${namespace}:seen`;
+
+async function readWithin<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Analytics unavailable")), DEADLINE_MS);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+const readDay = cache(async (date: string) => {
+  const r = redis();
+  if (!r) throw new Error("Analytics not configured");
+  return readWithin(r.hgetall<Record<string, string>>(dayKey(date)));
+});
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -164,6 +181,10 @@ export async function record(hit: Hit): Promise<void> {
 }
 
 async function write(r: Redis, hit: Hit): Promise<void> {
+  if (!/^\/[A-Za-z0-9\-._~/%]*$/.test(hit.path) || hit.path.length > 300) return;
+  if (hit.path.startsWith("/admin") || hit.path.startsWith("/api/")) return;
+  // Bound scanner-controlled cardinality; missing paths are diagnostics, not demand.
+  if (hit.missing) hit = { ...hit, path: "/unrecognized" };
 
   const date = today();
   const key = dayKey(date);
@@ -196,10 +217,10 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   // read 60 times" quietly mixed a crawler sweeping every page with a person
   // choosing one, and the second is the fact worth having.
   const brand = brandOf(hit.path);
-  if (brand && !hit.missing) fields.push(`${hit.agent ? "ba" : "b"}:${brand}`);
+  if (brand && !hit.missing && !hit.event) fields.push(`${hit.agent ? "ba" : "b"}:${brand}`);
 
   const comparison = comparisonOf(hit.path, hit.query);
-  if (comparison) fields.push(`m:${comparison}`);
+  if (comparison && !hit.agent && !hit.event && !hit.missing) fields.push(`m:${comparison}`);
 
   try {
     const pipe = r.pipeline();
@@ -222,6 +243,7 @@ async function write(r: Redis, hit: Hit): Promise<void> {
       }),
     );
     pipe.ltrim(FEED_KEY, 0, FEED_MAX - 1);
+    pipe.expire(FEED_KEY, DAY_TTL);
 
     // First and last seen, outside the daily keys because the question is "am I
     // in this crawler's refresh cycle", which a per-day count cannot answer.
@@ -311,7 +333,7 @@ export async function cadence(): Promise<Cadence[]> {
   const r = redis();
   if (!r) return [];
   try {
-    const hash = await r.hgetall<Record<string, string>>(SEEN_KEY);
+    const hash = await readWithin(r.hgetall<Record<string, string>>(SEEN_KEY));
     if (!hash) return [];
     const byAgent = new Map<string, { first: number; last: number }>();
     for (const [field, value] of Object.entries(hash)) {
@@ -335,6 +357,7 @@ export async function cadence(): Promise<Cadence[]> {
 /* -- reading --------------------------------------------------------------- */
 
 export type Totals = {
+  status: "ok" | "unconfigured" | "unavailable";
   views: Array<[string, number]>;
   brands: Array<[string, number]>;
   /** The same look-ups, but by an agent rather than a person. */
@@ -353,6 +376,7 @@ export type Totals = {
 };
 
 const EMPTY: Totals = {
+  status: "unconfigured",
   views: [],
   brands: [],
   brandsByAgents: [],
@@ -369,17 +393,17 @@ const EMPTY: Totals = {
 };
 
 /** Everything counted over the last `days` days, merged and sorted. */
-export async function totals(days = 30): Promise<Totals> {
+export async function totals(days = 30, offset = 0): Promise<Totals> {
   const r = redis();
   if (!r) return EMPTY;
 
   let hashes: Array<Record<string, string> | null>;
   try {
     hashes = await Promise.all(
-      recentDays(days).map((d) => r.hgetall<Record<string, string>>(dayKey(d))),
+      recentDays(days + offset).slice(offset).map(readDay),
     );
   } catch {
-    return EMPTY;
+    return { ...EMPTY, status: "unavailable" };
   }
 
   const bucket: Record<string, Map<string, number>> = {
@@ -414,6 +438,7 @@ export async function totals(days = 30): Promise<Totals> {
 
   const referrers = ranked(bucket.r);
   return {
+    status: "ok",
     views: ranked(bucket.v),
     brands: ranked(bucket.b),
     brandsByAgents: ranked(bucket.ba),
@@ -448,7 +473,7 @@ export async function feed(limit = 60): Promise<FeedEntry[]> {
   const r = redis();
   if (!r) return [];
   try {
-    const rows = await r.lrange<FeedEntry | string>(FEED_KEY, 0, limit - 1);
+    const rows = await readWithin(r.lrange<FeedEntry | string>(FEED_KEY, 0, limit - 1));
     return rows
       .map((row) => {
         // The SDK deserialises JSON automatically, but a value written by an
@@ -473,7 +498,7 @@ export async function daily(days = 14): Promise<Array<{ date: string; human: num
   const dates = recentDays(days).reverse();
   try {
     const hashes = await Promise.all(
-      dates.map((d) => r.hmget<Record<string, string>>(dayKey(d), "t:human", "t:agent")),
+      dates.map(readDay),
     );
     return dates.map((date, i) => ({
       date,

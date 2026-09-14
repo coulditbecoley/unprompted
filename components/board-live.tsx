@@ -86,6 +86,7 @@ export function LiveBoard({
   rows,
   questions,
   denominators,
+  evidenceUrl,
 }: {
   rows: BoardRow[];
   /** Question text in board order, aligned to every standing's `steps`. */
@@ -98,6 +99,7 @@ export function LiveBoard({
    * image board showed "13/13" for questions where fifteen runs had answered.
    */
   denominators: number[];
+  evidenceUrl?: string;
 }) {
   const [active, setActive] = useState<number | null>(null);
   const [sort, setSort] = useState<SortKey>("first");
@@ -127,7 +129,16 @@ export function LiveBoard({
     // which is the one place it needed to be. Sticky inside this wrapper rather
     // than the page, so it leaves with the board instead of following the
     // reader down into the next section.
-    <div className="board-wrap" onMouseLeave={() => setActive(null)}>
+    <div className="board-wrap">
+      <label htmlFor="board-question">Inspect a question</label>{" "}
+      <select id="board-question" value={active ?? ""} onChange={e => setActive(e.target.value === "" ? null : Number(e.target.value))}>
+        <option value="">Choose a question</option>
+        {questions.map((q, i) => <option key={i} value={i}>{i + 1}. {q}</option>)}
+      </select>
+      {active !== null && <details open className="question-evidence"><summary>{questions[active]}</summary>
+        <dl className="audience-rows">{rows.map(row => <div key={row.standing.brand}><dt>{row.standing.brand}</dt><dd>{row.standing.stepNamed[active] ?? 0}/{denominators[active] ?? 0}</dd></div>)}</dl>
+        {evidenceUrl && <a href={evidenceUrl}>Read the original answers</a>}
+      </details>}
       <div className="board-read" data-on={active !== null}>
         {active === null ? (
           <span className="board-read-idle">

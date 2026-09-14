@@ -59,7 +59,7 @@ def live_categories() -> list[str]:
     return sorted(p.stem for p in QUESTIONS.glob("*.yml"))
 
 
-def most_recent_monday(today: date) -> date:
+def most_recent_monday(today: date, observed_at: datetime | None = None) -> date:
     """The Monday whose run should exist by now.
 
     Today's Monday counts only once the grace period has passed; before that a
@@ -68,7 +68,7 @@ def most_recent_monday(today: date) -> date:
     """
     monday = today - timedelta(days=today.weekday())
     if today.weekday() == 0:
-        now = datetime.now(timezone.utc)
+        now = observed_at or datetime.now(timezone.utc)
         # Monday 13:00 New York is 17:00 UTC in summer, 18:00 in winter. Using
         # the later of the two plus the grace period keeps this correct all
         # year without a timezone dependency: being an hour cautious can only
@@ -105,14 +105,13 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
     day = monday.isoformat()
     produced, missing, unstarted = [], [], []
     for category in live_categories():
-        if (RUNS / day / f"{category}.json").exists() or (
-            HELD / day / f"{category}.json"
-        ).exists():
+        if any((base / (monday + timedelta(days=i)).isoformat() / f"{category}.json").exists()
+               for base in (RUNS, HELD) for i in range(7)):
             produced.append(category)
         elif ever_measured(category):
             missing.append(category)
         else:
-            unstarted.append(category)
+            missing.append(category)
     return produced, missing, unstarted
 
 
@@ -131,7 +130,7 @@ def open_issue(title: str, body: str) -> None:
             capture_output=True,
             text=True,
             timeout=60,
-            check=False,
+            check=True,
         )
         if title in (existing.stdout or ""):
             print(f"  an open issue already says this: {title}", file=sys.stderr)
@@ -142,7 +141,7 @@ def open_issue(title: str, body: str) -> None:
             capture_output=True,
             text=True,
             timeout=60,
-            check=False,
+            check=True,
         )
         print(f"  opened: {title}", file=sys.stderr)
     except (OSError, subprocess.SubprocessError) as exc:
@@ -158,7 +157,7 @@ def main() -> int:
     args = parser.parse_args()
 
     today = date.fromisoformat(args.date) if args.date else date.today()
-    monday = most_recent_monday(today)
+    monday = most_recent_monday(today, datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc) if args.date else None)
     produced, missing, unstarted = week_status(monday)
 
     print(f"week of {monday}", file=sys.stderr)

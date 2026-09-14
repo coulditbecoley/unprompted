@@ -66,4 +66,6 @@ class PerplexityEngine(Engine):
             # Sonar bills a per-request search fee on top of tokens.
             "requests": 1,
         }
+        if not choices or choices[0].get("finish_reason") not in {None, "stop"}:
+            usage["incomplete_response"] = 1
         return text, list(dict.fromkeys(sources)), usage

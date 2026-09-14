@@ -83,6 +83,8 @@ class Engine:
         name = type(exc).__name__.lower()
         text = str(exc).lower()
 
+        if any(p in text for p in ("quota", "billing", "credit balance", "usage limit", "spending limit")):
+            return False
         # Rate limits are the one 4xx worth waiting out.
         if "ratelimit" in name or "rate_limit" in text or "429" in text:
             return True
@@ -113,13 +115,13 @@ class Engine:
         A failure after retries becomes an EngineAnswer carrying `error`, which
         is recorded as data. One dead engine must not cost the week.
         """
-        if not self.is_configured:
+        if not self.is_configured or getattr(self, "_blocked_error", None):
             return EngineAnswer(
                 engine=self.name,
                 question_id=question_id,
                 question=question,
                 run_index=run_index,
-                error=self.unavailable_reason,
+                error=getattr(self, "_blocked_error", None) or self.unavailable_reason,
                 fetched_at=utc_now(),
             )
 
@@ -127,10 +129,13 @@ class Engine:
         for attempt in range(MAX_ATTEMPTS):
             try:
                 text, sources, usage = self._one_call(question)
-                error = None
+                error = "engine failed: incomplete response" if usage.get("incomplete_response") else None
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
                 error = f"{type(exc).__name__}: {exc}"
+                if any(word in error.lower() for word in ("quota", "billing", "credit balance", "usage limit", "spending limit", "authentication", "unauthorized", "invalid api key", "invalid_api_key")):
+                    # In-flight calls may finish; queued calls on this instance stop.
+                    self._blocked_error = f"not attempted after provider failure: {error}"
                 if not self.is_retryable(exc):
                     break
                 if attempt < MAX_ATTEMPTS - 1:
@@ -146,6 +151,7 @@ class Engine:
             error=error,
             fetched_at=utc_now(),
             usage=usage,
+            source_kind=getattr(self, "source_kind", "unspecified"),
         )
 
     def ask(self, question_id: str, question: str, runs: int) -> list[EngineAnswer]:

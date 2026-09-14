@@ -18,9 +18,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e . pytest
+        run: pip install -r requirements.lock -e .
       - name: Test
-        run: python -m pytest tests/test_pipeline.py -q
+        run: python -m pytest -q
 
   web:
     runs-on: ubuntu-latest
@@ -34,6 +34,8 @@ jobs:
         run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Dependency advisories
+        run: npm audit --omit=dev
       - name: Test
         run: npm test
       - name: Build

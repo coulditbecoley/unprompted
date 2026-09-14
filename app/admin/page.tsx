@@ -44,16 +44,18 @@ export const metadata: Metadata = {
 const money = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
 
-export default async function AdminPage() {
-  const questionsPath = path.join(REPO_ROOT, "questions", `${CATEGORY}.yml`);
-  const aliasesPath = path.join(REPO_ROOT, "aliases", `${CATEGORY}.yml`);
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+  const selected = (await searchParams).category;
+  const category = CATEGORIES.some(c => c.slug === selected) ? selected! : CATEGORY;
+  const questionsPath = path.join(REPO_ROOT, "questions", `${category}.yml`);
+  const aliasesPath = path.join(REPO_ROOT, "aliases", `${category}.yml`);
 
   const questionsRaw = fs.readFileSync(questionsPath, "utf-8");
   const aliasesRaw = fs.readFileSync(aliasesPath, "utf-8");
   const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number };
 
-  const history = loadHistory(CATEGORY);
-  const run = latestRun(CATEGORY);
+  const history = loadHistory(category);
+  const run = latestRun(category);
   const board = run ? standings(run) : [];
 
   const quarantine = loadQuarantine();
@@ -69,7 +71,7 @@ export default async function AdminPage() {
   // Registry order is priority, and only one extractor ever reads a run. Which
   // one is not obvious from a list of enabled toggles, and getting it wrong is
   // expensive rather than visible, so the dashboard names it.
-  const activeExtractor = extractors.find(({ p, ready }) => p.kind === "api" || ready);
+  const activeExtractor = extractors.find(({ p, ready }) => p.kind === "api" && ready);
 
   // Where the week actually runs. A local CLI engine cannot exist on a GitHub
   // runner, so registering one moves the measurement onto this machine, and the
@@ -93,7 +95,7 @@ export default async function AdminPage() {
 
   // Read here rather than inside the masthead so the whole page makes one pass
   // over the store instead of two.
-  const audience = await totals(30);
+  const [audience, previousAudience] = await Promise.all([totals(7, 1), totals(7, 8)]);
 
   /* -- the money ------------------------------------------------------------
      Priced from usage the providers themselves reported, against data/rates.json,
@@ -104,7 +106,7 @@ export default async function AdminPage() {
      away, which meant the one question a spend limit makes urgent could only be
      answered by logging into three provider dashboards. */
   const rates = loadRates();
-  const { runs: allRuns, errors: archiveErrors } = loadAllRuns();
+  const { runs: allRuns, errors: archiveErrors } = loadAllRuns(true);
 
   // Priced once. Each run was previously parsed by loadAllRuns and then priced
   // three separate times -- weekly total, archive total, weekly line items --
@@ -196,8 +198,8 @@ export default async function AdminPage() {
     {
       label: "Last run",
       value:
-        lastRun?.status === "published"
-          ? "clean"
+        (lastRun?.status === "published" || lastRun?.status === "measured")
+          ? "measured"
           : lastRun?.status === "held"
             ? "held"
             : lastRun?.status === "failed"
@@ -215,10 +217,10 @@ export default async function AdminPage() {
       value: `${enginesReady}/${engines.length}`,
       note:
         enginesReady !== engines.length
-          ? "one cannot be queried"
+          ? "web-host configuration only"
           : worst && worst.errors > 0
             ? `${worst.engine} failed ${(worst.rate * 100).toFixed(0)}% in ${worst.worstCategory ?? "a category"}`
-            : "all reachable, none failing",
+            : "configured here; runner not probed",
       attention: enginesReady !== engines.length || Boolean(worst?.over),
     },
     {
@@ -239,9 +241,9 @@ export default async function AdminPage() {
       note: `method v${spec.method_version}`,
     },
     {
-      label: "Read to answer",
-      value: String(audience.purposes.live ?? 0),
-      note: `${audience.agentHits} agent hits, 30d`,
+      label: "Browser views",
+      value: audience.status === "ok" ? String(audience.humanHits) : audience.status,
+      note: "previous 7 complete UTC days",
     },
     {
       // "Signups" claimed more than it can prove. The count is a browser
@@ -249,14 +251,14 @@ export default async function AdminPage() {
       // enough to answer "is anyone signing up", not good enough to be called a
       // subscriber count. It becomes authoritative when a mailing provider's
       // webhook is the thing incrementing it.
-      label: "Confirmed signups",
-      value: String(signups),
+      label: "Signup reports",
+      value: audience.status === "ok" ? String(signups) : audience.status,
       note:
         signupTries > signups
-          ? `${signupTries} tried, 30d`
+          ? `${signupTries} tried, 7d`
           : signups === 0
-            ? "none yet, 30d"
-            : "30 days",
+            ? "none yet, 7d"
+            : "7 complete days",
     },
     {
       label: "Held last run",
@@ -288,6 +290,7 @@ export default async function AdminPage() {
         the name of the page -- a visual decision should not take a structural
         one with it.
       */}
+      <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
       <h1 className="sr-only">Admin dashboard</h1>
       <h2 className="zone">Operations</h2>
 
@@ -476,6 +479,9 @@ export default async function AdminPage() {
                   {h.date} · held, {Math.round(h.errorRate * 100)}% of calls errored ·
                   kept in data/held, never published
                 </small>
+                <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
+                  {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
+                </small>
               </span>
               <span className="mono seq-delta is-down" style={{ fontSize: 11 }}>
                 HELD
@@ -628,7 +634,7 @@ export default async function AdminPage() {
         the operational status above it hard to find at all.
       */}
       <h2 className="zone">Audience</h2>
-      <AdminAnalytics />
+      <AdminAnalytics current={audience} previous={previousAudience} />
 
       {/*
         Where the week runs, and what came out of it. Split out from State
@@ -643,9 +649,10 @@ export default async function AdminPage() {
         engine list moved without one is held rather than published.
       </p>
 
-      <ProviderManager initial={providers} />
+      <ProviderManager initial={providers} initialRaw={fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8")} />
 
       <AdminEditor
+        category={category}
         label="Questions"
         target="questions"
         initial={questionsRaw}
@@ -653,6 +660,7 @@ export default async function AdminPage() {
       />
 
       <AdminEditor
+        category={category}
         label="Alias map"
         target="aliases"
         initial={aliasesRaw}

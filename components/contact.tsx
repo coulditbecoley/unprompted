@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { send } from "@/components/beacon";
 
 /**
  * Write to the operator.
@@ -52,7 +53,7 @@ export function Contact() {
     if (!WEB3FORMS_KEY) {
       setState("error");
       setNote(
-        "This form is not configured: NEXT_PUBLIC_WEB3FORMS_KEY is unset. Email works in the meantime.",
+        "This form is unavailable. Use the source repository link to report a correction.",
       );
       return;
     }
@@ -64,6 +65,7 @@ export function Contact() {
 
     try {
       const res = await fetch(WEB3FORMS_ENDPOINT, {
+        signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: { Accept: "application/json" },
         body: data,
@@ -71,6 +73,7 @@ export function Contact() {
       const body = (await res.json()) as { success?: boolean; message?: string };
 
       if (res.ok && body.success) {
+        send({ path: window.location.pathname, event: "contact:sent" });
         setState("done");
         setNote("Thanks. I read everything that comes through here.");
         form.reset();

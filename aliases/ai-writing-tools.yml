@@ -14,6 +14,7 @@ canonical:
   Claude:
     - claude
     - anthropic claude
+    - claude by anthropic
     - claude opus
     - claude sonnet
   Gemini:
@@ -66,6 +67,23 @@ canonical:
     - microsoft copilot
     - copilot
     - bing chat
+  NovelCrafter: []
+  Mintlify: []
+  NovelAI: []
+  Document360: []
+  Lavender: []
+  Paperpal: []
+  LanguageTool: []
+  Trinka: []
+  Shortwave: []
+  # Canonical names are lookup keys too. Do not rename this row to Writer:
+  # Bare names require answer-level evidence in normalize.resolve_in_context.
+  # Unsupported common nouns remain quarantined; there is no global bare alias.
+  Writer.com:
+    - writer ai
+  # Bare Superhuman may mean Grammarly's parent, or the email product.
+  # Neither alias nor exclude it globally; normalize checks the answer context.
+  Superhuman Mail: []
 
 # Which engine's own house each product belongs to. Perplexity is listed as a
 # brand above because engines do name it, but it is not treated as its own
@@ -83,6 +101,7 @@ exclude:
   - microsoft
   # Adjacent tooling that is not a writing tool
   - google docs
+  - google workspace
   - microsoft word
   - word
   - docs

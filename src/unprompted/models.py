@@ -25,6 +25,7 @@ class EngineAnswer:
     run_index: int
     text: str = ""
     sources: list[str] = field(default_factory=list)
+    source_kind: str = "unspecified"
     error: str | None = None
     fetched_at: str = ""
     # Token counts as reported by the provider, plus any billable server-side
@@ -61,6 +62,7 @@ class Extraction:
     run_index: int
     brands: list[BrandMention] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    source_kind: str = "unspecified"
     refused: bool = False
     error: str | None = None
     usage: dict[str, int] = field(default_factory=dict)
@@ -81,6 +83,7 @@ class Extraction:
             "run_index": self.run_index,
             "brands": [b.to_dict() for b in self.brands],
             "sources": self.sources,
+            "source_kind": self.source_kind,
             "refused": self.refused,
             "error": self.error,
             "answer": self.answer,
@@ -120,6 +123,7 @@ class RunRecord:
     # in the repository, so this is what makes a published week reproducible:
     # without it, "which same-day commit was this" has no answer.
     git_sha: str = ""
+    methodology: dict[str, Any] = field(default_factory=dict)
     extractions: list[Extraction] = field(default_factory=list)
     quarantined: list[str] = field(default_factory=list)
 
@@ -135,6 +139,7 @@ class RunRecord:
             "measured_on": self.measured_on or self.run_date,
             "source_run": self.source_run,
             "git_sha": self.git_sha,
+            "methodology": self.methodology,
             "extractions": [e.to_dict() for e in self.extractions],
             # Sorted, not deduplicated. checks.py counts occurrences to decide
             # whether an unrecognised name is material enough to hold the week,

@@ -7,6 +7,7 @@
  */
 
 import fs from "node:fs";
+import { cache } from "react";
 import path from "node:path";
 
 import { load as loadYaml } from "js-yaml";
@@ -51,7 +52,7 @@ function isRunRecord(v: unknown): v is RunRecord {
   );
 }
 
-export function loadHistory(category: string): RunRecord[] {
+export const loadHistory = cache(function loadHistory(category: string, allReadings = false): RunRecord[] {
   if (!fs.existsSync(RUNS_DIR)) return [];
   const dates = fs
     .readdirSync(RUNS_DIR)
@@ -81,8 +82,10 @@ export function loadHistory(category: string): RunRecord[] {
     }
     runs.push(parsed);
   }
-  return runs;
-}
+  if (allReadings) return runs;
+  const byMeasurement = new Map(runs.map(r => [r.measured_on || r.run_date, r]));
+  return [...byMeasurement.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, r]) => r);
+});
 
 export type ArchiveScan = {
   runs: RunRecord[];
@@ -110,18 +113,27 @@ export type ArchiveScan = {
  * declared date disagrees with the directory it sits in can silently move which
  * run counts as the latest, and the latest run is what the whole page is about.
  */
-export function loadAllRuns(): ArchiveScan {
+export function loadAllRuns(includeHeld = false): ArchiveScan {
+  if (includeHeld) {
+    const published = loadAllRuns();
+    const held = scanRuns(path.join(REPO_ROOT, "data", "held"));
+    return { runs: [...published.runs, ...held.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)), errors: [...published.errors, ...held.errors] };
+  }
+  return scanRuns(RUNS_DIR);
+}
+
+function scanRuns(root: string): ArchiveScan {
   const runs: RunRecord[] = [];
   const errors: string[] = [];
-  if (!fs.existsSync(RUNS_DIR)) return { runs, errors };
+  if (!fs.existsSync(root)) return { runs, errors };
 
   const dates = fs
-    .readdirSync(RUNS_DIR)
+    .readdirSync(root)
     .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
     .sort();
 
   for (const date of dates) {
-    const dir = path.join(RUNS_DIR, date);
+    const dir = path.join(root, date);
     if (!fs.statSync(dir).isDirectory()) continue;
 
     for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
@@ -314,7 +326,7 @@ export function selfPreference(
   return out;
 }
 
-export type HeldRun = { category: string; date: string; errorRate: number };
+export type HeldRun = { category: string; date: string; errorRate: number; reasons: string[] };
 
 /**
  * Runs that failed their checks and were withheld.
@@ -342,6 +354,9 @@ export function loadHeld(): HeldRun[] {
           category: run.category,
           date: run.run_date,
           errorRate: total ? errored / total : 0,
+          reasons: Array.isArray(run.publication_checks?.reasons)
+            ? run.publication_checks.reasons.filter((r): r is string => typeof r === "string" && !!r.trim())
+            : [],
         });
       } catch {
         // A corrupt held file must not take the dashboard down.
@@ -386,6 +401,12 @@ export type QuarantineEntry = {
 /** The share of a run's answered calls a name must reach to have held it. */
 const QUARANTINE_MATERIAL = 0.02;
 
+export function quarantineKey(name: string): string {
+  const parts = name.trim().toLowerCase().replace(/['\u2019]s\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/);
+  while (["llc", "inc", "incorporated", "ltd", "limited", "corp", "corporation", "co"].includes(parts.at(-1) ?? "")) parts.pop();
+  return parts.join(" ");
+}
+
 /**
  * Unrecognised names from the most recent run of each live category.
  *
@@ -423,7 +444,7 @@ export function loadQuarantine(): QuarantineEntry[] {
     const answered = answeredCount(category.slug, date);
     // The same floor checks.py uses, and never below two: one sighting of a
     // thing is not evidence of anything at any sample size.
-    const floor = answered ? Math.max(2, Math.ceil(answered * QUARANTINE_MATERIAL)) : Infinity;
+    const floor = answered ? Math.ceil(answered * QUARANTINE_MATERIAL) : Infinity;
 
     let names: unknown;
     try {
@@ -436,7 +457,8 @@ export function loadQuarantine(): QuarantineEntry[] {
     const here = new Map<string, number>();
     for (const raw of names) {
       if (typeof raw !== "string" || !raw.trim()) continue;
-      here.set(raw, (here.get(raw) ?? 0) + 1);
+      const key = quarantineKey(raw);
+      here.set(key, (here.get(key) ?? 0) + 1);
     }
 
     for (const [name, count] of here) {

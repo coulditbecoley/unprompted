@@ -4,10 +4,11 @@ import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
-import { categoryLabel, REPO_ROOT, latestRun } from "@/lib/data";
+import { categoryLabel, REPO_ROOT, latestRun, loadHistory } from "@/lib/data";
+import { notFound } from "next/navigation";
 import { AwaitingFirstRun, TrimTop } from "@/components/ui";
 
-type Params = { c?: string };
+type Params = { c?: string; date?: string };
 
 function resolve(params: Params): string {
   return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
@@ -66,12 +67,16 @@ export default async function QuestionsPage({
 }: {
   searchParams: Promise<Params>;
 }) {
-  const category = resolve(await searchParams);
-  const spec = loadYaml(
+  const params = await searchParams;
+  const category = resolve(params);
+  let spec = loadYaml(
     fs.readFileSync(path.join(REPO_ROOT, "questions", `${category}.yml`), "utf-8"),
   ) as Spec;
 
-  const run = latestRun(category);
+  const history = loadHistory(category, true);
+  const run = params.date ? history.find(r => r.run_date === params.date) : history.at(-1);
+  if (params.date && !run) notFound();
+  if (run?.methodology?.questions) spec = run.methodology.questions;
 
   if (!run) {
     return (
@@ -93,6 +98,8 @@ export default async function QuestionsPage({
     <section className="shell section">
       <CategoryTabs category={category} />
       <p className="label">{categoryLabel(category)} · week of {run.run_date}</p>
+      <form action="/questions"><input type="hidden" name="c" value={category} /><label htmlFor="evidence-date">Published reading </label><select id="evidence-date" name="date" defaultValue={run.run_date}>{history.map(r => <option key={r.run_date}>{r.run_date}</option>)}</select> <button type="submit" className="btn">Open</button></form>
+      {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
       <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
         Every question, and what each assistant answered.
       </h1>
@@ -107,7 +114,7 @@ export default async function QuestionsPage({
         const engines = [...new Set(rows.map((r) => r.engine))].sort();
 
         return (
-          <div className="q-block" key={q.id}>
+          <div className="q-block" key={q.id} id={q.id}>
             <TrimTop />
             <p className="label" style={{ marginTop: 6 }}>{q.id}</p>
             <p className="q-text">{q.text}</p>
@@ -132,6 +139,11 @@ export default async function QuestionsPage({
                         ) : (
                           <em>named nothing</em>
                         )}
+                        <details><summary>Answer {r.run_index + 1} · {r.fetched_at || "fetch time not recorded"}</summary>
+                          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "Raw text was not recorded for this answer."}</p>
+                          <p>Source evidence: {r.source_kind || "type not recorded"}</p>
+                          <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
+                        </details>
                       </span>
                     ))}
                   </span>

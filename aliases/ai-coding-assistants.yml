@@ -44,6 +44,9 @@ canonical:
     - windsurf
     - codeium windsurf
     - codeium
+    # Renamed IDE, not Devin the cloud agent. Keep this series continuous;
+    # review the canonical display label separately when naming shifts.
+    - devin desktop
   Cline:
     - cline
     - claude dev

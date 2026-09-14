@@ -23,6 +23,8 @@ not pretend to be one.
 from __future__ import annotations
 
 import json
+import os
+import re
 import sys
 import time
 import urllib.parse
@@ -33,13 +35,14 @@ REPO = Path(__file__).resolve().parents[1]
 BASE = "http://127.0.0.1:3577"
 DAY = time.strftime("%Y-%m-%d", time.gmtime())
 
-env = {}
-for line in (REPO / ".env.local").read_text(encoding="utf-8").splitlines():
-    if "=" in line and not line.strip().startswith("#"):
-        k, _, v = line.partition("=")
-        env[k.strip()] = v.strip().strip('"').strip("'")
-URL = env["KV_REST_API_URL"].rstrip("/")
-TOK = env["KV_REST_API_TOKEN"]
+NAMESPACE = os.environ.get("TEST_ANALYTICS_NAMESPACE", "")
+if not re.fullmatch(r"test-[a-z0-9-]{8,64}", NAMESPACE):
+    raise SystemExit("Set a unique TEST_ANALYTICS_NAMESPACE and isolated TEST_REDIS_URL/TOKEN; production credentials are never loaded")
+URL = os.environ["TEST_REDIS_URL"].rstrip("/")
+TOK = os.environ["TEST_REDIS_TOKEN"]
+with urllib.request.urlopen(BASE + "/api/track", timeout=10) as response:
+    if json.loads(response.read()).get("namespace") != NAMESPACE:
+        raise SystemExit("Server namespace does not match; no Redis commands issued")
 
 BROWSER = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -48,6 +51,7 @@ BROWSER = (
 
 
 def redis(*parts: str, body: bytes | None = None) -> object:
+    parts = tuple(NAMESPACE + p[1:] if p.startswith("a:") else p for p in parts)
     path = "/".join(urllib.parse.quote(p, safe="") for p in parts)
     req = urllib.request.Request(
         f"{URL}/{path}",
@@ -139,9 +143,9 @@ case(
     {
         "g:ClaudeBot": 1,
         "p:training": 1,
-        f"gp:ClaudeBot{NUL}/wp-admin": 1,
+        f"gp:ClaudeBot{NUL}/unrecognized": 1,
         "t:agent": 1,
-        "x:/wp-admin": 1,
+        "x:/unrecognized": 1,
     },
     counters(),
 )
@@ -152,7 +156,7 @@ get("/definitely-not-here")
 time.sleep(2.5)
 case(
     "human miss records only the miss, not a page view",
-    {"x:/definitely-not-here": 1},
+    {"x:/unrecognized": 1},
     counters(),
 )
 

@@ -49,10 +49,11 @@ export function GET() {
       const snub = theSnub(moves);
       const leader = board[0];
       const label = categoryLabel(run.category);
+      const measured = run.measured_on || run.run_date;
 
       const title = leader
-        ? `${label}, week of ${run.run_date}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of runs`
-        : `${label}, week of ${run.run_date}: no brand was named`;
+        ? `${label}, measured ${measured}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of runs`
+        : `${label}, measured ${measured}: no brand was named`;
 
       const rows = board
         .slice(0, 8)
@@ -63,17 +64,18 @@ export function GET() {
         .join("");
 
       const body = [
+        run.source_run ? `<p>Re-read on ${esc(run.run_date)}; originally measured ${esc(measured)}.</p>` : "",
         `<p>${esc(label)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${esc(run.engines.join(", "))}), method v${run.method_version}.</p>`,
         `<ol>${rows}</ol>`,
         snub
           ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? "named last week, not named once this week" : `down ${Math.abs(snub.rotationDelta)} points`}.</p>`
           : "",
-        `<p><a href="${SITE}/chart/${run.category}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
+        `<p><a href="${SITE}/chart/${run.category}/${run.run_date}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
       ].join("");
 
       return `  <entry>
     <title>${esc(title)}</title>
-    <link href="${SITE}/chart/${run.category}"/>
+    <link href="${SITE}/chart/${run.category}/${run.run_date}"/>
     <id>tag:unprompted.report,${run.run_date}:${run.category}</id>
     <updated>${runInstant(run.run_date).toISOString()}</updated>
     <content type="html">${esc(body)}</content>

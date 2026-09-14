@@ -38,6 +38,9 @@ export type Usage = {
 };
 
 export type Extraction = {
+  answer?: string;
+  fetched_at?: string;
+  source_kind?: string;
   engine: string;
   question_id: string;
   run_index: number;
@@ -49,6 +52,10 @@ export type Extraction = {
 };
 
 export type RunRecord = {
+  publication_checks?: { passed: boolean; reasons: string[] };
+  measured_on?: string;
+  source_run?: string;
+  methodology?: { questions?: { questions: Array<{ id: string; text: string }> }; aliases?: { affiliations?: Record<string, string | string[]> } };
   category: string;
   run_date: string;
   method_version: number;
@@ -249,7 +256,7 @@ export function exceedsNoise(
   p2: number,
   n2: number,
 ): boolean {
-  if (n1 < 1 || n2 < 1) return false;
+  if (n1 < 30 || n2 < 30) return false;
   const se = Math.sqrt((p1 * (1 - p1)) / n1 + (p2 * (1 - p2)) / n2);
   if (se === 0) return p1 !== p2;
   return Math.abs(p1 - p2) / se > 1.96;
@@ -293,7 +300,7 @@ export function movement(
         isDropout: true,
         // Named last week and not once this week is a real disappearance, not a
         // wobble, so it always counts.
-        significant: true,
+        significant: exceedsNoise(0, thisWeek[0]?.totalRuns ?? 0, before.rotation, before.totalRuns),
       });
     }
   }
@@ -384,7 +391,7 @@ export function consensus(
   questionText: Record<string, string>,
 ): QuestionConsensus[] {
   const rows = answered(run);
-  const engines = [...new Set(rows.map((e) => e.engine))].sort();
+  const engines = [...new Set(run.engines)].sort();
 
   return questionOrder(run).map((questionId) => {
     const picks: EnginePick[] = engines.map((engine) => {
@@ -396,12 +403,12 @@ export function consensus(
         const first = ex.brands.find((b) => b.position === 1);
         if (first) firsts.set(first.name, (firsts.get(first.name) ?? 0) + 1);
       }
-      // Ties break alphabetically so the page is stable between builds rather
-      // than depending on Map insertion order.
+      // Stable display order; equal leaders remain unresolved below.
       const ranked = [...firsts.entries()].sort(
         (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
       );
-      const [brand, count] = ranked[0] ?? [null, 0];
+      const [winner, count] = ranked[0] ?? [null, 0];
+      const brand = ranked.length > 1 && ranked[1][1] === count ? null : winner;
       return {
         engine,
         brand,
@@ -416,7 +423,8 @@ export function consensus(
     const ranked = [...votes.entries()].sort(
       (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
     );
-    const [majority, agree] = ranked[0] ?? [null, 0];
+    const [winner, agree] = ranked[0] ?? [null, 0];
+    const majority = agree > picks.length / 2 ? winner : null;
 
     return {
       questionId,
@@ -426,7 +434,7 @@ export function consensus(
       agree,
       // Settled means unanimous, and only counts when every engine actually
       // named something: three engines naming nothing is not agreement.
-      settled: agree === picks.length && picks.every((p) => p.brand !== null),
+      settled: picks.length > 1 && agree === picks.length && picks.every((p) => p.brand !== null),
     };
   });
 }
@@ -581,11 +589,13 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
     const engine = ex.engine || "unknown";
     const usage = ex.usage ?? {};
     const item = bucket(engine, engine);
-    item.calls += 1;
-    item.inputTokens += usage.input_tokens ?? 0;
-    item.outputTokens += usage.output_tokens ?? 0;
-    item.searches += usage.web_searches || usage.requests || 0;
-    item.dollars += price(rates, engine, usage);
+    if (!run.source_run) {
+      item.calls += 1;
+      item.inputTokens += usage.input_tokens ?? 0;
+      item.outputTokens += usage.output_tokens ?? 0;
+      item.searches += usage.web_searches || usage.requests || 0;
+      item.dollars += price(rates, engine, usage);
+    }
 
     const ein = usage.extract_input_tokens ?? 0;
     const eout = usage.extract_output_tokens ?? 0;

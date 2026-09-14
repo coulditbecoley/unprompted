@@ -32,12 +32,14 @@ import json
 import re
 import sys
 import time
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from pydantic import BaseModel, Field
 
 from .cli_provider import CliProvider, ProviderError, parse_json_reply
 from .models import BrandMention, EngineAnswer, Extraction
+from .storage import write_json
 
 # Letters and digits only, for checking that an extracted name occurs in the
 # answer. Deliberately a local copy rather than an import from normalize: this
@@ -133,6 +135,7 @@ def _base_for(answer: EngineAnswer) -> tuple[Extraction, bool]:
         question_id=answer.question_id,
         run_index=answer.run_index,
         sources=answer.sources,
+        source_kind=answer.source_kind,
         answer=answer.text,
         fetched_at=answer.fetched_at,
         # The engine's own usage rides along on the record it produced. Without
@@ -199,6 +202,8 @@ def extract_one(
         if u is not None:
             base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
             base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+        if getattr(result, "stop_reason", "end_turn") != "end_turn" or parsed is None:
+            raise ValueError("incomplete extraction response")
     except Exception as exc:  # noqa: BLE001 - recorded, not raised
         base.error = f"extract failed: {type(exc).__name__}: {exc}"
         return base
@@ -269,16 +274,27 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
     a plain dict. A malformed entry is dropped rather than raised: one unreadable
     brand should cost that brand, not the whole answer.
     """
-    base.refused = bool(parsed.get("refused"))
+    if not isinstance(parsed, dict) or type(parsed.get("refused")) is not bool or not isinstance(parsed.get("brands"), list):
+        base.error = "extract failed: expected boolean refused and a brands list"
+        return base
+    base.refused = parsed["refused"]
     brands = parsed.get("brands")
     if not isinstance(brands, list):
         brands = []
 
     mentions: list[BrandMention] = []
     unsupported: list[str] = []
+    positions: set[int] = set()
     for item in brands:
-        if not isinstance(item, dict):
-            continue
+        if (not isinstance(item, dict) or not isinstance(item.get("name"), str)
+            or not item["name"].strip() or type(item.get("position")) is not int
+            or item["position"] < 1 or item["position"] in positions
+            or not isinstance(item.get("sentiment", "neutral"), str)
+            or item.get("sentiment", "neutral") not in {"positive", "neutral", "negative"}):
+            base.error = "extract failed: invalid brand name, position or sentiment"
+            base.brands = []
+            return base
+        positions.add(item["position"])
         name = str(item.get("name", "")).strip()
         if not name:
             continue
@@ -307,6 +323,9 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
             file=sys.stderr,
         )
 
+    if base.refused and mentions:
+        base.error = "extract failed: refusal with recommendations"
+        return base
     base.brands = sorted(mentions, key=lambda b: b.position)
     # A reply that returned nothing at all is a refusal only if it said so.
     return base
@@ -384,6 +403,7 @@ def extract_all_batch(
     answers: list[EngineAnswer],
     api_key: str | None = None,
     model: str | None = None,
+    checkpoint: Path | None = None,
 ) -> list[Extraction]:
     """Structure a whole run in one Batch API job. Half the price of live calls.
 
@@ -445,8 +465,21 @@ def extract_all_batch(
         for request in requests:
             request["params"]["output_config"] = output_config
 
+        import hashlib
+        identity = hashlib.sha256(json.dumps({
+            "requests": requests,
+            "answers": [(a.engine, a.question_id, a.run_index, a.text) for a in answers],
+        }, sort_keys=True).encode("utf-8")).hexdigest()
+        saved = json.loads(checkpoint.read_text(encoding="utf-8")) if checkpoint and checkpoint.exists() else None
+        if saved and saved.get("identity") != identity:
+            raise ValueError("batch checkpoint identity differs; preserve it and use a new output date")
         client = _client(api_key)
-        batch = client.messages.batches.create(requests=requests)
+        if checkpoint and checkpoint.exists():
+            batch = client.messages.batches.retrieve(saved["id"])
+        else:
+            batch = client.messages.batches.create(requests=requests)
+            if checkpoint:
+                write_json(checkpoint, {"id": batch.id, "identity": identity, "model": model, "answers": len(requests)})
         batch_id = batch.id
         print(
             f"  batch {batch.id}: {len(requests)} answers submitted",
@@ -454,9 +487,10 @@ def extract_all_batch(
             flush=True,
         )
 
+        started = time.monotonic()
         waited = 0
         while batch.processing_status != "ended":
-            if waited >= BATCH_MAX_WAIT_SECONDS:
+            if time.monotonic() - started >= BATCH_MAX_WAIT_SECONDS or waited >= BATCH_MAX_WAIT_SECONDS:
                 # Cancel before giving up. An abandoned batch keeps running and
                 # bills on completion, and the recovery path is a fresh
                 # `reextract` rather than a reconnection, so without this the
@@ -474,7 +508,7 @@ def extract_all_batch(
                 raise TimeoutError(
                     f"still {batch.processing_status} after {waited // 60} minutes"
                 )
-            time.sleep(BATCH_POLL_SECONDS)
+            time.sleep(min(BATCH_POLL_SECONDS, max(0, BATCH_MAX_WAIT_SECONDS - (time.monotonic() - started))))
             waited += BATCH_POLL_SECONDS
             batch = client.messages.batches.retrieve(batch.id)
             if waited % 60 == 0:
@@ -488,21 +522,29 @@ def extract_all_batch(
 
         for entry in client.messages.batches.results(batch.id):
             index = int(entry.custom_id[1:])
+            if index < 0 or index >= len(bases) or entry.custom_id != f"x{index}":
+                raise ValueError("invalid batch result id")
+            if index in seen:
+                bases[index].error = "extract failed: duplicate batch result"
+                continue
             seen.add(index)
             base = bases[index]
             if entry.result.type != "succeeded":
                 base.error = f"extract failed: batch {entry.result.type}"
                 continue
             message = entry.result.message
+            u = getattr(message, "usage", None)
+            if u is not None:
+                base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
+                base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
+            if getattr(message, "stop_reason", "end_turn") != "end_turn":
+                base.error = "extract failed: incomplete response"
+                continue
             try:
                 _apply(base, json.loads(message.content[0].text))
             except (ValueError, IndexError, AttributeError) as exc:
                 base.error = f"extract failed: {type(exc).__name__}: {exc}"
                 continue
-            u = getattr(message, "usage", None)
-            if u is not None:
-                base.usage["extract_input_tokens"] = getattr(u, "input_tokens", 0) or 0
-                base.usage["extract_output_tokens"] = getattr(u, "output_tokens", 0) or 0
     except Exception as exc:  # noqa: BLE001 - recorded on the records, not raised
         failure = f"{type(exc).__name__}: {exc}"
         print(
@@ -541,6 +583,7 @@ def extract_run(
     api_key: str | None = None,
     max_workers: int = 6,
     model: str | None = None,
+    checkpoint: Path | None = None,
 ) -> list[Extraction]:
     """Read a whole run's answers with whichever extractor the registry chose.
 
@@ -557,7 +600,7 @@ def extract_run(
             file=sys.stderr,
             flush=True,
         )
-        out = extract_all_batch(answers, api_key=api_key, model=model)
+        out = extract_all_batch(answers, api_key=api_key, model=model, **({"checkpoint": checkpoint} if checkpoint else {}))
         failed = sum(1 for e in out if e.error)
         print(f"  extracted {len(out)} ({failed} failed)", file=sys.stderr, flush=True)
         return out

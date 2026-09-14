@@ -13,6 +13,7 @@ WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_use
 
 
 class AnthropicEngine(Engine):
+    source_kind = "retrieved"
     name = "claude"
     # CLAUDE_API accepted as an alias: it is a natural name to reach for.
     key_names = ("ANTHROPIC_API_KEY", "CLAUDE_API")
@@ -35,6 +36,8 @@ class AnthropicEngine(Engine):
 
         if getattr(response, "stop_reason", None) == "refusal":
             return "", [], usage
+        if getattr(response, "stop_reason", None) not in {None, "end_turn", "stop_sequence"}:
+            usage["incomplete_response"] = 1
 
         text_parts: list[str] = []
         sources: list[str] = []

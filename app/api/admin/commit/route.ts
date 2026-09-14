@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { load as loadYaml } from "js-yaml";
 
 import { isAuthorised } from "@/lib/auth";
-import { CATEGORY } from "@/lib/data";
+import { CATEGORIES } from "@/lib/categories";
+import { CATEGORY, quarantineKey } from "@/lib/data";
 import { KNOWN_CLIS } from "@/lib/providers";
 
 export const runtime = "nodejs";
@@ -44,9 +45,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
   }
 
-  const { target, content } = (payload ?? {}) as { target?: string; content?: string };
+  const { target, content, category = CATEGORY, baseline } = (payload ?? {}) as { target?: string; content?: string; category?: string; baseline?: string };
+  if (!CATEGORIES.some(c => c.slug === category) || typeof baseline !== "string") return NextResponse.json({ error: "Category and editor baseline required" }, { status: 400 });
 
-  if (typeof target !== "string" || !(target in TARGETS)) {
+  if (typeof target !== "string" || !Object.hasOwn(TARGETS, target)) {
     return NextResponse.json({ error: "Unknown target" }, { status: 400 });
   }
   if (typeof content !== "string" || !content.trim()) {
@@ -62,8 +64,11 @@ export async function POST(request: Request) {
   if (invalid) {
     return NextResponse.json({ error: invalid }, { status: 400 });
   }
+  if (target === "questions" && (loadYaml(content) as { category?: string }).category !== category) {
+    return NextResponse.json({ error: "Question bank category must match the selected category" }, { status: 400 });
+  }
 
-  const filePath = TARGETS[target as Target];
+  const filePath = target === "providers" ? "providers.json" : `${target}/${category}.yml`;
   const api = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`;
   const headers = {
     Authorization: `Bearer ${token}`,
@@ -79,7 +84,8 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
-  const current = (await head.json()) as { sha: string };
+  const current = (await head.json()) as { sha: string; content: string };
+  if (Buffer.from(current.content, "base64").toString("utf-8").replace(/\r\n/g, "\n") !== baseline.replace(/\r\n/g, "\n")) return NextResponse.json({ error: "This file changed since you opened it. Reload and merge your edits." }, { status: 409 });
 
   const put = await fetch(api, {
     method: "PUT",
@@ -107,7 +113,7 @@ export async function POST(request: Request) {
 function validate(target: Target, content: string): string | null {
   let parsed: unknown;
   try {
-    parsed = loadYaml(content);
+    parsed = target === "providers" ? JSON.parse(content) : loadYaml(content);
   } catch (err) {
     return `Not valid YAML: ${err instanceof Error ? err.message : "parse error"}`;
   }
@@ -115,16 +121,17 @@ function validate(target: Target, content: string): string | null {
 
   if (target === "questions") {
     const spec = parsed as Record<string, unknown>;
-    if (typeof spec.method_version !== "number") return "method_version must be a number";
-    if (typeof spec.runs_per_question !== "number" || spec.runs_per_question < 1) {
-      return "runs_per_question must be a positive number";
+    if (!Number.isInteger(spec.method_version) || Number(spec.method_version) < 1) return "method_version must be a number";
+    if (!Number.isInteger(spec.runs_per_question) || Number(spec.runs_per_question) < 1 || Number(spec.runs_per_question) > 100) {
+      return "runs_per_question must be an integer from 1 to 100";
     }
+    if (spec.max_brands !== undefined && (!Number.isInteger(spec.max_brands) || Number(spec.max_brands) < 1)) return "max_brands must be a positive integer";
     if (!Array.isArray(spec.questions) || spec.questions.length === 0) {
       return "questions must be a non-empty list";
     }
     const ids = new Set<string>();
     for (const q of spec.questions as Array<Record<string, unknown>>) {
-      if (typeof q?.id !== "string" || typeof q?.text !== "string" || !q.text.trim()) {
+      if (typeof q?.id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(q.id) || typeof q?.text !== "string" || !q.text.trim()) {
         return "every question needs an id and non-empty text";
       }
       if (ids.has(q.id)) return `duplicate question id: ${q.id}`;
@@ -145,6 +152,13 @@ function validate(target: Target, content: string): string | null {
         return `${id}: role must be engine or extractor`;
       }
       if (typeof enabled !== "boolean") return `${id}: enabled must be true or false`;
+      const apiContract: Record<string, [string, string]> = {
+        chatgpt: ["engine", "OPENAI_API_KEY"], claude: ["engine", "ANTHROPIC_API_KEY"],
+        perplexity: ["engine", "PERPLEXITY_API_KEY"], gemini: ["engine", "GEMINI_API_KEY"],
+        "claude-api-extract": ["extractor", "ANTHROPIC_API_KEY"],
+      };
+      if (kind === "api" && (!Object.hasOwn(apiContract, id) || role !== apiContract[id][0] || env !== apiContract[id][1])) return `${id}: unsupported API role or credential variable`;
+      if (enabled && kind === "api" && !(["chatgpt", "claude", "perplexity", "gemini", "claude-api-extract"].includes(id))) return `${id}: no supported API adapter`;
 
       if (kind === "api" && (typeof env !== "string" || !env.trim())) {
         return `${id}: an api provider needs the name of its key variable`;
@@ -178,11 +192,18 @@ function validate(target: Target, content: string): string | null {
   } else {
     const spec = parsed as Record<string, unknown>;
     const canonical = spec.canonical;
-    if (!canonical || typeof canonical !== "object") return "aliases needs a canonical mapping";
+    if (!canonical || typeof canonical !== "object" || Array.isArray(canonical)) return "aliases needs a canonical mapping";
+    const owners = new Map<string, string>();
     for (const [name, list] of Object.entries(canonical as Record<string, unknown>)) {
       if (!name.trim()) return "canonical names cannot be empty";
       if (list !== null && !Array.isArray(list)) {
         return `aliases for ${name} must be a list`;
+      }
+      if (Array.isArray(list) && list.some(x => typeof x !== "string" || !x.trim())) return `aliases for ${name} must contain non-empty strings`;
+      for (const spelling of [name, ...(Array.isArray(list) ? list : [])]) {
+        const key = quarantineKey(spelling);
+        if (owners.has(key) && owners.get(key) !== name) return `alias collision: ${spelling}`;
+        owners.set(key, name);
       }
     }
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 
-import { ADMIN_COOKIE, deriveSessionToken, safeEqual } from "@/lib/auth";
+import { ADMIN_COOKIE, deriveSessionToken, safeEqual, validSession, isAuthorised, allowLogin } from "@/lib/auth";
 import { recordRequest } from "@/lib/analytics";
 
 
@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // the response. Reading a waitUntil off the request and calling it unbound
   // throws on `this`, which took the whole site to a 500 for every route until
   // the second parameter was used properly.
-  event.waitUntil(
+  if (!(await isAuthorised(request))) event.waitUntil(
     recordRequest(path, request.headers.get("user-agent"), !isKnownPath(path)),
   );
 
@@ -59,13 +59,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // a leaked cookie cannot be turned back into the credential.
   const expected = await deriveSessionToken(secret);
   const cookie = request.cookies.get(ADMIN_COOKIE)?.value;
-  if (cookie && safeEqual(cookie, expected)) {
+  if (cookie && await validSession(cookie, secret)) {
     return NextResponse.next();
   }
 
   // Basic auth: the browser supplies the prompt, we set the session once.
   const header = request.headers.get("authorization");
   if (header?.startsWith("Basic ")) {
+    if (!(await allowLogin(request))) return new NextResponse("Too many login attempts; retry in a minute.", { status: 429 });
     let decoded = "";
     try {
       decoded = atob(header.slice(6));

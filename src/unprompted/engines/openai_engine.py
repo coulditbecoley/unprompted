@@ -19,6 +19,7 @@ TIMEOUT_SECONDS = 180
 
 
 class OpenAIEngine(Engine):
+    source_kind = "cited"
     name = "chatgpt"
     key_names = ("OPENAI_API_KEY", "OPENAI_API")
 
@@ -48,6 +49,8 @@ class OpenAIEngine(Engine):
         # Every call in this category uses the web search tool, and OpenAI bills
         # it per call rather than reporting it in usage.
         usage["web_searches"] = 1
+        if getattr(response, "status", None) not in {None, "completed"}:
+            usage["incomplete_response"] = 1
         return text, sources, usage
 
 

@@ -32,6 +32,8 @@ MIN_GROUNDED_RATE = 0.60
 # would hold the week forever on a perfectly healthy result, so the bound
 # applies to brands above a noise floor. This is an operational threshold, not a
 # measurement definition: no published number changes, only whether we publish.
+# Threshold edits still require a methodology version bump under the question-bank
+# policy, so the publication decision remains attributable to its policy version.
 MIN_ROTATION_TO_COUNT = 0.02  # named in at least ~2% of runs
 MIN_BRANDS = 2
 # How wide a field is plausible is a property of the category, not a global
@@ -68,6 +70,19 @@ def run_checks(
     # instruction to the operator and nothing checked it, so registering a new
     # engine — a local CLI harness, say — would silently produce a week that
     # was not comparable to the one before it and publish it as if it were.
+    snapshot = run.get("methodology", {})
+    spec = snapshot.get("questions", {})
+    if spec:
+        expected = {(e, q["id"], i) for e in run.get("engines", [])
+                    for q in spec["questions"] for i in range(run["runs_per_question"])}
+        rows = [(e.get("engine"), e.get("question_id"), e.get("run_index"))
+                for e in run.get("extractions", [])]
+        if set(rows) != expected or len(rows) != len(expected):
+            reasons.append("measurement population has missing, duplicate or unexpected rows")
+    if previous and previous.get("method_version") == run.get("method_version"):
+        before_method = previous.get("methodology", {})
+        if before_method and snapshot and any(before_method.get(k) != snapshot.get(k) for k in ("questions", "engines")):
+            reasons.append("questions or engine configuration changed without a method_version bump")
     if previous:
         before = sorted(previous.get("engines", []))
         now = sorted(run.get("engines", []))

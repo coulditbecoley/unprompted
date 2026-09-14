@@ -21,15 +21,22 @@ from datetime import date
 
 from .aggregate import brand_week, load_history
 from .checks import run_checks
+from .budget import check as check_budget
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .engines import all_engines
-from .extract import extract_run
+from .extract import EXTRACT_PROMPT, extract_run
 from .models import EngineAnswer, RunRecord
 from .normalize import AliasMap, normalize
 from .run import MAX_WORKERS, ROOT, git_sha, load_local_env, persist
+from .storage import run_lock
 
 
 def main() -> int:
+    with run_lock(ROOT / ".unprompted"):
+        return _main()
+
+
+def _main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("date")
     parser.add_argument("--category", required=True)
@@ -40,12 +47,23 @@ def main() -> int:
     parser.add_argument(
         "--in-place",
         action="store_true",
-        help="overwrite the source run instead of writing a new dated file. "
-        "Only for a run that was never published.",
+        help="retired: use --out-date to preserve earlier readings and usage",
     )
     args = parser.parse_args()
 
+    if args.in_place:
+        raise SystemExit("In-place recovery would erase earlier usage. Use --out-date to create a new reading; the source is preserved.")
+
     load_local_env()
+    date.fromisoformat(args.date)
+    if args.category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
+        raise SystemExit("unknown category")
+    out_date = args.out_date or date.today().isoformat()
+    date.fromisoformat(out_date)
+    for bucket in ("runs", "held"):
+        target = ROOT / "data" / bucket / out_date / f"{args.category}.json"
+        if target.exists():
+            raise SystemExit(f"refusing existing destination before extraction: {target}")
 
     path = ROOT / "data" / "runs" / args.date / f"{args.category}.json"
     if not path.exists():
@@ -55,19 +73,9 @@ def main() -> int:
         if not held.exists():
             raise SystemExit(f"no run at {path} or {held}")
         path = held
-    # The help string said --in-place was "only for a run that was never
-    # published" and nothing enforced it, so re-reading a published date with
-    # --in-place overwrote the public archive at its own path. data/runs is the
-    # thing the methodology calls append-only; the guarantee has to be code.
-    published = path.parent.parent.name == "runs"
-    if args.in_place and published:
-        raise SystemExit(
-            f"{path} is a published run and data/runs is append-only.\n"
-            "Re-read it without --in-place to write a new dated file, or use "
-            "--out-date to choose that date yourself."
-        )
-
     record = json.loads(path.read_text(encoding="utf-8"))
+    if record.get("category") != args.category or record.get("run_date") != args.date:
+        raise SystemExit("source record identity does not match its path")
 
     answers = [
         EngineAnswer(
@@ -77,6 +85,8 @@ def main() -> int:
             run_index=e["run_index"],
             text=e.get("answer", ""),
             sources=e.get("sources", []),
+            source_kind=e.get("source_kind", "unspecified"),
+            fetched_at=e.get("fetched_at", ""),
             # A stored extraction failure is ours, not the engine's, so clear it
             # and retry. A genuine engine failure stays a failure: there is no
             # answer text to re-parse. Note that .get("error", "") is not enough,
@@ -105,6 +115,9 @@ def main() -> int:
     except ProviderError as exc:
         raise SystemExit(str(exc)) from exc
     hosted = isinstance(extractor, ApiExtractor)
+    verdict = check_budget(args.category, len(answers))
+    if not verdict.ok:
+        raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
     print(
         f"re-extracting {len(answers)} stored answers via {extractor.label}",
         file=sys.stderr,
@@ -115,16 +128,18 @@ def main() -> int:
         None if hosted else extractor,
         max_workers=MAX_WORKERS,
         model=extractor.model if hosted else None,
+        checkpoint=ROOT / ".unprompted" / "reextract" / out_date / args.category / "batch.json",
     )
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
     aliases = AliasMap.load(ROOT / "aliases" / f"{args.category}.yml")
     extractions, quarantined = normalize(extractions, aliases)
 
-    # A re-extraction is a new reading of the same answers, so it gets its own
-    # dated file unless the operator says otherwise. --in-place exists for a run
-    # that was never published, where correcting the original is the honest move.
-    out_date = args.out_date or (args.date if args.in_place else date.today().isoformat())
+    import yaml
+    methodology = {**record.get("methodology", {}),
+                   "extraction_prompt": EXTRACT_PROMPT,
+                   "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
+                   "aliases": yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8"))}
 
     fresh = RunRecord(
         category=record["category"],
@@ -141,6 +156,7 @@ def main() -> int:
         measured_on=record.get("measured_on") or record["run_date"],
         source_run=f"{record['run_date']}/{record['category']}",
         git_sha=git_sha(),
+        methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,
     )
@@ -148,12 +164,12 @@ def main() -> int:
     history = [
         h
         for h in load_history(ROOT / "data" / "runs", args.category)
-        if h["run_date"] not in {args.date, out_date}
+        if (h.get("measured_on") or h["run_date"]) < (record.get("measured_on") or record["run_date"])
     ]
     this_week = brand_week(fresh.to_dict())
     import yaml as _yaml
 
-    spec = _yaml.safe_load(
+    spec = record.get("methodology", {}).get("questions") or _yaml.safe_load(
         (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
     )
     result = run_checks(
@@ -166,15 +182,15 @@ def main() -> int:
         # so the sources in the record are the ones the engine gave on the day.
         # The grounding rule applies exactly as it did then, and reading the
         # flag off the live engines keeps one definition of who searches.
-        grounding_engines={
-            name for name, e in all_engines().items() if e.grounds
-        },
+        grounding_engines=({name for name, settings in record["methodology"]["engines"].items() if settings.get("grounds")}
+                           if record.get("methodology", {}).get("engines") else
+                           {name for name, e in all_engines().items() if e.grounds}),
     )
 
     # Same gate as a live run: a re-extraction that still fails its checks is
     # held, not published.
     try:
-        persist(fresh, result.reasons, overwrite=args.in_place)
+        persist(fresh, result.reasons)
     except FileExistsError as exc:
         # A re-read is normally aimed at a date that already has a file, so this
         # is an ordinary mistake rather than a crash. --out-date is the answer.

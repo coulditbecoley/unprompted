@@ -26,6 +26,7 @@ async function sendToInbox(email: string): Promise<boolean> {
   if (!WEB3FORMS_KEY) return false;
   try {
     const res = await fetch(WEB3FORMS_ENDPOINT, {
+      signal: AbortSignal.timeout(15000),
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({
@@ -63,7 +64,7 @@ export function Subscribe() {
    */
   function succeed(via: "provider" | "inbox") {
     setState("done");
-    setMessage("Done. You will get the chart every Monday.");
+    setMessage(via === "provider" ? "Request accepted. Check your inbox for any confirmation step." : "Your request reached the operator. Automatic weekly delivery is not set up through this fallback.");
     setEmail("");
     send({ path: window.location.pathname, event: `signup:${via}` });
   }
@@ -77,6 +78,7 @@ export function Subscribe() {
 
     try {
       const res = await fetch("/api/subscribe", {
+        signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -123,9 +125,9 @@ export function Subscribe() {
         </h2>
         <p className="subscribe-lead">
           No account, no paywall, and nothing here is gated. Everything on this
-          site stays free to read whether you subscribe or not. There is no
-          mailing provider behind this yet, so for now your address reaches a
-          person rather than a list, and a reply saying stop is all it takes.
+          site stays free to read whether you subscribe or not. The confirmation
+          tells you whether the mailing service accepted your request or it was
+          sent to the operator for follow-up. RSS is available immediately.
         </p>
 
         <form onSubmit={submit} className="subscribe-form">

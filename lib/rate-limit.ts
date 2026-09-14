@@ -75,7 +75,8 @@ async function callerFor(request: Request): Promise<string> {
   // ADMIN_PASSWORD is reused as the key rather than adding a variable an
   // operator has to know to set; it is already required for the site to run at
   // all, and it never leaves the server.
-  const secret = process.env.ADMIN_PASSWORD ?? "unprompted";
+  const secret = process.env.ANALYTICS_HASH_SECRET ?? process.env.ADMIN_PASSWORD;
+  if (!secret) throw new Error("A private rate-limit hashing secret is required");
   const bytes = new TextEncoder().encode(`${secret}:${address}`);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest).slice(0, 8))

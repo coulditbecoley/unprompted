@@ -144,7 +144,7 @@ def exceeds_noise(p1: float, n1: int, p2: float, n2: int) -> bool:
     Not a claim of rigour beyond the usual two-proportion test: repeats within a
     week are not independent draws. It is a floor under what gets reported.
     """
-    if n1 < 1 or n2 < 1:
+    if n1 < 30 or n2 < 30:
         return False
     se = math.sqrt(p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2)
     if se == 0:
@@ -195,7 +195,7 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
                     is_dropout=True,
                     # Named last week and not once this week is a real
                     # disappearance rather than a wobble, so it always counts.
-                    significant=True,
+                    significant=exceeds_noise(0, this_week[0].total_runs if this_week else 0, before.rotation, before.total_runs),
                 )
             )
 
@@ -241,7 +241,9 @@ def load_history(runs_dir: str | Path, category: str) -> list[dict]:
     if not root.exists():
         return []
     files = sorted(root.glob(f"*/{category}.json"))
-    return [json.loads(f.read_text(encoding="utf-8")) for f in files]
+    readings = [json.loads(f.read_text(encoding="utf-8")) for f in files]
+    by_measurement = {r.get("measured_on") or r["run_date"]: r for r in readings}
+    return [by_measurement[day] for day in sorted(by_measurement)]
 
 
 @dataclass

@@ -11,11 +11,13 @@ type Target = "questions" | "aliases";
  * instead of a fact.
  */
 export function AdminEditor({
+  category,
   label,
   target,
   initial,
   note,
 }: {
+  category: string;
   label: string;
   target: Target;
   initial: string;
@@ -25,16 +27,18 @@ export function AdminEditor({
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
-  const dirty = body !== initial;
+  const [baseline, setBaseline] = useState(initial);
+  const dirty = body !== baseline;
 
   async function save() {
+    const submitted = body;
     setStatus("saving");
     setMessage("");
     try {
       const res = await fetch("/api/admin/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target, content: body }),
+        body: JSON.stringify({ target, category, content: submitted, baseline }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; url?: string };
       if (!res.ok || !data.ok) {
@@ -42,6 +46,7 @@ export function AdminEditor({
         setMessage(data.error ?? `Save failed (${res.status})`);
         return;
       }
+      setBaseline(submitted);
       setStatus("done");
       setMessage(data.url ? `Committed. ${data.url}` : "Committed.");
     } catch (err) {
@@ -102,6 +107,7 @@ export function AdminEditor({
         {message && (
           <span
             className="mono"
+            role="status"
             style={{
               fontSize: 11.5,
               color: status === "error" ? "var(--down)" : "var(--up)",

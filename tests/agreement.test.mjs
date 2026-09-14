@@ -26,6 +26,26 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { deriveSessionToken, validSession, isAuthorised } from "../lib/auth.ts";
+
+test("admin sessions expire and reject tampering", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = await deriveSessionToken("test-secret", now + 60);
+  assert.equal(await validSession(token, "test-secret", now), true);
+  assert.equal(await validSession(token, "test-secret", now + 60), false);
+  assert.equal(await validSession(token, "wrong-secret", now), false);
+  assert.equal(await validSession(`0${token}`, "test-secret", now), false);
+  const prior = process.env.ADMIN_PASSWORD;
+  process.env.ADMIN_PASSWORD = "test-secret";
+  try {
+    assert.equal(await isAuthorised(new Request("http://localhost/admin", {
+      headers: { cookie: `other=value; unprompted_admin=${token}` },
+    })), true);
+  } finally {
+    if (prior === undefined) delete process.env.ADMIN_PASSWORD;
+    else process.env.ADMIN_PASSWORD = prior;
+  }
+});
 
 import {
   MAX_ENGINE_ERROR_RATE,
@@ -36,7 +56,26 @@ import {
   exceedsNoise,
   marginOfError,
   standings,
+  consensus,
+  engineDivergence,
 } from "../lib/metrics.ts";
+
+test("ties, missing engines and pluralities cannot manufacture consensus", () => {
+  const row = (engine, brand, index = 0) => ({ engine, question_id: "q1", run_index: index,
+    brands: [{ name: brand, position: 1 }], sources: [], refused: false, error: null });
+  const run = { category: "test", run_date: "2026-09-14", engines: ["a", "b", "c"], runs_per_question: 2,
+    extractions: [row("a", "Alpha"), row("b", "Beta"), row("c", "Gamma")] };
+  let rows = consensus(run, {});
+  assert.equal(rows[0].majority, null);
+  assert.ok(engineDivergence(rows).every(e => e.differs === 0));
+  run.extractions = [row("a", "Alpha"), row("a", "Beta", 1), row("b", "Alpha"), row("b", "Beta", 1)];
+  rows = consensus(run, {});
+  assert.equal(rows[0].settled, false);
+  assert.equal(rows[0].picks.length, 3);
+  assert.ok(rows[0].picks.every(p => p.brand === null));
+  run.extractions = [row("a", "Alpha"), row("b", "Alpha")];
+  assert.equal(consensus(run, {})[0].settled, false);
+});
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, "..");

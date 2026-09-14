@@ -48,8 +48,20 @@ Full detail, including what we deliberately do *not* measure, is in
 
 ## Running it yourself
 
+Use a project virtual environment. On Windows:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock -e .
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+The Windows weekly runner uses `.venv\Scripts\python.exe` and refuses to start
+without it. On other platforms, create and activate `.venv` before the commands
+below. A dry run still calls paid providers; it only skips final publication.
+
 ```bash
-pip install -e ".[dev]"
+pip install -r requirements.lock -e .
 pytest                                  # no API keys needed
 
 export ANTHROPIC_API_KEY=...            # every engine key: a missing one is
@@ -125,19 +137,17 @@ purpose:
 
 | Role | What it does | If it is missing |
 |---|---|---|
-| **extractor** | Reads answers other engines gave. Never on the chart. | Falls back to the next extractor, then to the hosted API. |
+| **extractor** | Reads answers other engines gave. Never on the chart. | Requires an available hosted extractor. CLI extraction is disabled pending isolation qualification. |
 | **engine** | Is asked the shopper's questions. Gets its own chart row. | The run refuses to start. |
 
-The asymmetry is deliberate. Extraction is a mechanical reading job with a
-hosted fallback that produces the same answer, so falling through costs money
-rather than meaning. A missing *engine* changes which assistants answered, which
-changes what the week means, so the run stops before spending anything.
+Both an unavailable hosted extractor and a missing declared engine stop the run
+before spending. Different extractors are not assumed to produce identical readings.
 
 | Harness | Command | Extractor | Engine |
 |---|---|---|---|
-| Claude Code | `claude` | fallback | on, charted |
-| Codex | `codex` | fallback | on, charted |
-| Gemini | `gemini` | allowlisted, unverified | — |
+| Claude Code | `claude` | disabled pending isolation | on, charted |
+| Codex | `codex` | disabled pending isolation | on, charted |
+| Gemini | `gemini` | disabled pending isolation | — |
 
 **Both local engines are on**, which is why the week runs on the operator's
 machine rather than a GitHub runner: an enabled CLI engine has to exist wherever
@@ -146,8 +156,8 @@ the pipeline runs, and a runner has no local subscription. See
 method change, and a check holds the week if the two disagree.
 
 **Extraction no longer runs through a local harness.** The hosted API extractor
-is first in `providers.json` and reads a whole run as one Batch API job; the two
-CLIs sit below it as fallbacks for a machine with no key. A harness call carried
+is first in `providers.json` and reads a whole run as one Batch API job. CLI
+extractor entries are ignored until their isolation is qualified. A harness call carried
 roughly 48k tokens of its own context to do about 900 tokens of work, which is
 where a subscription's allowance went. Registry order is priority, and the
 `/admin` dashboard marks which extractor will actually run.

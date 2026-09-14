@@ -61,9 +61,9 @@ PAIR_SEP = "\x00"
 # lib/analytics.ts; short and stable enough that a shared file would cost more
 # than it saves, unlike the agent registry which is long and changes.
 ASSISTANT_HOSTS = (
-    "chatgpt.com", "chat.openai.com", "openai.com", "perplexity.ai", "claude.ai",
-    "gemini.google.com", "copilot.microsoft.com", "bing.com", "you.com",
-    "phind.com", "poe.com", "duckduckgo.com", "mistral.ai", "chat.mistral.ai",
+    "chatgpt.com", "chat.openai.com", "perplexity.ai", "claude.ai",
+    "gemini.google.com", "copilot.microsoft.com", "you.com",
+    "phind.com", "poe.com", "mistral.ai", "chat.mistral.ai",
     "grok.com", "x.ai",
 )
 
@@ -159,17 +159,18 @@ def write_raw(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     counted = {k: v for k, v in counters.items() if not k.startswith("_")}
+    existing = {}
     if path.exists():
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             existing = {}
         previous = {k: v for k, v in existing.items() if not k.startswith("_")}
-        if sum(previous.values()) >= sum(counted.values()):
+        if any(counted.get(k, 0) < v for k, v in previous.items()) or previous == counted:
             return False
 
     payload = dict(counted)
-    payload["_agents"] = snapshot(counted, meta)
+    payload["_agents"] = {**snapshot(counted, meta), **existing.get("_agents", {})}
 
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -307,7 +308,9 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     for path in files:
         try:
             for field, count in json.loads(path.read_text(encoding="utf-8")).items():
-                life[field] += int(count)
+                if field.startswith("_"): continue
+                try: life[field] += int(count)
+                except (ValueError, TypeError): continue
         except (ValueError, TypeError):
             continue
 

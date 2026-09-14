@@ -36,6 +36,8 @@ export default function Home() {
   const spec = questionSpec();
   const run = latestRun(CATEGORY);
   const history = loadHistory(CATEGORY);
+  const measured = run?.measured_on || run?.run_date;
+  const questions = run?.methodology?.questions?.questions ?? spec.questions;
 
   const board = run ? standings(run) : [];
   const prev = history.length > 1 ? standings(history[history.length - 2]) : [];
@@ -46,7 +48,7 @@ export default function Home() {
 
   // The board's steps are indexed by question order, so the text has to be put
   // in the same order to be able to name the column a reader is pointing at.
-  const text = loadQuestionText(CATEGORY);
+  const text = run?.methodology?.questions ? Object.fromEntries(questions.map(q => [q.id, q.text])) : loadQuestionText(CATEGORY);
   const questionsInBoardOrder = run
     ? questionOrder(run).map((id) => text[id] ?? id)
     : [];
@@ -57,7 +59,7 @@ export default function Home() {
         <div className="hero-grid">
           <div>
             <p className="label" style={{ marginBottom: 18 }}>
-              {categoryLabel(CATEGORY)} · {run ? run.run_date : "not yet measured"}
+              {categoryLabel(CATEGORY)} · {measured ?? "not yet measured"}
             </p>
 
             {/* Answer-first: the verdict is the first thing on the page, before
@@ -75,8 +77,8 @@ export default function Home() {
             </h1>
 
             <p className="hero-sub">
-              Every week we ask the AI assistants the same {spec.questions.length}{" "}
-              buying questions, {spec.runs_per_question} times each, and publish
+              Every week we ask the AI assistants the same {questions.length}{" "}
+              buying questions, {run?.runs_per_question ?? spec.runs_per_question} times each, and publish
               exactly who they name. The questions, the method and every raw answer
               are public.
             </p>
@@ -90,7 +92,7 @@ export default function Home() {
           <div className="buffer">
             <TrimTop />
             <div className="buffer-body" aria-label="The questions being asked">
-              {spec.questions.slice(0, 9).map((q, i) => (
+              {questions.slice(0, 9).map((q, i) => (
                 <div className="buffer-line" key={q.id}>
                   <span className="buffer-n">{String(i + 1).padStart(2, "0")}</span>
                   <span className="buffer-q">ask(&ldquo;{q.text}&rdquo;)</span>
@@ -98,10 +100,10 @@ export default function Home() {
               ))}
               <div className="buffer-line">
                 <span className="buffer-n">
-                  {String(Math.min(10, spec.questions.length)).padStart(2, "0")}
+                  {String(Math.min(10, questions.length)).padStart(2, "0")}
                 </span>
                 <span className="buffer-q">
-                  …{spec.questions.length - 9} more
+                  …{Math.max(0, questions.length - 9)} more
                   <span className="caret" aria-hidden="true" />
                 </span>
               </div>
@@ -114,17 +116,17 @@ export default function Home() {
         {run ? (
           <>
             <StatusBar
-              runDate={run.run_date}
+              runDate={measured!}
               engines={run.engines}
               methodVersion={run.method_version}
               runsPerQuestion={run.runs_per_question}
             />
-            <Freshness runDate={run.run_date} />
+            <Freshness runDate={measured!} />
             <LiveBoard
               questions={questionsInBoardOrder}
               denominators={answeredPerQuestion(run)}
               rows={board.map((b, i) => ({
-                standing: b,
+                standing: { ...b, cells: [] },
                 rank: i + 1,
                 move: moveFor.get(b.brand),
                 href: brandHref(CATEGORY, b.brand),
@@ -132,6 +134,7 @@ export default function Home() {
             />
 
             <ShareRow
+              url={`https://unprompted.report/chart/${CATEGORY}/${run.run_date}`}
               headline={
                 leader
                   ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${categoryLabel(CATEGORY).toLowerCase()}.`
@@ -159,7 +162,7 @@ export default function Home() {
       </section>
 
       <section className="shell section">
-        <h2>Why we ask five times</h2>
+        <h2>Why we repeat each question</h2>
         <p className="section-lead">
           These systems do not give the same answer twice. Ask the same question on
           Monday and Wednesday and you can get different brands. Asking once and

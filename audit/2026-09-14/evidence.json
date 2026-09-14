@@ -1,0 +1,110 @@
+{
+  "observed_defects": {
+    "published_destination_overwrite": true,
+    "analytics_index_drops_snapshot_days": {
+      "expected_humans": 7,
+      "reported_humans": 0
+    },
+    "analytics_monotonic_sum_loses_fields": true,
+    "reextract_loses_fetched_at": true,
+    "declared_engine_without_rows_passes": true,
+    "repeat_count_change_without_version_passes": true,
+    "empty_extractor_object_counted_as_answer": true,
+    "permanent_quota_429_retried": true,
+    "paid_all_failed_run_predicts_zero": {
+      "estimated": 0.0,
+      "confident": true
+    }
+  },
+  "archive": {
+    "runs": [
+      {
+        "file": "data/runs/2026-08-21/pokemon-grading.json",
+        "rows": 225,
+        "errors": 0,
+        "usd_at_repository_rates": 0.0,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 225
+      },
+      {
+        "file": "data/runs/2026-08-22/ai-coding-assistants.json",
+        "rows": 225,
+        "errors": 0,
+        "usd_at_repository_rates": 0.0,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 225
+      },
+      {
+        "file": "data/runs/2026-08-22/ai-writing-tools.json",
+        "rows": 225,
+        "errors": 0,
+        "usd_at_repository_rates": 0.0,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 225
+      },
+      {
+        "file": "data/runs/2026-08-24/ai-image-generators.json",
+        "rows": 225,
+        "errors": 24,
+        "usd_at_repository_rates": 19.503,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 225
+      }
+    ],
+    "held": [
+      {
+        "file": "data/held/2026-08-23/ai-image-generators.json",
+        "rows": 225,
+        "errors": 225,
+        "usd_at_repository_rates": 19.503,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 225
+      },
+      {
+        "file": "data/held/2026-08-24/ai-coding-assistants.json",
+        "rows": 375,
+        "errors": 96,
+        "usd_at_repository_rates": 7.4545,
+        "extract_input_tokens": 0,
+        "extract_output_tokens": 0,
+        "missing_fetch_timestamps": 375
+      },
+      {
+        "file": "data/held/2026-09-07/ai-coding-assistants.json",
+        "rows": 375,
+        "errors": 2,
+        "usd_at_repository_rates": 27.6451,
+        "extract_input_tokens": 620535,
+        "extract_output_tokens": 73051,
+        "missing_fetch_timestamps": 0
+      },
+      {
+        "file": "data/held/2026-09-07/ai-image-generators.json",
+        "rows": 375,
+        "errors": 1,
+        "usd_at_repository_rates": 26.1441,
+        "extract_input_tokens": 617041,
+        "extract_output_tokens": 85079,
+        "missing_fetch_timestamps": 0
+      },
+      {
+        "file": "data/held/2026-09-07/ai-writing-tools.json",
+        "rows": 375,
+        "errors": 0,
+        "usd_at_repository_rates": 22.6635,
+        "extract_input_tokens": 606935,
+        "extract_output_tokens": 71720,
+        "missing_fetch_timestamps": 0
+      }
+    ]
+  },
+  "metadata_contrast": {
+    "dark": 3.94,
+    "light": 3.45
+  }
+}

@@ -22,6 +22,8 @@ import { useEffect } from "react";
  */
 
 export function send(body: Record<string, unknown>) {
+  try { if (localStorage.getItem("unprompted-exclude") === "1") return; } catch { /* storage optional */ }
+  if (document.querySelector("[data-not-found]")) return;
   const payload = JSON.stringify(body);
   try {
     // sendBeacon returns false when it could not queue the request -- the queue
@@ -116,9 +118,15 @@ export function Beacon() {
   const params = useSearchParams();
 
   useEffect(() => {
-    if (PRIVATE_ROUTES.some((p) => pathname.startsWith(p))) return;
+    if (PRIVATE_ROUTES.some((p) => pathname.startsWith(p))) {
+      try { localStorage.setItem("unprompted-exclude", "1"); } catch { /* storage optional */ }
+      return;
+    }
     const query = QUERY_ROUTES.includes(pathname) ? params.toString() : null;
-    send({ path: pathname, query, referrer: document.referrer || null });
+    // One external referral per document, not again on each client navigation.
+    const referrer = document.documentElement.dataset.referrerCounted ? null : document.referrer;
+    document.documentElement.dataset.referrerCounted = "1";
+    send({ path: pathname, query, referrer: referrer || null });
   }, [pathname, params]);
 
   useEffect(() => {

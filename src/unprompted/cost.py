@@ -109,11 +109,12 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
         item = buckets.setdefault(
             engine, LineItem(engine, 0, 0, 0, 0, 0.0)
         )
-        item.calls += 1
-        item.input_tokens += usage.get("input_tokens", 0)
-        item.output_tokens += usage.get("output_tokens", 0)
-        item.searches += usage.get("web_searches", 0) or usage.get("requests", 0)
-        item.dollars += _price(engine, usage)
+        if not run.get("source_run"):
+            item.calls += 1
+            item.input_tokens += usage.get("input_tokens", 0)
+            item.output_tokens += usage.get("output_tokens", 0)
+            item.searches += usage.get("web_searches", 0) or usage.get("requests", 0)
+            item.dollars += _price(engine, usage)
 
         # The extraction pass rides on the same record but is billed separately,
         # so it gets its own line rather than inflating the engine it read.

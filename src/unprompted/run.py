@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import traceback
@@ -26,8 +27,10 @@ from .budget import check as check_budget
 from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
-from .extract import extract_run
-from .models import RunRecord
+from .extract import EXTRACT_PROMPT, extract_run
+from .engines.base import SYSTEM_PROMPT
+from .models import EngineAnswer, RunRecord
+from .storage import run_lock, write_json
 from .normalize import AliasMap, normalize
 from .report import write_report
 
@@ -86,8 +89,29 @@ def git_sha() -> str:
 
 
 def load_questions(category: str) -> dict:
+    if category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
+        raise ValueError("unknown category")
     path = ROOT / "questions" / f"{category}.yml"
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    spec = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(spec, dict) or spec.get("category") != category:
+        raise ValueError("question bank category mismatch")
+    for field in ("runs_per_question", "method_version", "max_brands"):
+        if type(spec.get(field, 15 if field == "max_brands" else None)) is not int or spec.get(field, 15) < 1:
+            raise ValueError(f"{field} must be a positive integer")
+    questions = spec.get("questions")
+    if spec["runs_per_question"] > 100:
+        raise ValueError("runs_per_question must be an integer from 1 to 100")
+    if not isinstance(questions, list) or not questions:
+        raise ValueError("questions must be a non-empty list")
+    import re
+    ids = set()
+    for q in questions:
+        if (not isinstance(q, dict) or not isinstance(q.get("id"), str)
+            or not re.fullmatch(r"[a-zA-Z0-9_-]+", q["id"]) or q["id"] in ids
+            or not isinstance(q.get("text"), str) or not q["text"].strip()):
+            raise ValueError("invalid or duplicate question")
+        ids.add(q["id"])
+    return spec
 
 
 def run_category(
@@ -96,8 +120,23 @@ def run_category(
     dry_run: bool = False,
     ignore_budget: bool = False,
 ) -> tuple[RunRecord, list[str]]:
+    with run_lock(ROOT / ".unprompted"):
+        return _run_category(category, run_date, dry_run, ignore_budget)
+
+
+def _run_category(
+    category: str,
+    run_date: str,
+    dry_run: bool = False,
+    ignore_budget: bool = False,
+) -> tuple[RunRecord, list[str]]:
     """Execute one full run. Returns the record and any hold reasons."""
     spec = load_questions(category)
+    date.fromisoformat(run_date)
+    for bucket in ("runs", "held"):
+        target = ROOT / "data" / bucket / run_date / f"{category}.json"
+        if target.exists():
+            raise FileExistsError(f"already recorded: {target}; use reextract for recovery")
     runs_per_question = int(spec["runs_per_question"])
     questions = spec["questions"]
 
@@ -163,14 +202,51 @@ def run_category(
 
     # as_completed rather than map: a twenty-minute run that prints nothing until
     # it finishes looks identical to a hung one, both here and in CI logs.
+    checkpoint = ROOT / ".unprompted" / run_date / category
+    methodology = {
+        "questions": spec,
+        "engines": {name: {"model": getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds}
+                    for name, e in engines.items()},
+        "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
+        "system_prompt": SYSTEM_PROMPT,
+        "extraction_prompt": EXTRACT_PROMPT,
+        "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
+    }
+    prior = load_history(ROOT / "data" / "runs", category)
+    if prior and prior[-1].get("method_version") == spec["method_version"]:
+        before = prior[-1].get("methodology", {})
+        if before and any(before.get(k) != methodology[k] for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")):
+            raise ValueError("methodology changed without a version bump; refusing before paid calls")
+    manifest = checkpoint / "methodology.json"
+    if manifest.exists():
+        if json.loads(manifest.read_text(encoding="utf-8")) != methodology:
+            raise ValueError("checkpoint methodology differs; preserve it and use a new run date")
+    else:
+        write_json(manifest, methodology)
     answers = []
+    pending = []
+    for engine, qid, text, run_index in tasks:
+        saved = checkpoint / f"{engine.name}-{qid}-{run_index}.json"
+        if saved.exists():
+            answer = EngineAnswer(**json.loads(saved.read_text(encoding="utf-8")))
+            if (answer.engine, answer.question_id, answer.question, answer.run_index) != (engine.name, qid, text, run_index):
+                raise ValueError(f"checkpoint answer identity differs: {saved.name}")
+            answers.append(answer)
+        else:
+            pending.append((engine, qid, text, run_index))
+    def ask_and_save(engine, qid, text, run_index):
+        answer = engine.ask_one(qid, text, run_index)
+        write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
+        return answer
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {
-            pool.submit(engine.ask_one, qid, text, run_index): engine.name
-            for engine, qid, text, run_index in tasks
+            pool.submit(ask_and_save, engine, qid, text, run_index): engine.name
+            for engine, qid, text, run_index in pending
         }
         for done, future in enumerate(as_completed(futures), start=1):
-            answers.append(future.result())
+            answer = future.result()
+            answers.append(answer)
             if done % 10 == 0 or done == len(tasks):
                 failed = sum(1 for a in answers if a.error)
                 print(
@@ -193,6 +269,7 @@ def run_category(
         None if hosted else extractor,
         max_workers=MAX_WORKERS,
         model=extractor.model if hosted else None,
+        checkpoint=checkpoint / "batch.json",
     )
 
     # The live path returns out of order; restore a deterministic sort so the
@@ -214,6 +291,7 @@ def run_category(
         extractor_model=extractor.model if hosted else "",
         measured_on=run_date,
         git_sha=git_sha(),
+        methodology=methodology,
         extractions=extractions,
         quarantined=quarantined,
     )
@@ -252,12 +330,19 @@ def persist(record: RunRecord, reasons: list[str], overwrite: bool = False) -> P
     Shared with reextract so a second write path cannot drift back to the far
     side of this gate.
     """
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", record.category):
+        raise ValueError("invalid category")
+    if date.fromisoformat(record.run_date).isoformat() != record.run_date:
+        raise ValueError("run date must be YYYY-MM-DD")
     held = bool(reasons)
     data = record.to_dict()
+    # Preserve the decision made by this code version; never reconstruct old
+    # hold reasons using today's checks or infer them from the error rate.
+    data["publication_checks"] = {"passed": not held, "reasons": list(reasons)}
     out_dir = ROOT / "data" / ("held" if held else "runs") / record.run_date
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{record.category}.json"
-    if out_path.exists() and not overwrite:
+    if out_path.exists():
         # Not SystemExit. This is a condition of one category, and killing the
         # process here cost a real week: on 2026-08-24 a leftover held file
         # aborted the run after ai-image-generators had already paid for 375
@@ -267,9 +352,7 @@ def persist(record: RunRecord, reasons: list[str], overwrite: bool = False) -> P
         raise FileExistsError(
             f"refusing to overwrite {out_path}: run data is append-only"
         )
-    out_path.write_text(
-        json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    write_json(out_path, data)
     print(f"  wrote {out_path.relative_to(ROOT)}", file=sys.stderr)
 
     # The readable note lives beside the data so the scheduled cloud run
@@ -336,7 +419,7 @@ def main() -> int:
             record, reasons = run_category(
                 category, args.date, dry_run=args.dry_run, ignore_budget=args.ignore_budget
             )
-        except Exception as exc:  # noqa: BLE001 - one category must not cost the rest
+        except (Exception, SystemExit) as exc:  # one category must not cost the rest
             # Categories are independent measurements that happen to share a
             # scheduler. Letting one crash out of the loop skipped every
             # category after it, and left whatever had already been written
@@ -345,9 +428,8 @@ def main() -> int:
             #
             # A crash is recorded as a hold: same exit code, so the categories
             # that did publish are still committed, and the reason is in the
-            # log beside the ones the checks produced. SystemExit is not caught
-            # on purpose, because pre-flight refuses before spending anything
-            # and that should stop the whole run.
+            # log beside the ones the checks produced. A category's pre-flight
+            # refusal must also leave earlier completed categories publishable.
             print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc()
             held[category] = [f"the run raised {type(exc).__name__}: {exc}"]

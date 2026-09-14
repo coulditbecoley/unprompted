@@ -26,7 +26,7 @@ type Detected = {
  * serverless function genuinely cannot see a laptop and pretending otherwise
  * would be a confusing bug rather than an honest limit.
  */
-export function ProviderManager({ initial }: { initial: Provider[] }) {
+export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; initialRaw: string }) {
   const [providers, setProviders] = useState<Provider[]>(initial);
   const [scan, setScan] = useState<{ note: string; detected: Detected[] } | null>(null);
   const [busy, setBusy] = useState<"idle" | "scanning" | "saving">("idle");
@@ -41,7 +41,8 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
     env: "",
   });
 
-  const dirty = JSON.stringify(providers) !== JSON.stringify(initial);
+  const [baseline, setBaseline] = useState(initialRaw);
+  const dirty = JSON.stringify(providers) !== JSON.stringify(JSON.parse(baseline).providers);
 
   async function detect() {
     setBusy("scanning");
@@ -119,9 +120,10 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
       const res = await fetch("/api/admin/commit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ target: "providers", content }),
+        body: JSON.stringify({ target: "providers", content, baseline }),
       });
       const data = await res.json();
+      if (res.ok) setBaseline(content);
       setMessage(res.ok ? "Committed. Redeploy to pick it up." : data.error ?? "Save failed.");
     } catch {
       setMessage("Could not reach the server.");
@@ -157,7 +159,7 @@ export function ProviderManager({ initial }: { initial: Provider[] }) {
             <span className="mono" style={{ fontSize: 11, color: p.enabled ? "var(--fg-2)" : "var(--fg-3)" }}>
               {p.kind === "cli" ? "LOCAL CLI" : "API"}
             </span>
-            <button className="btn" onClick={() => toggle(p.id)} style={{ fontSize: 11 }}>
+            <button aria-label={`${p.enabled ? "Disable" : "Enable"} ${p.label}`} className="btn" onClick={() => toggle(p.id)} style={{ fontSize: 11 }}>
               {p.enabled ? "ON" : "OFF"}
             </button>
           </div>

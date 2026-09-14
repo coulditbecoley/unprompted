@@ -1,0 +1,195 @@
+{
+  "scope": "Offline context probes of every saved answer containing the ambiguous names; not reconstructed extractions, a recovered run, or proof the next measurement passes. Historical normalized records do not retain per-answer quarantined positions.",
+  "source": "data\\held\\2026-09-07\\ai-writing-tools.json",
+  "decisions": [
+    {
+      "engine": "chatgpt",
+      "question_id": "q02",
+      "run_index": 4,
+      "probe_name": "Writer",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 1,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 2,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 3,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 4,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q03",
+      "run_index": 0,
+      "probe_name": "Writer",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q03",
+      "run_index": 2,
+      "probe_name": "Writer",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "claude-code",
+      "question_id": "q03",
+      "run_index": 3,
+      "probe_name": "Writer",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q04",
+      "run_index": 3,
+      "probe_name": "Superhuman",
+      "decision": ""
+    },
+    {
+      "engine": "claude",
+      "question_id": "q04",
+      "run_index": 4,
+      "probe_name": "Superhuman",
+      "decision": ""
+    },
+    {
+      "engine": "claude",
+      "question_id": "q05",
+      "run_index": 1,
+      "probe_name": "Writer",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q08",
+      "run_index": 1,
+      "probe_name": "Superhuman",
+      "decision": ""
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q08",
+      "run_index": 2,
+      "probe_name": "Superhuman",
+      "decision": ""
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 0,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 1,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 2,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 3,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 3,
+      "probe_name": "Superhuman",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 4,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 0,
+      "probe_name": "Superhuman",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 1,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 2,
+      "probe_name": "Superhuman",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 3,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 4,
+      "probe_name": "Superhuman",
+      "decision": "Superhuman Mail"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q14",
+      "run_index": 4,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q15",
+      "run_index": 0,
+      "probe_name": "Superhuman",
+      "decision": "quarantine"
+    },
+    {
+      "engine": "chatgpt",
+      "question_id": "q15",
+      "run_index": 3,
+      "probe_name": "Writer",
+      "decision": "Writer.com"
+    }
+  ]
+}

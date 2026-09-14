@@ -48,11 +48,12 @@ HEADLINE = {
 
 def write_status(status: str, detail: str, exit_code: int) -> None:
     """The durable half. Committed with the run, so the record is in git."""
-    STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATUS_FILE.write_text(
+    destination = REPO / ".unprompted" / "last-attempt.json" if status == "failed" else STATUS_FILE
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
         json.dumps(
             {
-                "status": status,
+                "status": "measured" if status == "published" else status,
                 "detail": detail,
                 "exit_code": exit_code,
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -62,7 +63,7 @@ def write_status(status: str, detail: str, exit_code: int) -> None:
         + "\n",
         encoding="utf-8",
     )
-    print(f"  wrote {STATUS_FILE.relative_to(REPO)}", file=sys.stderr)
+    print(f"  wrote {destination.relative_to(REPO)}", file=sys.stderr)
 
 
 def existing_issue(title: str) -> bool:

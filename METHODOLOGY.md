@@ -1,6 +1,19 @@
 # Methodology
 
-**Version 2** · effective 2026-08-24
+**Version 2** · effective 2026-08-24; **AI writing tools version 3** · effective 2026-09-14
+
+Writing version 3 raises its publication cap from 25 to 30 material brands to
+accommodate email-writing and documentation products already within its questions.
+It also adds narrow answer-context rules for two ambiguous writing names:
+bare Writer resolves only with a same-line Writer product label and a writer.com
+or support.writer.com URL. Bare Superhuman resolves to Superhuman Mail when the
+answer explicitly names Mail or describes Superhuman as an email client. It is
+excluded only when all its mentions are covered by reviewed Grammarly parent
+phrases. Other ambiguous wording remains quarantined. A source list alone does
+not resolve a name; neither name becomes an unconditional alias or exclusion.
+Questions, repetitions, the 2% floor and measurement formulas are unchanged. Other
+categories remain on their question-bank versions. Historical runs retain their
+recorded versions; this revision does not rewrite or recover them.
 
 Unprompted measures which brands AI assistants name when people ask real buying
 questions, and publishes the result every week. This document is the method. It
@@ -174,7 +187,7 @@ bump. That rule is now enforced rather than merely written down: a run whose
 engine list differs from the previous week's without a version bump is held.
 
 An engine that errors or returns nothing has that fact recorded as data. One
-failing call does not discard the week; enough of them do. Two of the six checks
+failing call does not discard the week; enough of them do. Two publication checks
 cover this: more than 20% of all calls failing holds the week, and separately,
 any single engine failing more than 20% of *its own* calls holds it. The second
 exists because the first cannot see one broken engine — with five engines, one
@@ -271,6 +284,14 @@ That check is now runnable rather than hypothetical. A second local harness
 past week can be re-read by the other harness without re-querying any engine:
 
     python -m unprompted.reextract <date> --category <slug>
+
+Recovery writes a new dated reading and retains its source, including previous
+extraction usage. Use `--out-date YYYY-MM-DD` to choose an unused output date.
+The former `--in-place` option now refuses before paid work. Recovery runs under
+the same process lock and conservative budget preflight as a new measurement.
+Saved batch IDs are bound to their exact inputs and extraction configuration;
+unrecognized or mismatched checkpoints require reconciliation, never automatic
+resubmission. Budget totals remain usage estimates, not provider invoices.
 
 with the other extractor enabled in `providers.json`. Comparing the two
 resulting records is the cross-extractor check. Until it has been run over a
