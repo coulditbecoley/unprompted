@@ -1,4 +1,7 @@
 @echo off
+setlocal
+set "GIT_TERMINAL_PROMPT=0"
+set "GCM_INTERACTIVE=never"
 REM Runs the whole week on this machine and publishes the result.
 REM
 REM This lives here rather than in GitHub Actions because two of the five
@@ -10,6 +13,7 @@ REM
 REM Scheduled by scripts\install-weekly-task.ps1. Log: %TEMP%\unprompted-weekly.log
 
 cd /d "%~dp0.."
+if errorlevel 1 exit /b 1
 set "UNPROMPTED_PYTHON=%CD%\.venv\Scripts\python.exe"
 if not exist "%UNPROMPTED_PYTHON%" (
   echo ABORT: create .venv and install requirements.lock before scheduling.
@@ -20,7 +24,13 @@ echo. >> "%TEMP%\unprompted-weekly.log"
 echo ===== %DATE% %TIME% ===== >> "%TEMP%\unprompted-weekly.log"
 
 REM Start from the published state, or the push at the end will be rejected.
-git pull --ff-only >> "%TEMP%\unprompted-weekly.log" 2>&1
+set "RUN_BRANCH="
+for /f "delims=" %%B in ('git branch --show-current') do set "RUN_BRANCH=%%B"
+if not "%RUN_BRANCH%"=="main" (
+  echo ABORT: checkout must be on main before scheduled measurement. >> "%TEMP%\unprompted-weekly.log"
+  exit /b 1
+)
+git pull --ff-only origin main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 (
   echo ABORT: git pull failed, working tree may have local changes >> "%TEMP%\unprompted-weekly.log"
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "git pull --ff-only failed before the run started, so nothing was measured." >> "%TEMP%\unprompted-weekly.log" 2>&1
@@ -39,7 +49,7 @@ REM modified there would be swept into a bot commit that claims to be this
 REM week's measurement. Refuse to start instead: a hand edit waiting to be
 REM reviewed must not be published under the bot's name.
 git status --porcelain -- data reports > "%TEMP%\unprompted-dirty.txt" 2>&1
-for /f %%A in ("%TEMP%\unprompted-dirty.txt") do set DIRTY_SIZE=%%~zA
+for %%A in ("%TEMP%\unprompted-dirty.txt") do set "DIRTY_SIZE=%%~zA"
 if not "%DIRTY_SIZE%"=="0" (
   echo ABORT: data\ or reports\ has uncommitted changes before the run: >> "%TEMP%\unprompted-weekly.log"
   type "%TEMP%\unprompted-dirty.txt" >> "%TEMP%\unprompted-weekly.log"
@@ -55,13 +65,13 @@ REM
 REM Deliberately narrow. An audit recommended refusing on *any* dirty file,
 REM which would trade a whole week's measurement for an uncommitted README
 REM edit. These four paths are the ones that change a published figure.
-git status --porcelain -- src questions aliases providers.json agents.json > "%TEMP%\unprompted-method.txt" 2>&1
-for /f %%A in ("%TEMP%\unprompted-method.txt") do set METHOD_SIZE=%%~zA
+git status --porcelain -- src questions aliases providers.json agents.json scripts requirements.lock pyproject.toml > "%TEMP%\unprompted-method.txt" 2>&1
+for %%A in ("%TEMP%\unprompted-method.txt") do set "METHOD_SIZE=%%~zA"
 if not "%METHOD_SIZE%"=="0" (
   echo ABORT: the method is uncommitted, so this run could not be reproduced: >> "%TEMP%\unprompted-weekly.log"
   type "%TEMP%\unprompted-method.txt" >> "%TEMP%\unprompted-weekly.log"
   echo         Commit or stash these, then re-run. >> "%TEMP%\unprompted-weekly.log"
-  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "src, questions, aliases or a registry was uncommitted, so this run would not have been reproducible from the repository." >> "%TEMP%\unprompted-weekly.log" 2>&1
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Measurement code, launcher, dependency configuration, questions, aliases or a registry was uncommitted; refusing unreproducible work." >> "%TEMP%\unprompted-weekly.log" 2>&1
   exit /b 1
 )
 
@@ -113,15 +123,19 @@ goto :published
 :publish
 git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "Run: measured and published" >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :commit_failed
-git push >> "%TEMP%\unprompted-weekly.log" 2>&1
+git push origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :push_failed
 
 REM Confirm the remote actually has it. Neither commit nor push returns non-zero
 REM for every kind of failure, and PUSHED used to be printed unconditionally: a
 REM network or auth failure looked identical to a real publication in both the
 REM log and Task Scheduler's last result.
-for /f %%H in ('git rev-parse HEAD') do set LOCAL_SHA=%%H
-for /f %%H in ('git rev-parse "@{upstream}"') do set REMOTE_SHA=%%H
+set "LOCAL_SHA="
+set "REMOTE_SHA="
+for /f %%H in ('git rev-parse HEAD') do set "LOCAL_SHA=%%H"
+for /f %%H in ('git ls-remote origin refs/heads/main') do set "REMOTE_SHA=%%H"
+if "%LOCAL_SHA%"=="" goto :sha_mismatch
+if "%REMOTE_SHA%"=="" goto :sha_mismatch
 if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch
 echo PUSHED %LOCAL_SHA%, exit %RUN_EXIT% >> "%TEMP%\unprompted-weekly.log"
 goto :published

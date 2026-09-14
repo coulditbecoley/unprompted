@@ -105,11 +105,22 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
     day = monday.isoformat()
     produced, missing, unstarted = [], [], []
     for category in live_categories():
-        if any((base / (monday + timedelta(days=i)).isoformat() / f"{category}.json").exists()
-               for base in (RUNS, HELD) for i in range(7)):
+        measured = False
+        for base in (RUNS, HELD):
+            for i in range(7):
+                path = base / (monday + timedelta(days=i)).isoformat() / f"{category}.json"
+                if not path.exists():
+                    continue
+                try:
+                    record = json.loads(path.read_text(encoding="utf-8"))
+                    measured_on = date.fromisoformat(record.get("measured_on") or record["run_date"])
+                    if (record.get("category") == category and record.get("extractions")
+                        and monday <= measured_on < monday + timedelta(days=7)):
+                        measured = True
+                except (OSError, ValueError, KeyError, AttributeError, TypeError) as exc:
+                    print(f"  invalid archive record {path}: {exc}", file=sys.stderr)
+        if measured:
             produced.append(category)
-        elif ever_measured(category):
-            missing.append(category)
         else:
             missing.append(category)
     return produced, missing, unstarted
@@ -132,19 +143,18 @@ def open_issue(title: str, body: str) -> None:
             timeout=60,
             check=True,
         )
-        if title in (existing.stdout or ""):
+        if any(row.get("title") == title for row in json.loads(existing.stdout or "[]")):
             print(f"  an open issue already says this: {title}", file=sys.stderr)
             return
         subprocess.run(
-            ["gh", "issue", "create", "--title", title, "--body", body,
-             "--label", "weekly-run"],
+            ["gh", "issue", "create", "--title", title, "--body", body],
             capture_output=True,
             text=True,
             timeout=60,
             check=True,
         )
         print(f"  opened: {title}", file=sys.stderr)
-    except (OSError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"  could not open an issue: {exc}", file=sys.stderr)
 
 
@@ -211,8 +221,8 @@ def main() -> int:
             "",
             "1. Windows Task Scheduler, task **Unprompted weekly run** — its",
             "   last result. `0x41306` means it was terminated.",
-            "2. Whether the machine was awake at 13:00 Monday. `WakeToRun` is",
-            "   off, so a sleeping machine defers the run silently.",
+            "2. Whether the machine was powered on and the operator signed in.",
+            "   WakeToRun requests wake-up; shutdown or sign-out still prevents execution.",
             "3. The run log, and `data/last-run.json`.",
             "",
             "A held run does **not** trigger this: held is the checks working,",

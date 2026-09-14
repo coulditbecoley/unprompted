@@ -2178,7 +2178,8 @@ def _watchdog(monkeypatch, tmp_path, categories, runs=(), held=()):
         for day, category in entries:
             d = tmp_path / "data" / base / day
             d.mkdir(parents=True, exist_ok=True)
-            (d / f"{category}.json").write_text("{}", encoding="utf-8")
+            (d / f"{category}.json").write_text(json.dumps({"category": category,
+                "run_date": day, "extractions": [{"engine": "test"}]}), encoding="utf-8")
 
     monkeypatch.setattr(wd, "QUESTIONS", q)
     monkeypatch.setattr(wd, "RUNS", tmp_path / "data" / "runs")

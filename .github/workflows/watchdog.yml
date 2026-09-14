@@ -19,7 +19,7 @@ name: Did Monday happen
 
 on:
   schedule:
-    # Tuesday 09:00 UTC — Monday 05:00 New York, roughly sixteen hours after the
+    # Tuesday 09:00 UTC — Tuesday 05:00 EDT / 04:00 EST, after the
     # run is due. Deliberately not Monday night: a check that runs close to the
     # deadline reports a slow week as a dead one, and an alarm that cries wolf
     # gets muted, which costs more than the delay does.

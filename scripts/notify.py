@@ -30,6 +30,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from unprompted.storage import write_json
 
 REPO = Path(__file__).resolve().parents[1]
 STATUS_FILE = REPO / "data" / "last-run.json"
@@ -49,19 +50,13 @@ HEADLINE = {
 def write_status(status: str, detail: str, exit_code: int) -> None:
     """The durable half. Committed with the run, so the record is in git."""
     destination = REPO / ".unprompted" / "last-attempt.json" if status == "failed" else STATUS_FILE
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
-        json.dumps(
+    write_json(destination,
             {
                 "status": "measured" if status == "published" else status,
                 "detail": detail,
                 "exit_code": exit_code,
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+            }, replace=True,
     )
     print(f"  wrote {destination.relative_to(REPO)}", file=sys.stderr)
 

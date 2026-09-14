@@ -27,6 +27,16 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { deriveSessionToken, validSession, isAuthorised } from "../lib/auth.ts";
+import { nextRun } from "../lib/schedule.ts";
+
+test("Monday countdown stays at 13:00 Eastern across daylight saving changes", () => {
+  for (const [now, expected] of [
+    ["2026-09-14T16:59:00Z", "2026-09-14T17:00:00.000Z"],
+    ["2026-09-14T17:00:00Z", "2026-09-21T17:00:00.000Z"],
+    ["2026-10-26T17:00:00Z", "2026-11-02T18:00:00.000Z"],
+    ["2026-03-02T18:00:00Z", "2026-03-09T17:00:00.000Z"],
+  ]) assert.equal(nextRun(new Date(now)).toISOString(), expected);
+});
 
 test("admin sessions expire and reject tampering", async () => {
   const now = Math.floor(Date.now() / 1000);

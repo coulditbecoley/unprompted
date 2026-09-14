@@ -23,7 +23,13 @@ if (-not (Test-Path $script)) { throw "not found: $script" }
 # Monday 13:00 local. The cloud job used 13:00 UTC; this one follows the
 # machine's clock because it can only run when the machine is on anyway.
 # components/freshness.tsx counts down to the same slot and must stay in step.
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 1pm
+$nextMonday = (Get-Date).Date.AddHours(13)
+while ($nextMonday.DayOfWeek -ne 'Monday' -or $nextMonday -le (Get-Date)) {
+    $nextMonday = $nextMonday.AddDays(1)
+}
+$trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Monday -At $nextMonday
+# No UTC offset: keep 13:00 on the machine's local clock across DST changes.
+$trigger.StartBoundary = $nextMonday.ToString("yyyy-MM-dd'T'HH:mm:ss")
 $action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
 
 # StartWhenAvailable matters more than the exact time: a laptop that was asleep
@@ -34,21 +40,28 @@ $action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
 # few hundred calls per category and can run for hours.
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
+    -WakeToRun `
     -DontStopIfGoingOnBatteries `
     -AllowStartIfOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Hours 8) `
     -MultipleInstances IgnoreNew
 
-Register-ScheduledTask `
+if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+    # Retain the installed principal and credentials when correcting settings.
+    Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings | Out-Null
+} else {
+    Register-ScheduledTask `
     -TaskName    $taskName `
     -Description "Measures every Unprompted category on this machine and pushes the result. Local CLI engines cannot run in the cloud." `
     -Trigger     $trigger `
     -Action      $action `
     -Settings    $settings `
     -Force | Out-Null
+}
 
 Write-Host "Registered '$taskName'."
-Write-Host "  runs:   Mondays at 13:00, or next wake-up if asleep"
+Write-Host "  runs:   Mondays at 13:00 local; wake requested, catch up when available"
+Write-Host "  needs:  this machine powered on and the operator signed in (locking is fine)"
 Write-Host "  script: $script"
 Write-Host "  log:    $env:TEMP\unprompted-weekly.log"
 Write-Host ""
