@@ -171,6 +171,7 @@ test("admin server component remains readable when a published category is corru
   const providers = await import("../lib/providers.ts");
   const category = categories.DEFAULT_CATEGORY;
   const reading = data.loadHistory(category, true)[0];
+  const heldReading = data.loadHeld().runs[0];
   const broken = path.join(data.REPO_ROOT, "data", "runs", reading.run_date, `${category}.json`);
   const originalRead = fs.readFileSync;
   t.mock.method(fs, "readFileSync", (p, ...args) => p === broken ? "invalid JSON" : originalRead(p, ...args));
@@ -195,6 +196,7 @@ test("admin server component remains readable when a published category is corru
   assert.ok(html.includes(`data/runs/${reading.run_date}/${category}.json`));
   assert.match(html, /Published readings are unavailable/);
   assert.match(html, /Quarantine review is incomplete/);
+  assert.ok(html.includes(`https://github.com/coulditbecoley/unprompted/blob/main/data/held/${heldReading.date}/${heldReading.category}.json`));
   assert.match(html, /PUBLISHED/); // healthy categories remain visible
 });
 

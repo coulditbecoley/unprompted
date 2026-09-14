@@ -413,3 +413,15 @@ checkpoint does not displace an older completed baseline, paid checkpoint usage
 still counts, and finalization removes duplicate accounting. No live data or
 budget ceiling changed. The prior full Python suite passed 158 tests; this cycle
 expanded an existing test rather than adding a parallel estimator test suite.
+
+## Cycle 20: link held decisions to their evidence
+
+Each admin held-reading row now links directly to its dated source JSON on
+GitHub, beside the saved reasons and any published rereading. This reuses the
+existing public archive instead of adding a second answer viewer or exposing
+held results through public chart routes. The link labels its destination.
+
+Verification: the in-process admin render check confirms the link targets the
+actual held date/category, and typecheck passed. No data, CSS, routes, or provider
+calls changed. Live GitHub navigation and browser interaction remain unverified;
+local unpushed records become remotely available only after the scheduler pushes.

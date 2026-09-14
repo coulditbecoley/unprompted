@@ -484,6 +484,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
                   {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
                 </small>
+                <small><a href={`https://github.com/coulditbecoley/unprompted/blob/main/data/held/${h.date}/${h.category}.json`}>Read this held reading’s answers and metadata on GitHub</a></small>
                 {h.recoveredOn && <small><Link href={`/chart/${h.category}/${h.recoveredOn}`}>View published rereading from {h.recoveredOn}</Link></small>}
               </span>
               <span className={`mono seq-delta${h.recoveredOn ? "" : " is-down"}`} style={{ fontSize: 11 }}>
