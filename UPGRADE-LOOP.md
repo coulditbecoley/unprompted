@@ -1,5 +1,24 @@
 # Upgrade loop
 
+## Hosted verification after the scheduled push
+
+GitHub Actions run 34885102504 succeeded for cc69704, including Python tests and
+web install/typecheck/advisories/tests/build. Deployment 6444427828 reports
+Production success for that same revision. These results do not qualify the
+newer local upgrades. Evidence:
+https://github.com/coulditbecoley/unprompted/actions/runs/34885102504
+
+Browser verification on the reported deployment URL confirmed the September 14
+coding homepage, navigation to the full board, the supporting-answer link's
+category/date preservation, and expansion of a saved answer with its timestamp.
+This is a bounded deployed-reader check, not mobile, keyboard, form-delivery or
+authenticated admin acceptance. The canonical custom domain was not verified.
+
+Observed follow-up: the board's shortfall text says the Claude Code call did not
+come back, but the recorded failure was extraction after all engine responses
+returned. Reader copy must distinguish missing usable readings from failed
+engine delivery. No archive should be rewritten to fix that description.
+
 ## Cycle 23: review the September 14 image hold
 
 Image methodology version 3 maps Flux Kontext and FLUX.1 Kontext to Flux.
