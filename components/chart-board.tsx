@@ -59,8 +59,8 @@ export function ChartBoard({
   }
 
   /*
-    Engines that did not answer everything they were asked this week. Empty on a
-    normal week, which is when the sentence above is true as written.
+    Engines with fewer usable readings than recorded attempts. This includes
+    call failures, extraction errors and refusals, not just missing responses.
 
     Named from the registry so this reads as prose rather than as ids -- and
     falling back to the id, because an engine retired from providers.json still
@@ -129,17 +129,16 @@ export function ChartBoard({
       */}
       {missed.length > 0 && (
         <p className="section-lead coverage-note">
-          <strong>Not a full week.</strong>{" "}
+          <strong>Incomplete usable sample.</strong>{" "}
           {missed.map((c, i) => (
             <span key={c.engine}>
               {i > 0 ? ", and " : ""}
-              {c.label} answered {c.answered} of {c.attempted}
+              {c.label}: {c.answered} usable readings from {c.attempted} attempts
             </span>
           ))}
-          . The {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)} calls
-          that did not come back are excluded from every figure below rather than
-          counted against a brand, so the percentages are read from a smaller
-          sample than the line above describes.
+          . Excluded readings: {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)}.
+          Failed calls, extraction errors, and refusals are excluded from ranking
+          percentages. They are not counted as answers that omitted a brand.
         </p>
       )}
 

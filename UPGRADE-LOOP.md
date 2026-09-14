@@ -1,5 +1,17 @@
 # Upgrade loop
 
+## Cycle 24: describe excluded readings accurately
+
+The shared ChartBoard shortfall notice now reports usable readings per recorded
+attempt and explains that call failures, extraction errors and refusals are
+excluded from ranking percentages. It no longer claims every excluded row was
+an engine response that never returned. No metrics or archived data changed.
+
+Verification: typecheck and the 84-page production build passed. Generated HTML
+for both the latest and dated September 14 coding boards contains "74 usable
+readings from 75 attempts" and no longer contains "did not come back". This
+verifies locally generated output; the deployed revision still needs the fix.
+
 ## Hosted verification after the scheduled push
 
 GitHub Actions run 34885102504 succeeded for cc69704, including Python tests and
