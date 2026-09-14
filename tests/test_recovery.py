@@ -391,8 +391,16 @@ def test_budget_counts_unpublished_checkpoints_once(tmp_path, monkeypatch):
     write_json(checkpoint / "chatgpt-q1-0.json", answer.to_dict())
     before = budget._archived_runs()
     assert len(before) == 1 and cost_of_run(before[0])[1] > 0
-    write_json(tmp_path / "data/held/2026-09-14/alpha.json", before[0])
-    assert budget._archived_runs() == before
+    assert not budget.estimate_category("alpha", 10, before).confident
+    historical = {"category": "alpha", "run_date": "2026-09-07", "extractions": [
+        {"engine": "chatgpt", "usage": {"input_tokens": 2_000_000, "extract_input_tokens": 1000}}]}
+    estimate = budget.estimate_category("alpha", 10, [historical, *before])
+    assert "2026-09-07" in estimate.basis
+    assert budget.spent_in_month(run.date(2026, 9, 14), before) == cost_of_run(before[0])[1]
+    final = {k: v for k, v in before[0].items() if k != "checkpoint_only"}
+    write_json(tmp_path / "data/held/2026-09-14/alpha.json", final)
+    assert budget._archived_runs() == [final]
+    assert budget.estimate_category("alpha", 10).confident
 
 
 def test_permanent_provider_fault_stops_later_calls(monkeypatch):

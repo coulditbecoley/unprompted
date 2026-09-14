@@ -105,7 +105,7 @@ def _archived_runs() -> list[dict]:
             except (OSError, ValueError, AttributeError) as exc:
                 raise ValueError(f"cannot account for unreadable checkpoint: {file}") from exc
         if rows:
-            out.append({"category": category, "run_date": day, "extractions": rows})
+            out.append({"category": category, "run_date": day, "extractions": rows, "checkpoint_only": True})
     return out
 
 
@@ -133,6 +133,9 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     will override it, and then the guard has achieved nothing.
     """
     runs = _archived_runs() if runs is None else runs
+    # Intermediate engine usage belongs in spend, but omits the remaining calls
+    # and extraction. It cannot price a complete future operation.
+    runs = [r for r in runs if not r.get("checkpoint_only")]
     # A re-read pays only extraction; it cannot price a fresh measurement.
     if extraction_only:
         priced = [(r, sum(i.dollars for i in cost_of_run(r)[0] if i.label == "extract")) for r in runs]

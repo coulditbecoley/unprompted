@@ -397,3 +397,19 @@ the mode and eligible-call count; both focused budget checks passed after that
 assertion was added. No paid recovery or live-checkout edits were performed.
 At 13:41 local the scheduled task remained Running, with all 375 coding answers
 submitted and pending in the extraction batch. Publication remains unproven.
+
+## Cycle 19: keep partial spend out of complete-run estimates
+
+Checkpoint-derived accounting rows now carry an internal marker. They still
+count toward recorded monthly spend, but cannot become the baseline for a new
+measurement or recovery estimate: an engine-only checkpoint omits extraction
+and can represent only part of the engine population. Completed held/published
+records retain their existing estimate eligibility and supersede their matching
+checkpoint in spend accounting.
+
+Verification: all 22 recovery tests passed. The existing checkpoint accounting
+test now proves an unfinished-only archive uses the unconfident fallback, a newer
+checkpoint does not displace an older completed baseline, paid checkpoint usage
+still counts, and finalization removes duplicate accounting. No live data or
+budget ceiling changed. The prior full Python suite passed 158 tests; this cycle
+expanded an existing test rather than adding a parallel estimator test suite.
