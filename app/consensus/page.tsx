@@ -60,7 +60,7 @@ export default async function ConsensusPage({
     );
   }
 
-  const rows = consensus(run, loadQuestionText(category));
+  const rows = consensus(run, loadQuestionText(category, run));
   const score = consensusScore(rows);
   const divergence = engineDivergence(rows);
   const engines = rows[0]?.picks.map((p) => p.engine) ?? [];
@@ -72,7 +72,7 @@ export default async function ConsensusPage({
 
       <h1 className="display cns-title">
         {engines.length < 2 ? (
-          <>One engine answered this week.</>
+          <>This measurement has fewer than two engines.</>
         ) : (
           <>
             The engines agree on {score.settled} of {score.total} questions.
@@ -82,16 +82,16 @@ export default async function ConsensusPage({
       <p className="section-lead cns-lead">
         {engines.length < 2 ? (
           <>
-            Agreement needs at least two engines to mean anything. This week&rsquo;s
-            run had one, so there is nothing to compare yet.
+            Agreement needs at least two engines. This measurement has too few
+            to compare.
           </>
         ) : (
           <>
             Each engine&rsquo;s pick is the brand it named first most often across
             its repeats. Where every engine picks the same brand, the question is
             settled. Where they split, the answer a buyer gets depends on which
-            assistant they happened to ask. {categoryLabel(category)}, week of{" "}
-            {run.run_date}.
+            assistant they happened to ask. {categoryLabel(category)}, measured on{" "}
+            {run.measured_on || run.run_date}.
           </>
         )}
       </p>
@@ -114,6 +114,7 @@ export default async function ConsensusPage({
           </div>
 
           <h2 className="cmp-h2">Question by question</h2>
+          {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
             A pick set in full weight is one that differs from what the other
             engines chose. Colour is not used here, so a split reads the same in

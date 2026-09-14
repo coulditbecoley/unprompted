@@ -86,7 +86,7 @@ export function ChartBoard({
 
   // Read once. Called inside the map below, this re-read and re-parsed the
   // whole question file for every question on the board.
-  const text = run.methodology?.questions ? Object.fromEntries(run.methodology.questions.questions.map(q => [q.id, q.text])) : loadQuestionText(category.slug);
+  const text = loadQuestionText(category.slug, run);
   const questionText = questionOrder(run).map((id) => text[id] ?? id);
 
   return (
@@ -111,7 +111,7 @@ export function ChartBoard({
 
       {/* This sentence has to match what the board actually draws. */}
       <p className="section-lead">
-        Week of {run.run_date}. One step per question, {run.runs_per_question} runs
+        Measured on {run.measured_on || run.run_date}. One step per question, {run.runs_per_question} runs
         each across {run.engines.length} engine
         {run.engines.length === 1 ? "" : "s"}. A taller step means the brand was
         named more often for that question.
@@ -150,6 +150,7 @@ export function ChartBoard({
         runsPerQuestion={run.runs_per_question}
       />
       <Freshness runDate={run.measured_on || run.run_date} />
+      {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
       <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
       <p><Link href={`/chart/${category.slug}/${run.run_date}`}>Permanent link to this result</Link> · <Link href={`/questions?c=${category.slug}&date=${run.run_date}`}>Read the supporting answers</Link></p>
       <details><summary>Published readings</summary><ul>{history.map(r => <li key={r.run_date}><Link href={`/chart/${category.slug}/${r.run_date}`}>{r.run_date}{r.source_run ? " (reprocessed)" : ""}</Link></li>)}</ul></details>

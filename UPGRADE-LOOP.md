@@ -281,3 +281,20 @@ component check also verifies the incomplete-review message. Removed the obsolet
 sidecar denominator reader; no archives or sidecars were changed. The Python
 source remains at its 156-test pass. At 13:21 local the scheduled coding log reached
 180/375 calls, zero failures; publication and later categories remain pending.
+
+## Cycle 14: bind question labels to the reading they describe
+
+Head-to-head and consensus views previously loaded today's bank even when their
+reading included frozen question wording. The shared question loader now accepts
+the reading and prefers its snapshot. Homepage and dated/current chart boards
+use the same loader. Empty or partial snapshots never acquire additional wording
+from today's bank. Pages that use the legacy fallback disclose that historical
+wording was not recorded. Chart and consensus date copy identifies measurement
+dates rather than presenting a reread as a fresh measurement.
+
+Verification: 31 Node tests and the 77-page build passed. The loader test covers
+changed wording, empty snapshots, legacy fallback, and a snapshot whose live bank
+is absent. Generated homepage, current chart, and dated-chart HTML contain the
+legacy caveat. Browser acceptance remains pending. No dependencies, CSS rules,
+or archive records changed. At 13:24 local the scheduled coding log reached
+210/375 calls with zero failures; main remains frozen for the live task.

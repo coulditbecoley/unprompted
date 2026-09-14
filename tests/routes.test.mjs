@@ -257,6 +257,18 @@ test("brand history retains absent brands, dates rereads by measurement, and mar
   assert.equal(history[2].readingDate, "2026-08-18");
 });
 
+test("all question labels prefer frozen wording and never fill gaps from today's bank", async () => {
+  const { loadQuestionText } = await import("../lib/data.ts");
+  const category = "ai-coding-assistants";
+  const live = loadQuestionText(category);
+  assert.ok(Object.keys(live).length > 0);
+  const id = Object.keys(live)[0];
+  assert.deepEqual(loadQuestionText(category, { methodology: { questions: { questions: [{ id, text: "Original recorded question" }] } } }), { [id]: "Original recorded question" });
+  assert.deepEqual(loadQuestionText(category, { methodology: { questions: { questions: [] } } }), {});
+  assert.deepEqual(loadQuestionText(category, { methodology: {} }), live);
+  assert.deepEqual(loadQuestionText("missing-bank", { methodology: { questions: { questions: [{ id, text: "Archived bank" }] } } }), { [id]: "Archived bank" });
+});
+
 test("recorded absence of affiliations never falls back to today's ownership", async () => {
   const { loadAffiliations } = await import("../lib/data.ts");
   const category = "ai-coding-assistants";

@@ -51,7 +51,7 @@ export default function Home() {
 
   // The board's steps are indexed by question order, so the text has to be put
   // in the same order to be able to name the column a reader is pointing at.
-  const text = run?.methodology?.questions ? Object.fromEntries(questions.map(q => [q.id, q.text])) : loadQuestionText(CATEGORY);
+  const text = loadQuestionText(CATEGORY, run);
   const questionsInBoardOrder = run
     ? questionOrder(run).map((id) => text[id] ?? id)
     : [];
@@ -125,6 +125,7 @@ export default function Home() {
               runsPerQuestion={run.runs_per_question}
             />
             <Freshness runDate={measured!} />
+            {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
             <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
             <LiveBoard
               questions={questionsInBoardOrder}

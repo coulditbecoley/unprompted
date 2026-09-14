@@ -183,12 +183,13 @@ export function latestRun(category: string): RunRecord | null {
  * published question bank. Exported because a step is meaningless without the
  * question it belongs to, and the comparison page names them.
  */
-export function loadQuestionText(category: string): Record<string, string> {
-  const file = path.join(REPO_ROOT, "questions", `${category}.yml`);
-  if (!fs.existsSync(file)) return {};
-  const spec = loadYaml(fs.readFileSync(file, "utf-8")) as
-    | { questions?: Array<{ id?: string; text?: string }> }
-    | undefined;
+export function loadQuestionText(category: string, run?: RunRecord | null): Record<string, string> {
+  let spec: { questions?: Array<{ id?: string; text?: string }> } | undefined = run?.methodology?.questions;
+  if (spec === undefined) {
+    const file = path.join(REPO_ROOT, "questions", `${category}.yml`);
+    if (!fs.existsSync(file)) return {};
+    spec = loadYaml(fs.readFileSync(file, "utf-8")) as typeof spec;
+  }
   const out: Record<string, string> = {};
   for (const q of spec?.questions ?? []) {
     if (typeof q?.id === "string" && typeof q?.text === "string") out[q.id] = q.text;

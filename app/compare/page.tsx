@@ -96,7 +96,7 @@ export default async function ComparePage({
   }));
   const [L, R] = sides;
 
-  const questions = loadQuestionText(category);
+  const questions = loadQuestionText(category, run);
   const order = questionOrder(run);
   const weeks = Math.max(L.history.length, R.history.length);
 
@@ -172,6 +172,7 @@ export default async function ComparePage({
       {L.row && R.row && (
         <>
           <h2 className="cmp-h2">Question by question</h2>
+          {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
             How often each brand was named for each question asked. The larger
             figure in a pair is set in full weight; colour is not used, so the
