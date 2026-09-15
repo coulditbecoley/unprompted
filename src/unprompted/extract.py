@@ -2,7 +2,8 @@
 
 An AI reading an AI. Pattern matching is not an option here: the engines write
 ordinary prose, and brand names appear inline, possessively, abbreviated and
-inside comparisons. A forced JSON schema makes parse failures impossible.
+inside comparisons. Structured output reduces malformed responses; validation
+failures remain explicit errors.
 
 The weekly run goes through the Batch API: half price, and a reading job that
 publishes on Mondays does not care that results take minutes instead of
@@ -17,13 +18,9 @@ published runs, re-read and put through the same normalize():
     Sonnet 5      86%          63%          85%           $ 8.50
     Haiku 4.5     86%          64%          86%           $ 2.10
 
-Opus disagrees with the archive 11% of the time by itself, so that is the
-task's noise floor rather than a model failure. Haiku holds the first brand,
-which is what the board ranks on, but drops 13 points on the full brand set,
-which is what the "named" counts are built from. Sonnet reads no better than
-Haiku and costs four times as much, so it is not a middle option. The saving
-from Haiku is about $6 a week and it is paid for in lost mentions, so this
-stays on Opus.
+These are agreement figures against an earlier extraction, not independent
+accuracy labels or a measured noise floor. The existing Opus choice is retained;
+model quality claims require the blinded review described in READING-REVIEW.md.
 """
 
 from __future__ import annotations
@@ -61,8 +58,8 @@ TIMEOUT_SECONDS = 120
 # category and the scheduled task is allowed eight hours total. Three categories
 # of roughly 375 calls each spend about 45 minutes apiece querying engines, so a
 # two-hour cap put the worst case at 8.4 hours and the scheduler would have
-# killed the run mid-week. At one hour the worst case is 5.4 hours, and giving
-# up early costs nothing: the answers are kept and `reextract` re-reads them.
+# killed the run mid-week. A timed-out job may still complete and bill: keep
+# its ID and collect it before further spending.
 BATCH_POLL_SECONDS = 15
 BATCH_MAX_WAIT_SECONDS = 3600
 
@@ -401,6 +398,54 @@ def _local_schema(model: type[BaseModel]) -> dict:
     return walk(model.model_json_schema())
 
 
+def _batch_entries(client, batch):
+    started = time.monotonic()
+    while batch.processing_status != "ended":
+        if time.monotonic() - started >= BATCH_MAX_WAIT_SECONDS:
+            raise TimeoutError(f"batch {batch.id} remains pending; collect it before new paid work")
+        print(f"  batch {batch.id}: {batch.processing_status}", file=sys.stderr, flush=True)
+        time.sleep(min(BATCH_POLL_SECONDS, max(0, BATCH_MAX_WAIT_SECONDS - (time.monotonic() - started))))
+        batch = client.messages.batches.retrieve(batch.id)
+    yield from client.messages.batches.results(batch.id)
+
+
+def read_batch_results(checkpoint: Path):
+    """Read and validate a complete local download, without contacting a provider."""
+    from anthropic.types.messages import MessageBatchIndividualResponse
+
+    state = json.loads(checkpoint.read_text(encoding="utf-8"))
+    saved = json.loads((checkpoint.parent / "extraction-batch/results.json").read_text(encoding="utf-8"))
+    if (saved.get("id"), saved.get("identity")) != (state.get("id"), state.get("identity")):
+        raise ValueError("extraction results do not match the saved batch")
+    entries = [MessageBatchIndividualResponse.model_validate(entry) for entry in saved["entries"]]
+    received = [entry.custom_id for entry in entries]
+    expected = state.get("answer_keys")
+    if expected is not None and (not isinstance(expected, dict)
+        or any(not isinstance(key, list) or len(key) != 3 or not all(isinstance(v, str) and v for v in key[:2])
+               or type(key[2]) is not int or key[2] < 0 for key in expected.values())
+        or len({tuple(key) for key in expected.values()}) != len(expected)):
+        raise ValueError("invalid extraction answer identities")
+    if (len(received) != len(set(received)) or len(received) != state["answers"]
+        or (expected is not None and set(received) != set(expected))):
+        raise ValueError("extraction results have missing, duplicate, or unexpected identities")
+    return entries
+
+
+def collect_batch(checkpoint: Path, api_key: str | None = None):
+    """Download an existing extraction job only; never submit or re-extract."""
+    state = json.loads(checkpoint.read_text(encoding="utf-8"))
+    if not state.get("id"):
+        raise ValueError("ambiguous extraction batch submission; reconcile the provider job before retrying")
+    destination = checkpoint.parent / "extraction-batch/results.json"
+    if not destination.exists():
+        client = _client(api_key)
+        entries = [entry.model_dump(mode="json") for entry in
+                   _batch_entries(client, client.messages.batches.retrieve(state["id"]))]
+        # Complete download first: parsing cannot strand the provider's usage.
+        write_json(destination, {"id": state["id"], "identity": state["identity"], "entries": entries})
+    return read_batch_results(checkpoint)
+
+
 def extract_all_batch(
     answers: list[EngineAnswer],
     api_key: str | None = None,
@@ -426,11 +471,13 @@ def extract_all_batch(
     model = model or MODEL
     bases: list[Extraction] = []
     requests = []
+    answer_keys = {}
     for i, answer in enumerate(answers):
         base, needed = _base_for(answer)
         bases.append(base)
         if not needed:
             continue
+        answer_keys[f"x{i}"] = [answer.engine, answer.question_id, answer.run_index]
         requests.append(
             {
                 "custom_id": f"x{i}",
@@ -477,59 +524,29 @@ def extract_all_batch(
             raise ValueError("batch checkpoint identity differs; preserve it and use a new output date")
         if saved is not None and not saved.get("id"):
             raise ValueError("ambiguous extraction batch submission; reconcile the provider job before retrying")
-        client = _client(api_key)
-        if checkpoint and checkpoint.exists():
-            batch = client.messages.batches.retrieve(saved["id"])
-        else:
+        if saved is None:
+            client = _client(api_key)
             # The POST can succeed even when its response is lost. Persist intent
             # first and disable SDK retries so a restart cannot submit it twice.
-            intent = {"identity": identity, "model": model, "answers": len(requests), "submission_started": True}
+            intent = {"identity": identity, "model": model, "answers": len(requests), "submission_started": True,
+                      "result_checkpoint_version": 1,
+                      "answer_keys": answer_keys}
             if checkpoint:
                 write_json(checkpoint, intent)
             batch = client.messages.batches.create(requests=requests)
             if checkpoint:
                 write_json(checkpoint, {**intent, "id": batch.id}, replace=True)
-        batch_id = batch.id
+            batch_id = batch.id
+        else:
+            batch_id = saved["id"]
         print(
-            f"  batch {batch.id}: {len(requests)} answers submitted",
+            f"  batch {batch_id}: {len(requests)} answers submitted",
             file=sys.stderr,
             flush=True,
         )
 
-        started = time.monotonic()
-        waited = 0
-        while batch.processing_status != "ended":
-            if time.monotonic() - started >= BATCH_MAX_WAIT_SECONDS or waited >= BATCH_MAX_WAIT_SECONDS:
-                # Cancel before giving up. An abandoned batch keeps running and
-                # bills on completion, and the recovery path is a fresh
-                # `reextract` rather than a reconnection, so without this the
-                # week could be paid for twice.
-                try:
-                    client.messages.batches.cancel(batch.id)
-                    print(f"  batch {batch.id}: cancelled", file=sys.stderr, flush=True)
-                except Exception as exc:  # noqa: BLE001 - report, keep the real error
-                    print(
-                        f"  batch {batch.id}: could not cancel ({exc}); it may still "
-                        f"complete and bill",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                raise TimeoutError(
-                    f"still {batch.processing_status} after {waited // 60} minutes"
-                )
-            time.sleep(min(BATCH_POLL_SECONDS, max(0, BATCH_MAX_WAIT_SECONDS - (time.monotonic() - started))))
-            waited += BATCH_POLL_SECONDS
-            batch = client.messages.batches.retrieve(batch.id)
-            if waited % 60 == 0:
-                c = batch.request_counts
-                print(
-                    f"  batch {batch.id}: {c.succeeded} done, {c.processing} left"
-                    f" ({waited // 60}m)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-        for entry in client.messages.batches.results(batch.id):
+        entries = collect_batch(checkpoint, api_key) if checkpoint else _batch_entries(client, batch)
+        for entry in entries:
             index = int(entry.custom_id[1:])
             if index < 0 or index >= len(bases) or entry.custom_id != f"x{index}":
                 raise ValueError("invalid batch result id")
@@ -631,4 +648,20 @@ def extract_run(
                     flush=True,
                 )
     return out
+
+
+if __name__ == "__main__":
+    import argparse
+    from .run import ROOT, load_local_env
+    from .storage import run_lock
+
+    parser = argparse.ArgumentParser(description="Collect an existing extraction batch without paid requests")
+    parser.add_argument("--collect-batch", required=True, type=Path)
+    args = parser.parse_args()
+    checkpoint = args.collect_batch.resolve()
+    if not checkpoint.is_relative_to((ROOT / ".unprompted").resolve()) or checkpoint.name != "batch.json":
+        parser.error("checkpoint must be a batch.json inside this checkout's .unprompted directory")
+    load_local_env()
+    with run_lock(ROOT / ".unprompted"):
+        print(f"Collected {len(collect_batch(checkpoint))} extraction results")
 

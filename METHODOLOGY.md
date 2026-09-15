@@ -388,8 +388,23 @@ the request. If the response or the subsequent ID write fails, the checkpoint
 remains ambiguous and blocks new paid work, including with `--ignore-budget`.
 Reconcile the provider job and its spend before resuming; do not delete that
 checkpoint to force a retry. Existing checkpoints with saved IDs still retrieve
-their original jobs. This protects submission at the same checkpoint; it does
-not establish complete accounting for every interrupted extraction result.
+their original jobs.
+
+New extraction jobs retain a complete raw result download before parsing. A
+timeout leaves the job running; an interrupted download can be retried without
+another submission. To collect an existing job, including one whose run was held:
+
+```powershell
+.\.venv\Scripts\python.exe -m unprompted.extract --collect-batch .unprompted/<date>/<category>/batch.json
+```
+
+For a re-extraction job, use `.unprompted/reextract/<date>/<category>/batch.json`.
+This command only retrieves and stores results; it does not publish a correction.
+Incomplete or invalid result ledgers block new spending. Completed ledgers reconcile
+extraction usage in the local budget without rewriting archived records or counting
+their usage twice. Both restart paths collect their existing jobs before checking
+the budget. Legacy checkpoints without the new result-ledger marker retain their
+previous accounting behavior; historical invoices have not been reconciled.
 
 A reproducible, blinded review packet can be prepared and scored using
 `scripts/review_extractions.py`, as described in

@@ -649,3 +649,28 @@ The current local ledger remains readable and has no ambiguous extraction job;
 its $132.37 recorded September spend still refuses the $19.64 coding estimate
 against the unchanged $150 ceiling. Complete accounting/recovery of interrupted
 extraction result downloads remains a separate gap. GitHub login is still waiting.
+
+## September 15: retain and account for interrupted extraction results
+
+New extraction jobs save a complete provider result download before parsing it.
+The collect-only CLI retrieves an existing job and cannot create one. Timeouts
+leave the known job running; incomplete downloads, missing/duplicate identities,
+or mismatched result files keep new spending blocked. Both measurement and
+re-extraction restarts collect their existing job before the budget check.
+Budget accounting reconciles complete extraction usage with its original archive
+in memory, or includes it as checkpoint-only spend before archival. It preserves
+the archive bytes and does not add already recorded usage a second time. Older
+checkpoints without the result-ledger marker keep their prior accounting behavior.
+
+Verification: 179 Python tests, 35 Node tests, typecheck and the 84-page production
+build passed. The final changes passed all 32 recovery tests. Offline cases cover
+timeout, interrupted download, cached parsing without provider access, both job
+locations, pre-budget collection, complete/partial archive accounting and invalid
+result populations. Current recorded September spend remains $132.3659 against
+the unchanged $150 ceiling. No archive, provider configuration or paid API call
+changed. The scheduled task remains Ready. GitHub's device login expired, so
+publishing and hosted validation remain blocked by authentication.
+
+Remaining evidence-backed follow-up: restart estimates still price a complete
+operation even when its paid answers/results are already cached. That can refuse
+a restart whose only remaining work is local parsing and publication.

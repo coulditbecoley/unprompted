@@ -218,6 +218,10 @@ def _run_category(
     if batch_state.exists():
         from .engines.anthropic_batch import collect
         collect(batch_state, engines["claude"].api_key)
+    extraction_state = checkpoint / "batch.json"
+    if extraction_state.exists() and json.loads(extraction_state.read_text(encoding="utf-8")).get("result_checkpoint_version") == 1:
+        from .extract import collect_batch
+        collect_batch(extraction_state)
 
     # The last pre-flight, and the only one that needs to know how big the run
     # is. Placed here for the same reason as the two above: everything it can

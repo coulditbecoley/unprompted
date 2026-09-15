@@ -94,6 +94,38 @@ def _archived_runs() -> list[dict]:
             saved = json.loads(job.read_text(encoding="utf-8"))
             if saved.get("submission_started") and not saved.get("id"):
                 raise ValueError(f"ambiguous extraction batch: reconcile {job} before new paid work")
+            if saved.get("result_checkpoint_version") != 1:
+                continue  # Older jobs have no complete result ledger to reconcile.
+            from .extract import read_batch_results, anthropic_usage
+
+            try:
+                entries = read_batch_results(job)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise ValueError(f"unaccounted extraction batch: collect {job} before new paid work") from exc
+            usage_by_answer = {
+                tuple(saved["answer_keys"][entry.custom_id]):
+                ({f"extract_{k}": v for k, v in anthropic_usage(entry.result.message).items()}
+                 if entry.result.type == "succeeded" else {})
+                for entry in entries
+            }
+            day, category = job.parent.parent.name, job.parent.name
+            archived = [r for r in out if (r.get("run_date"), r.get("category")) == (day, category)
+                        and bool(r.get("source_run")) == ("reextract" in job.relative_to(state).parts)]
+            if archived:
+                for record in archived:
+                    keys = {(e["engine"], e["question_id"], e["run_index"]) for e in record["extractions"]}
+                    if not set(usage_by_answer).issubset(keys):
+                        raise ValueError(f"extraction ledger differs from archive: {job}")
+                    # Reconcile only this in-memory accounting view. Frozen
+                    # archives remain untouched; already recorded usage is not added twice.
+                    for entry in record["extractions"]:
+                        key = (entry["engine"], entry["question_id"], entry["run_index"])
+                        if key in usage_by_answer:
+                            entry["usage"] = {**{k: v for k, v in (entry.get("usage") or {}).items()
+                                                 if not k.startswith("extract_")}, **usage_by_answer[key]}
+            else:
+                out.append({"category": category, "run_date": day, "extractor": "api", "checkpoint_only": True,
+                            "extractions": [{"engine": key[0], "usage": usage} for key, usage in usage_by_answer.items()]})
     for job in state.glob("????-??-??/*/claude-batch/state.json"):
         if not json.loads(job.read_text(encoding="utf-8")).get("collected"):
             raise ValueError(f"unaccounted Claude batch: collect {job} before new paid work")

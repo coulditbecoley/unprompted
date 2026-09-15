@@ -116,6 +116,16 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     assert "reused 3/3 saved calls; 0 calls remaining" in capsys.readouterr().err
     saved = tmp_path / ".unprompted/2026-09-14/alpha"
     assert len(list(saved.glob("fake-*.json"))) == 3
+    from unprompted import extract
+    order = []
+    write_json(saved / "batch.json", {"result_checkpoint_version": 1})
+    with monkeypatch.context() as patch:
+        patch.setattr(extract, "collect_batch", lambda path: order.append("collect"))
+        patch.setattr(run, "check_budget", lambda *args: order.append("budget") or SimpleNamespace(ok=True, message="offline"))
+        with pytest.raises(RuntimeError, match="extraction outage"):
+            run.run_category("alpha", "2026-09-14")
+    assert order == ["collect", "budget"]
+    (saved / "batch.json").unlink()
     answer_path = saved / "fake-q1-0.json"
     answer = json.loads(answer_path.read_text())
     assert answer["text"] == "Alpha"
@@ -238,14 +248,17 @@ def test_category_refusal_preserves_other_categories(monkeypatch, tmp_path):
 
 def test_batch_resume_binds_input_and_keeps_invalid_output_usage(tmp_path, monkeypatch):
     from unprompted import extract
+    from anthropic.types.messages import MessageBatchIndividualResponse
     calls = []
     batch = SimpleNamespace(id="offline-batch", processing_status="ended")
-    message = SimpleNamespace(content=[SimpleNamespace(text="not JSON")],
-                              usage=SimpleNamespace(input_tokens=101, output_tokens=7), stop_reason="end_turn")
+    reply = MessageBatchIndividualResponse.model_validate({"custom_id": "x0", "result": {
+        "type": "succeeded", "message": {"id": "offline", "type": "message", "role": "assistant", "model": "offline",
+        "content": [{"type": "text", "text": "not JSON"}], "usage": {"input_tokens": 101, "output_tokens": 7},
+        "stop_reason": "end_turn", "stop_sequence": None}}})
     batches = SimpleNamespace(
         create=lambda **kw: calls.append("create") or batch,
         retrieve=lambda key: calls.append("retrieve") or batch,
-        results=lambda key: [SimpleNamespace(custom_id="x0", result=SimpleNamespace(type="succeeded", message=message))],
+        results=lambda key: [reply],
     )
     monkeypatch.setattr(extract, "_client", lambda key: SimpleNamespace(messages=SimpleNamespace(batches=batches)))
     monkeypatch.setattr(extract, "_json_format", lambda: {"type": "json_schema", "schema": {}})
@@ -308,6 +321,82 @@ def test_extraction_batch_client_disables_automatic_post_retries(monkeypatch):
     assert all(value["max_retries"] == 0 for value in options)
 
 
+@pytest.mark.parametrize("operation", ["", "reextract"])
+@pytest.mark.parametrize("failure", ["download", "timeout"])
+def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, monkeypatch, operation, failure):
+    from anthropic.types.messages import MessageBatchIndividualResponse
+    from unprompted import budget, extract
+    from unprompted.cost import cost_of_run
+
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "data/runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
+    checkpoint = tmp_path / ".unprompted" / operation / "2026-09-15/alpha/batch.json"
+    batch = SimpleNamespace(id="offline", processing_status="in_progress" if failure == "timeout" else "ended")
+    monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 0)
+    calls = []
+    interrupted = True
+    replies = [MessageBatchIndividualResponse.model_validate({"custom_id": f"x{i}", "result": {
+        "type": "succeeded", "message": {"id": f"m{i}", "type": "message", "role": "assistant", "model": "offline",
+        "content": [{"type": "text", "text": 'not JSON'}],
+        "usage": {"input_tokens": 100 + i, "output_tokens": 7, "cache_read_input_tokens": 50},
+        "stop_reason": "end_turn", "stop_sequence": None}}}) for i in range(2)]
+
+    def results(key):
+        yield replies[0]
+        if interrupted:
+            raise ConnectionError("download interrupted")
+        yield replies[1]
+
+    batches = SimpleNamespace(create=lambda **kw: calls.append("create") or batch,
+                              retrieve=lambda key: calls.append("retrieve") or batch, results=results)
+    monkeypatch.setattr(extract, "_client", lambda key: SimpleNamespace(messages=SimpleNamespace(batches=batches)))
+    monkeypatch.setattr(extract, "_json_format", lambda: {"type": "json_schema", "schema": {}})
+    answers = [EngineAnswer("chatgpt", "q1", "Question", i, text="Alpha", usage={"input_tokens": 200}) for i in range(2)]
+    failed = extract.extract_all_batch(answers, checkpoint=checkpoint)
+    assert all(("remains pending" if failure == "timeout" else "download interrupted") in e.error for e in failed)
+    assert not (checkpoint.parent / "extraction-batch/results.json").exists()
+    assert not list(tmp_path.rglob(".pending-*"))
+    archived = {"category": "alpha", "run_date": "2026-09-15", "extractor": "api",
+                "extractions": [e.to_dict() for e in failed]}
+    if operation:
+        archived["source_run"] = "2026-09-14/alpha"
+    archive = tmp_path / "data/held/2026-09-15/alpha.json"
+    write_json(archive, archived)
+    original = archive.read_bytes()
+    with pytest.raises(ValueError, match="unaccounted extraction batch"):
+        budget._archived_runs()
+    interrupted = False
+    batch.processing_status = "ended"
+    assert len(extract.collect_batch(checkpoint)) == 2
+    monkeypatch.setattr(extract, "_client", lambda key: pytest.fail("cached results contacted provider"))
+    recovered = extract.extract_all_batch(answers, checkpoint=checkpoint)
+    assert calls.count("create") == 1
+    assert [e.usage["extract_input_tokens"] for e in recovered] == [100, 101]
+    assert all(e.error.startswith("extract failed") for e in recovered)
+    expected = {**archived, "extractions": [e.to_dict() for e in recovered]}
+    accounted = budget._archived_runs()
+    assert len(accounted) == 1
+    assert cost_of_run(accounted[0])[1] == cost_of_run(expected)[1] > cost_of_run(archived)[1]
+    assert budget._archived_runs() == accounted
+    assert archive.read_bytes() == original
+    # Also account for collection before any archive was written.
+    archive.unlink()
+    local = budget._archived_runs()
+    assert len(local) == 1 and local[0]["checkpoint_only"]
+    assert sum(e["usage"]["extract_input_tokens"] for e in local[0]["extractions"]) == 201
+    # A complete archive must not double-charge the local extraction ledger.
+    write_json(archive, expected)
+    assert len(budget._archived_runs()) == 1
+    assert cost_of_run(budget._archived_runs()[0])[1] == cost_of_run(expected)[1]
+    # Corrupt, mismatched, or incomplete downloads cannot unlock spending.
+    destination = checkpoint.parent / "extraction-batch/results.json"
+    saved = json.loads(destination.read_text())
+    for change in ({"entries": saved["entries"][:1]}, {"entries": [saved["entries"][0]] * 2}, {"id": "different-job"}):
+        write_json(destination, {**saved, **change}, replace=True)
+        with pytest.raises(ValueError, match="unaccounted extraction batch"):
+            budget._archived_runs()
+
+
 def test_held_readings_are_immutable_and_rereads_add_only_extraction(tmp_path, monkeypatch):
     from unprompted.cost import cost_of_run
     from unprompted.budget import spent_in_month
@@ -354,12 +443,17 @@ def test_recovery_budget_prices_only_new_extraction_without_erasing_prior_spend(
 
 
 def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):
-    from unprompted import reextract
+    from unprompted import reextract, extract
     from unprompted.models import Extraction
     monkeypatch.setattr(reextract, "ROOT", tmp_path)
     monkeypatch.setattr(reextract, "load_local_env", lambda: None)
     monkeypatch.setattr(reextract, "resolve_extractor", lambda: SimpleNamespace(id="offline", label="offline"))
+    collected = []
+    checkpoint = tmp_path / ".unprompted/reextract/2026-09-14/alpha/batch.json"
+    write_json(checkpoint, {"result_checkpoint_version": 1})
+    monkeypatch.setattr(extract, "collect_batch", lambda path: collected.append(path))
     def refuse(category, answers, *, extraction_only):
+        assert collected == [checkpoint]
         assert category == "alpha" and answers == 1 and extraction_only is True
         return SimpleNamespace(ok=False, message="offline ceiling")
     monkeypatch.setattr(reextract, "check_budget", refuse)

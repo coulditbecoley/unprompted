@@ -143,6 +143,10 @@ def _main() -> int:
     except ProviderError as exc:
         raise SystemExit(str(exc)) from exc
     hosted = isinstance(extractor, ApiExtractor)
+    checkpoint = ROOT / ".unprompted" / "reextract" / out_date / args.category / "batch.json"
+    if checkpoint.exists() and json.loads(checkpoint.read_text(encoding="utf-8")).get("result_checkpoint_version") == 1:
+        from .extract import collect_batch
+        collect_batch(checkpoint)
     verdict = check_budget(args.category, sum(not a.error for a in answers), extraction_only=True)
     if not verdict.ok:
         raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
@@ -156,7 +160,7 @@ def _main() -> int:
         None if hosted else extractor,
         max_workers=MAX_WORKERS,
         model=extractor.model if hosted else None,
-        checkpoint=ROOT / ".unprompted" / "reextract" / out_date / args.category / "batch.json",
+        checkpoint=checkpoint,
     )
 
     extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
