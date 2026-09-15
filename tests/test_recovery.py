@@ -103,7 +103,8 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
 
     monkeypatch.setattr(run, "all_engines", lambda: {"fake": FakeEngine()})
     monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
-    monkeypatch.setattr(run, "check_budget", lambda *args: SimpleNamespace(ok=True, message="offline"))
+    budget_requests = []
+    monkeypatch.setattr(run, "check_budget", lambda *args, **kwargs: budget_requests.append(kwargs) or SimpleNamespace(ok=True, message="offline"))
 
     def fail_after_answers(*args, **kwargs):
         raise RuntimeError("simulated extraction outage")
@@ -113,6 +114,7 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
         with pytest.raises(RuntimeError, match="extraction outage"):
             run.run_category("alpha", "2026-09-14")
     assert sorted(calls) == [0, 1, 2]
+    assert budget_requests == [{}, {"remaining": {"_extract": 3}}]
     assert "reused 3/3 saved calls; 0 calls remaining" in capsys.readouterr().err
     saved = tmp_path / ".unprompted/2026-09-14/alpha"
     assert len(list(saved.glob("fake-*.json"))) == 3
@@ -121,10 +123,16 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     write_json(saved / "batch.json", {"result_checkpoint_version": 1})
     with monkeypatch.context() as patch:
         patch.setattr(extract, "collect_batch", lambda path: order.append("collect"))
-        patch.setattr(run, "check_budget", lambda *args: order.append("budget") or SimpleNamespace(ok=True, message="offline"))
+        patch.setattr(run, "check_budget", lambda *args, **kwargs: order.append("budget") or SimpleNamespace(ok=True, message="offline"))
         with pytest.raises(RuntimeError, match="extraction outage"):
             run.run_category("alpha", "2026-09-14")
-    assert order == ["collect", "budget"]
+        missing = saved / "fake-q1-0.json"
+        original = missing.read_bytes()
+        missing.unlink()
+        with pytest.raises(ValueError, match="engine checkpoints are missing"):
+            run.run_category("alpha", "2026-09-14")
+        missing.write_bytes(original)
+    assert order == ["collect", "budget", "collect"]
     (saved / "batch.json").unlink()
     answer_path = saved / "fake-q1-0.json"
     answer = json.loads(answer_path.read_text())
@@ -138,6 +146,7 @@ def test_restart_reuses_paid_answers_and_rejects_changed_method(tmp_path, monkey
     assert "reused 2/3 saved calls; 1 calls remaining" in progress
     assert "3/3 calls (0 failed)" in progress
     assert calls.count(0) == 2 and len(calls) == 4
+    assert budget_requests[-1] == {"remaining": {"fake": 1, "_extract": 3}}
     assert json.loads(answer_path.read_text())["measurement_git_sha"] == "resumed-code"
     assert json.loads((saved / "fake-q1-1.json").read_text())["measurement_git_sha"] == "initial-code"
     legacy = {k: v for k, v in answer.items() if k != "measurement_git_sha"}
@@ -356,7 +365,7 @@ def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, mo
     assert all(("remains pending" if failure == "timeout" else "download interrupted") in e.error for e in failed)
     assert not (checkpoint.parent / "extraction-batch/results.json").exists()
     assert not list(tmp_path.rglob(".pending-*"))
-    archived = {"category": "alpha", "run_date": "2026-09-15", "extractor": "api",
+    archived = {"category": "alpha", "run_date": "2026-09-15", "extractor": "claude-api-extract",
                 "extractions": [e.to_dict() for e in failed]}
     if operation:
         archived["source_run"] = "2026-09-14/alpha"
@@ -440,6 +449,100 @@ def test_recovery_budget_prices_only_new_extraction_without_erasing_prior_spend(
     unpriced = {**record, "extractions": [{"engine": "chatgpt", "usage": {"input_tokens": 1_000_000}}]}
     fallback = budget.estimate_category("alpha", 10, [unpriced], extraction_only=True)
     assert not fallback.confident and fallback.dollars == round(10 * budget.FALLBACK_PER_ANSWER, 2)
+
+
+def test_restart_budget_prices_the_missing_engine_and_keeps_accounting_guard(monkeypatch):
+    from datetime import date
+    from unprompted import budget
+
+    history = {"category": "alpha", "run_date": date.today().isoformat(), "extractor": "api", "extractions": [
+        {"engine": "chatgpt", "usage": {"input_tokens": 1_000_000, "extract_input_tokens": 1_000_000}},
+        {"engine": "claude", "usage": {"input_tokens": 2_000_000, "extract_input_tokens": 1_000_000}}]}
+    monkeypatch.setattr(budget, "_archived_runs", lambda: [history])
+    engine_only = budget.estimate_remaining("alpha", {"claude": 1}, [history])
+    expected = budget.estimate_category("alpha", 1, [{**history, "extractions": [
+        {"engine": "claude", "usage": {"input_tokens": 2_000_000}}]}])
+    assert engine_only.dollars == expected.dollars
+    both = budget.estimate_remaining("alpha", {"claude": 1, "_extract": 2}, [history])
+    assert both.dollars == round(engine_only.dollars + budget.estimate_category("alpha", 2, [history], extraction_only=True).dollars, 2)
+    assert not budget.estimate_remaining("alpha", {"unknown": 1}, [history]).confident
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 0.01)
+    assert not budget.check("alpha", 2, remaining={"claude": 1}).ok
+    free = budget.check("alpha", 2, remaining={"_extract": 0})
+    assert free.ok and free.spent > free.ceiling and free.estimate.dollars == 0
+    assert budget.check("alpha", 0, extraction_only=True).ok
+    for count in (-1, True, 0.5):
+        with pytest.raises(ValueError):
+            budget.check("alpha", 2, remaining={"claude": count})
+    def unknown_spend():
+        raise ValueError("unaccounted batch")
+    monkeypatch.setattr(budget, "_archived_runs", unknown_spend)
+    with pytest.raises(ValueError, match="unaccounted batch"):
+        budget.check("alpha", 2, remaining={"_extract": 0})
+
+
+@pytest.mark.parametrize("operation", ["measurement", "reextract"])
+def test_fully_cached_restart_publishes_above_budget_without_paid_calls(tmp_path, monkeypatch, operation):
+    from datetime import date
+    from anthropic.types.messages import MessageBatchIndividualResponse
+    from unprompted import budget, extract, reextract
+    from unprompted.cli_provider import ApiExtractor
+    from unprompted.models import Extraction
+
+    today = date.today().isoformat()
+    module = run if operation == "measurement" else reextract
+    for target in (run, reextract):
+        monkeypatch.setattr(target, "ROOT", tmp_path)
+        monkeypatch.setattr(target, "load_local_env", lambda: None)
+        monkeypatch.setattr(target, "git_sha", lambda: "offline-revision")
+        monkeypatch.setattr(target, "resolve_extractor", lambda: ApiExtractor("claude-api-extract", "offline", "offline", "UNUSED"))
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "data/runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 0.000001)
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical:\n  Alpha: []\n  Beta: []\n")
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha\nmethod_version: 1\nruns_per_question: 1\nquestions:\n  - id: q1\n    text: Which brand?\n")
+    calls = []
+    class Engine:
+        name = "chatgpt"
+        grounds = False
+        is_configured = True
+        def ask_one(self, qid, text, index):
+            calls.append("engine")
+            return EngineAnswer(self.name, qid, text, index, text="Alpha and Beta", usage={"input_tokens": 2_000_000})
+    for target in (run, reextract):
+        monkeypatch.setattr(target, "all_engines", lambda: {"chatgpt": Engine()})
+    batch = SimpleNamespace(id="offline", processing_status="ended")
+    reply = MessageBatchIndividualResponse.model_validate({"custom_id": "x0", "result": {
+        "type": "succeeded", "message": {"id": "offline", "type": "message", "role": "assistant", "model": "offline",
+        "content": [{"type": "text", "text": '{"refused":false,"brands":[{"name":"Alpha","position":1,"sentiment":"positive"},{"name":"Beta","position":2,"sentiment":"positive"}]}'}],
+        "usage": {"input_tokens": 1000, "output_tokens": 50}, "stop_reason": "end_turn", "stop_sequence": None}}})
+    batches = SimpleNamespace(create=lambda **kw: calls.append("extract") or batch,
+                              retrieve=lambda key: batch, results=lambda key: [reply])
+    monkeypatch.setattr(extract, "_client", lambda key: SimpleNamespace(messages=SimpleNamespace(batches=batches)))
+    monkeypatch.setattr(extract, "_json_format", lambda: {"type": "json_schema", "schema": {}})
+    if operation == "reextract":
+        write_json(tmp_path / "data/held/2000-01-01/alpha.json", RunRecord("alpha", "2000-01-01", 1, 1, ["chatgpt"],
+            extractions=[Extraction("chatgpt", "q1", 0, answer="Alpha and Beta", usage={"input_tokens": 2_000_000})]).to_dict())
+        monkeypatch.setattr(run.sys, "argv", ["reextract", "2000-01-01", "--category", "alpha", "--out-date", today])
+    def invoke():
+        return run.run_category("alpha", today) if operation == "measurement" else reextract.main()
+    def crash(*args, **kwargs):
+        raise RuntimeError("crash before publication")
+    with monkeypatch.context() as patch:
+        patch.setattr(module, "check_budget", lambda *a, **kw: SimpleNamespace(ok=True, message="offline first attempt"))
+        patch.setattr(module, "persist", crash)
+        with pytest.raises(RuntimeError, match="crash before publication"):
+            invoke()
+    spent = budget.spent_in_month(date.today())
+    assert spent > budget.MONTHLY_CEILING
+    before = list(calls)
+    monkeypatch.setattr(extract, "_client", lambda key: pytest.fail("cached restart contacted provider"))
+    invoke()
+    assert (tmp_path / f"data/runs/{today}/alpha.json").exists()
+    assert calls == before and calls.count("extract") == 1
+    assert budget.spent_in_month(date.today()) == spent
 
 
 def test_reextract_refuses_budget_before_calls(tmp_path, monkeypatch):

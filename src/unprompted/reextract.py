@@ -147,7 +147,10 @@ def _main() -> int:
     if checkpoint.exists() and json.loads(checkpoint.read_text(encoding="utf-8")).get("result_checkpoint_version") == 1:
         from .extract import collect_batch
         collect_batch(checkpoint)
-    verdict = check_budget(args.category, sum(not a.error for a in answers), extraction_only=True)
+    from .extract import _base_for
+    cached_extraction = hosted and checkpoint.exists() and json.loads(checkpoint.read_text(encoding="utf-8")).get("id")
+    remaining = 0 if cached_extraction else sum(_base_for(a)[1] for a in answers)
+    verdict = check_budget(args.category, remaining, extraction_only=True)
     if not verdict.ok:
         raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
     print(

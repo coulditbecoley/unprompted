@@ -124,7 +124,7 @@ def _archived_runs() -> list[dict]:
                             entry["usage"] = {**{k: v for k, v in (entry.get("usage") or {}).items()
                                                  if not k.startswith("extract_")}, **usage_by_answer[key]}
             else:
-                out.append({"category": category, "run_date": day, "extractor": "api", "checkpoint_only": True,
+                out.append({"category": category, "run_date": day, "extractor": "claude-api-extract", "checkpoint_only": True,
                             "extractions": [{"engine": key[0], "usage": usage} for key, usage in usage_by_answer.items()]})
     for job in state.glob("????-??-??/*/claude-batch/state.json"):
         if not json.loads(job.read_text(encoding="utf-8")).get("collected"):
@@ -221,7 +221,29 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     )
 
 
-def check(category: str, answers: int, when: date | None = None, *, extraction_only: bool = False) -> Verdict:
+def estimate_remaining(category: str, remaining: dict[str, int], runs: list[dict]) -> Estimate:
+    """Price missing engine calls and extraction separately on a restart."""
+    estimates = []
+    for engine, count in remaining.items():
+        if not isinstance(engine, str) or not engine or type(count) is not int or count < 0:
+            raise ValueError("remaining calls require engine names and nonnegative integer counts")
+        if count == 0:
+            continue
+        history = runs if engine == "_extract" else [
+            {**r, "extractions": [{**e, "usage": {k: v for k, v in (e.get("usage") or {}).items()
+                                                  if not k.startswith("extract_")}}
+                                  for e in r.get("extractions", []) if e.get("engine") == engine]}
+            for r in runs
+        ]
+        estimate = estimate_category(category, count, history, extraction_only=engine == "_extract")
+        estimates.append(Estimate(estimate.dollars, f"{count} {engine}: {estimate.basis}", estimate.confident))
+    return Estimate(round(sum(e.dollars for e in estimates), 2),
+                    "; ".join(e.basis for e in estimates) or "no new paid calls",
+                    all(e.confident for e in estimates))
+
+
+def check(category: str, answers: int, when: date | None = None, *, extraction_only: bool = False,
+          remaining: dict[str, int] | None = None) -> Verdict:
     """May this category run without taking the month over its ceiling?
 
     A ceiling of zero means none is set, and this always allows the run. Opt-in
@@ -229,9 +251,16 @@ def check(category: str, answers: int, when: date | None = None, *, extraction_o
     a Monday the first time it is wrong, is a guard that gets deleted.
     """
     when = when or date.today()
+    if type(answers) is not int or answers < 0:
+        raise ValueError("answer count must be a nonnegative integer")
     runs = _archived_runs()
     spent = spent_in_month(when, runs)
-    estimate = estimate_category(category, answers, runs, extraction_only=extraction_only)
+    estimate = (estimate_remaining(category, remaining, runs) if remaining is not None else
+                estimate_category(category, answers, runs, extraction_only=extraction_only))
+    no_paid_calls = not any(remaining.values()) if remaining is not None else answers == 0
+    if no_paid_calls:
+        return Verdict(True, spent, estimate, MONTHLY_CEILING,
+                       f"${spent:.2f} recorded this month; no new paid calls remain for {category}.")
 
     if MONTHLY_CEILING <= 0:
         return Verdict(

@@ -406,6 +406,14 @@ their usage twice. Both restart paths collect their existing jobs before checkin
 the budget. Legacy checkpoints without the new result-ledger marker retain their
 previous accounting behavior; historical invoices have not been reconciled.
 
+Restart estimates cover missing engine calls by engine, plus answers still needing
+extraction. Cached usage remains in recorded spend. When no new paid calls remain,
+local parsing and publication can finish even above the monthly ceiling; unresolved
+or unreadable accounting still blocks the restart. A saved extraction batch with
+missing engine checkpoints refuses to query replacements that would no longer
+match that batch's inputs. Checkpoint-only extraction spend uses the same batch
+discount as the completed archive.
+
 A reproducible, blinded review packet can be prepared and scored using
 `scripts/review_extractions.py`, as described in
 [READING-REVIEW.md](https://github.com/coulditbecoley/unprompted/blob/main/READING-REVIEW.md).

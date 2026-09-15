@@ -16,6 +16,7 @@ import subprocess
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -223,22 +224,6 @@ def _run_category(
         from .extract import collect_batch
         collect_batch(extraction_state)
 
-    # The last pre-flight, and the only one that needs to know how big the run
-    # is. Placed here for the same reason as the two above: everything it can
-    # refuse, it refuses before a single call is billed. The expensive failure
-    # is not a run that does not happen, it is one that stops halfway -- which
-    # is what a spend cap did on 2026-08-24, leaving a category measured on two
-    # and two-thirds engines and a chart that had to be caveated in public.
-    verdict = check_budget(category, len(tasks))
-    print(f"  budget: {verdict.message.splitlines()[0]}", file=sys.stderr)
-    if not verdict.ok:
-        if ignore_budget:
-            print("  --ignore-budget: running anyway", file=sys.stderr)
-        else:
-            raise SystemExit(f"Refusing to start {category}.\n{verdict.message}")
-
-    if not manifest.exists():
-        write_json(manifest, methodology)
     answers = []
     pending = []
     for engine, qid, text, run_index in tasks:
@@ -250,6 +235,32 @@ def _run_category(
             answers.append(answer)
         else:
             pending.append((engine, qid, text, run_index))
+    if extraction_state.exists() and pending:
+        raise ValueError("extraction batch exists but engine checkpoints are missing; reconcile before spending")
+
+    # The last pre-flight, and the only one that needs to know how big the run
+    # is. Placed here for the same reason as the two above: everything it can
+    # refuse, it refuses before a single call is billed. The expensive failure
+    # is not a run that does not happen, it is one that stops halfway -- which
+    # is what a spend cap did on 2026-08-24, leaving a category measured on two
+    # and two-thirds engines and a chart that had to be caveated in public.
+    if answers:
+        from .extract import _base_for
+        remaining = Counter(engine.name for engine, *_ in pending)
+        cached_extraction = hosted and extraction_state.exists() and json.loads(extraction_state.read_text(encoding="utf-8")).get("id")
+        remaining["_extract"] = 0 if cached_extraction else len(pending) + sum(_base_for(a)[1] for a in answers)
+        verdict = check_budget(category, len(tasks), remaining=dict(remaining))
+    else:
+        verdict = check_budget(category, len(tasks))
+    print(f"  budget: {verdict.message.splitlines()[0]}", file=sys.stderr)
+    if not verdict.ok:
+        if ignore_budget:
+            print("  --ignore-budget: running anyway", file=sys.stderr)
+        else:
+            raise SystemExit(f"Refusing to start {category}.\n{verdict.message}")
+
+    if not manifest.exists():
+        write_json(manifest, methodology)
     if answers:
         print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):

@@ -674,3 +674,26 @@ publishing and hosted validation remain blocked by authentication.
 Remaining evidence-backed follow-up: restart estimates still price a complete
 operation even when its paid answers/results are already cached. That can refuse
 a restart whose only remaining work is local parsing and publication.
+
+## September 15: price only work still needed on restart
+
+Checkpoint validation now precedes restart estimation. Missing engine calls are
+priced from each engine's history, and extraction is estimated separately for
+the remaining answers. A known extraction job is retrieved rather than priced
+as a new submission. Fully cached work can finish local parsing and publication
+above the monthly ceiling, while unresolved accounting still refuses it. A batch
+whose original engine checkpoints are missing refuses replacement queries before
+spending on answers that would not match its frozen input identity.
+
+The end-to-end check also exposed and corrected the previous cycle's temporary
+ledger extractor ID: `api` did not qualify for the configured batch discount.
+The local extraction ledger now uses `claude-api-extract`, matching publication.
+
+Verification: 182 Python tests, 35 Node tests and the production build (including
+TypeScript and 84 pages) passed. Simulated crashes before publication in both
+measurement and re-extraction finish above the ceiling without another provider
+call; recorded spend stays unchanged when checkpoints become an archive. Partial
+restarts price only the missing engine and outstanding extraction, and unknown
+spend still blocks zero-new-call restarts. Current fresh-week estimates remain
+unchanged: coding is $19.64 against $132.3659 already recorded and a $150 ceiling,
+so it is still refused. No paid calls, historical data or budget settings changed.

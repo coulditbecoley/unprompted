@@ -133,7 +133,7 @@ def test_orchestrator_uses_batch_and_restarts_without_sync_fallback(tmp_path, mo
         "questions": [{"id": "q1", "text": "Which brand?"}]})
     monkeypatch.setattr(run, "all_engines", lambda: {"claude": engine})
     monkeypatch.setattr(run, "resolve_extractor", lambda: NS(id="fake", label="fake"))
-    monkeypatch.setattr(run, "check_budget", lambda *args: NS(ok=True, message="offline"))
+    monkeypatch.setattr(run, "check_budget", lambda *args, **kwargs: NS(ok=True, message="offline"))
     engine.ask_one = lambda *args: pytest.fail("weekly path used full-price synchronous request")
     def extract(answers, *args, **kwargs):
         assert len(answers) == 1 and answers[0].usage["batch_billed"] == 1
