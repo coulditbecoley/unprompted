@@ -603,3 +603,14 @@ Tuesday 09:00 UTC scheduled check remains unchanged. Boundary checks cover
 Monday evening, Tuesday just before/at the deadline, and winter dates.
 This deadline covers the scheduled start; a delayed catch-up can still trigger
 an alert, appropriately distinguishing lateness from guaranteed completion.
+
+## September 15: refuse paid work when the push transport is unavailable
+
+Live GitHub authentication failed after the prior scheduling audit. A public
+repository still permits an unauthenticated pull, so the launcher could spend
+the week before discovering that publication was impossible. It now runs a
+non-mutating push dry-run before provider calls. The existing Windows acceptance
+test keeps fetch available while breaking the push endpoint, verifies no new
+measurement invocation, and checks the failure status stays in local state.
+This verifies the push transport now, not future availability or server hooks.
+Credential repair is still required; no credentials or budget were changed.

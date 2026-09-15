@@ -75,6 +75,16 @@ if not "%METHOD_SIZE%"=="0" (
   exit /b 1
 )
 
+REM A public clone can pull even when publishing credentials have expired.
+REM Check the push transport before paid work; dry-run changes no remote refs.
+REM This cannot guarantee later network availability or server-side hooks.
+git push --dry-run origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
+if errorlevel 1 (
+  echo ABORT: publication preflight failed before measurement. >> "%TEMP%\unprompted-weekly.log"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Publication preflight failed before any provider calls. Check GitHub authentication and the origin push URL; git push --dry-run origin HEAD:main must succeed." >> "%TEMP%\unprompted-weekly.log" 2>&1
+  exit /b 1
+)
+
 "%UNPROMPTED_PYTHON%" -m unprompted.run --category all --summary-file .unprompted\weekly-summary.json >> "%TEMP%\unprompted-weekly.log" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
 

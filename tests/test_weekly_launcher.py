@@ -80,6 +80,12 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     launch(1)
     assert invocations.read_text() == "run\n"
     git("switch", "main")
+    # Fetch remains valid while the push endpoint is unavailable: no paid calls.
+    git("config", "remote.origin.pushurl", str(tmp_path / "unavailable.git"))
+    launch(1)
+    assert invocations.read_text() == "run\n"
+    assert (repo / ".unprompted/attempt.json").read_text() == "failed"
+    git("config", "--unset", "remote.origin.pushurl")
     env["TEST_PIPELINE_EXIT"] = "2"
     launch(2)
     assert invocations.read_text() == "run\nrun\n"
