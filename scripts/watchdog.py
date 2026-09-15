@@ -37,14 +37,9 @@ RUNS = REPO / "data" / "runs"
 HELD = REPO / "data" / "held"
 STATUS_FILE = REPO / "data" / "last-run.json"
 
-# How long after Monday 13:00 America/New_York a missing run counts as missing
-# rather than as still in progress. A full week takes tens of minutes; this is
-# generous enough that a slow run is never reported as a dead one.
-#
-# Four, not six: the cutoff below is 18:00 UTC plus this, and six would put it
-# at midnight, where "before the deadline" is true for every hour of Monday and
-# a Monday-evening check would silently report the *previous* week as missing.
-GRACE_HOURS = 4
+# Match the installed task's eight-hour execution limit. Use the latest UTC
+# start (18:00 in winter) year-round: summer alarms get one extra hour.
+GRACE_HOURS = 8
 
 
 def live_categories() -> list[str]:
@@ -60,21 +55,13 @@ def live_categories() -> list[str]:
 
 
 def most_recent_monday(today: date, observed_at: datetime | None = None) -> date:
-    """The Monday whose run should exist by now.
-
-    Today's Monday counts only once the grace period has passed; before that a
-    run in progress is not a missing one. Any other day looks back to the last
-    Monday, so a Wednesday check still catches a Monday that never happened.
-    """
+    """The most recent Monday whose full execution window has elapsed."""
     monday = today - timedelta(days=today.weekday())
-    if today.weekday() == 0:
-        now = observed_at or datetime.now(timezone.utc)
-        # Monday 13:00 New York is 17:00 UTC in summer, 18:00 in winter. Using
-        # the later of the two plus the grace period keeps this correct all
-        # year without a timezone dependency: being an hour cautious can only
-        # delay an alarm, never raise a false one.
-        if now.hour < 18 + GRACE_HOURS:
-            monday -= timedelta(days=7)
+    now = observed_at or datetime.now(timezone.utc)
+    deadline = datetime.combine(monday, datetime.min.time(), tzinfo=timezone.utc) + timedelta(hours=18 + GRACE_HOURS)
+    # Compare instants, not hours: the deadline crosses into Tuesday.
+    if now < deadline:
+        monday -= timedelta(days=7)
     return monday
 
 
@@ -166,7 +153,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    today = date.fromisoformat(args.date) if args.date else date.today()
+    today = date.fromisoformat(args.date) if args.date else datetime.now(timezone.utc).date()
     monday = most_recent_monday(today, datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc) if args.date else None)
     produced, missing, unstarted = week_status(monday)
 

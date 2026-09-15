@@ -92,7 +92,16 @@ def test_watchdog_requires_this_weeks_measurement_not_a_reread(tmp_path, monkeyp
     spec = importlib.util.spec_from_file_location("watchdog_audit", ROOT / "scripts/watchdog.py")
     wd = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(wd)
-    from datetime import date
+    from datetime import date, datetime
+    for timestamp, expected in [
+        ("2026-09-14T22:00:00+00:00", date(2026, 9, 7)),
+        ("2026-09-15T01:59:59+00:00", date(2026, 9, 7)),
+        ("2026-09-15T02:00:00+00:00", date(2026, 9, 14)),
+        ("2026-11-03T01:59:59+00:00", date(2026, 10, 26)),
+        ("2026-11-03T02:00:00+00:00", date(2026, 11, 2)),
+    ]:
+        instant = datetime.fromisoformat(timestamp)
+        assert wd.most_recent_monday(instant.date(), instant) == expected
     questions = tmp_path / "questions"
     questions.mkdir()
     (questions / "alpha.yml").write_text("questions: []")

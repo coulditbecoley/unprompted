@@ -591,3 +591,15 @@ request. Existing alias-map regression checks remain green. This does not establ
 complete configuration-parser equivalence. At 14:24 local the scheduled task was
 still Running, with 0 of 375 batch results ready after 42 minutes. Main remains
 untouched while that job runs.
+
+## September 15: align the watchdog with the full execution window
+
+Confirmed that category persistence already runs inside the paid-work lock;
+no lock change was needed. The watchdog's four-hour grace did not cover the
+installed task's eight-hour allowance. It now compares complete UTC instants
+through Tuesday 02:00 UTC, allowing the latest winter start plus eight hours
+(one extra hour in summer). Default dates use UTC consistently. The existing
+Tuesday 09:00 UTC scheduled check remains unchanged. Boundary checks cover
+Monday evening, Tuesday just before/at the deadline, and winter dates.
+This deadline covers the scheduled start; a delayed catch-up can still trigger
+an alert, appropriately distinguishing lateness from guaranteed completion.
