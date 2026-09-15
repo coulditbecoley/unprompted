@@ -383,6 +383,14 @@ Recovery currently requires the supported hosted extractor. Local CLI extraction
 is disabled pending isolation qualification; enabling a registry entry does not
 make it available. No independent cross-extractor validation is claimed.
 
+Extraction batch submission also disables SDK retries and saves intent before
+the request. If the response or the subsequent ID write fails, the checkpoint
+remains ambiguous and blocks new paid work, including with `--ignore-budget`.
+Reconcile the provider job and its spend before resuming; do not delete that
+checkpoint to force a retry. Existing checkpoints with saved IDs still retrieve
+their original jobs. This protects submission at the same checkpoint; it does
+not establish complete accounting for every interrupted extraction result.
+
 A reproducible, blinded review packet can be prepared and scored using
 `scripts/review_extractions.py`, as described in
 [READING-REVIEW.md](https://github.com/coulditbecoley/unprompted/blob/main/READING-REVIEW.md).

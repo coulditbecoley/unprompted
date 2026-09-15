@@ -261,6 +261,53 @@ def test_batch_resume_binds_input_and_keeps_invalid_output_usage(tmp_path, monke
     assert calls == ["create", "retrieve"]
 
 
+@pytest.mark.parametrize("failure", ["response", "checkpoint"])
+@pytest.mark.parametrize("operation", ["", "reextract"])
+def test_ambiguous_extraction_submission_never_resubmits(tmp_path, monkeypatch, failure, operation):
+    from unprompted import budget, extract
+
+    checkpoint = tmp_path / ".unprompted" / operation / "2026-09-15/alpha/batch.json"
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "data/runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
+    calls = []
+
+    def create(**kwargs):
+        assert json.loads(checkpoint.read_text())["submission_started"] is True
+        calls.append("create")
+        if failure == "response":
+            raise TimeoutError("provider accepted, response lost")
+        return SimpleNamespace(id="accepted-job", processing_status="ended")
+
+    def save(path, value, **kwargs):
+        if failure == "checkpoint" and value.get("id"):
+            raise OSError("cannot save accepted job id")
+        write_json(path, value, **kwargs)
+
+    monkeypatch.setattr(extract, "write_json", save)
+    monkeypatch.setattr(extract, "_client", lambda key: SimpleNamespace(
+        messages=SimpleNamespace(batches=SimpleNamespace(create=create))))
+    monkeypatch.setattr(extract, "_json_format", lambda: {"type": "json_schema", "schema": {}})
+    answer = EngineAnswer("fake", "q1", "Question", 0, text="Alpha")
+    first = extract.extract_all_batch([answer], checkpoint=checkpoint)[0]
+    second = extract.extract_all_batch([answer], checkpoint=checkpoint)[0]
+    assert first.error and first.answer == "Alpha"
+    assert "ambiguous extraction batch" in second.error
+    assert calls == ["create"]
+    with pytest.raises(ValueError, match="ambiguous extraction batch"):
+        budget._archived_runs()
+
+
+def test_extraction_batch_client_disables_automatic_post_retries(monkeypatch):
+    import anthropic
+    from unprompted import extract
+
+    options = []
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **kwargs: options.append(kwargs))
+    extract._client("offline-key")
+    extract._client(None)
+    assert all(value["max_retries"] == 0 for value in options)
+
+
 def test_held_readings_are_immutable_and_rereads_add_only_extraction(tmp_path, monkeypatch):
     from unprompted.cost import cost_of_run
     from unprompted.budget import spent_in_month

@@ -89,6 +89,11 @@ def _archived_runs() -> list[dict]:
     # A crash before publication does not make checkpointed engine calls free.
     completed = {(r.get("run_date"), r.get("category")) for r in out if not r.get("source_run")}
     state = RUNS_DIR.parent.parent / ".unprompted"
+    for pattern in ("????-??-??/*/batch.json", "reextract/????-??-??/*/batch.json"):
+        for job in state.glob(pattern):
+            saved = json.loads(job.read_text(encoding="utf-8"))
+            if saved.get("submission_started") and not saved.get("id"):
+                raise ValueError(f"ambiguous extraction batch: reconcile {job} before new paid work")
     for job in state.glob("????-??-??/*/claude-batch/state.json"):
         if not json.loads(job.read_text(encoding="utf-8")).get("collected"):
             raise ValueError(f"unaccounted Claude batch: collect {job} before new paid work")

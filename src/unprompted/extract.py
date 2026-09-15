@@ -333,12 +333,13 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
 
 
 def _client(api_key: str | None):
+    """Batch client: a retried POST could create a second billable job."""
     from anthropic import Anthropic
 
     return (
-        Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS)
+        Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
         if api_key
-        else Anthropic(timeout=TIMEOUT_SECONDS)
+        else Anthropic(timeout=TIMEOUT_SECONDS, max_retries=0)
     )
 
 
@@ -474,13 +475,20 @@ def extract_all_batch(
         saved = json.loads(checkpoint.read_text(encoding="utf-8")) if checkpoint and checkpoint.exists() else None
         if saved and saved.get("identity") != identity:
             raise ValueError("batch checkpoint identity differs; preserve it and use a new output date")
+        if saved is not None and not saved.get("id"):
+            raise ValueError("ambiguous extraction batch submission; reconcile the provider job before retrying")
         client = _client(api_key)
         if checkpoint and checkpoint.exists():
             batch = client.messages.batches.retrieve(saved["id"])
         else:
+            # The POST can succeed even when its response is lost. Persist intent
+            # first and disable SDK retries so a restart cannot submit it twice.
+            intent = {"identity": identity, "model": model, "answers": len(requests), "submission_started": True}
+            if checkpoint:
+                write_json(checkpoint, intent)
             batch = client.messages.batches.create(requests=requests)
             if checkpoint:
-                write_json(checkpoint, {"id": batch.id, "identity": identity, "model": model, "answers": len(requests)})
+                write_json(checkpoint, {**intent, "id": batch.id}, replace=True)
         batch_id = batch.id
         print(
             f"  batch {batch.id}: {len(requests)} answers submitted",
@@ -553,8 +561,8 @@ def extract_all_batch(
             flush=True,
         )
         print(
-            "  the week will be held with every answer intact; re-read it with "
-            "python -m unprompted.reextract",
+            "  raw answers are retained; inspect the batch checkpoint before "
+            "re-reading. An ambiguous submission requires provider reconciliation.",
             file=sys.stderr,
             flush=True,
         )

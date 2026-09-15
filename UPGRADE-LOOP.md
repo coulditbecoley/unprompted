@@ -633,3 +633,19 @@ identity validation and temporary-file cleanup. The final date-scoping change
 passed all 23 recovery tests; the September 14 CLI invocation was a clean no-op.
 The missing August 21 retired-category note was left untouched. GitHub device
 login remained pending; no paid calls or notifications were sent.
+
+## September 15: prevent ambiguous extraction batch resubmission
+
+The extractor still used SDK retries and saved its batch checkpoint only after
+the POST returned. It now disables those retries, writes submission intent
+before the POST, and atomically adds the returned ID. A restart with no saved
+ID refuses to submit again. The budget guard also refuses new paid work when
+either a measurement or re-extraction checkpoint has ambiguous submission intent.
+Existing ID-bearing checkpoints keep their retrieve-only restart behavior.
+
+Verification: all 175 Python tests passed, including lost-response and failed-ID-
+write cases for both checkpoint locations, plus the actual client retry options.
+The current local ledger remains readable and has no ambiguous extraction job;
+its $132.37 recorded September spend still refuses the $19.64 coding estimate
+against the unchanged $150 ceiling. Complete accounting/recovery of interrupted
+extraction result downloads remains a separate gap. GitHub login is still waiting.
