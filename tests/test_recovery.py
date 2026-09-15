@@ -9,6 +9,53 @@ from unprompted.models import EngineAnswer, RunRecord
 from unprompted.storage import run_lock, write_json
 
 
+def test_report_failure_recovers_offline_without_rewriting_archives(tmp_path, monkeypatch):
+    from unprompted import report, storage
+
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("affiliations: {}", encoding="utf-8")
+    record = RunRecord("alpha", "2026-09-14", 1, 1, ["fake"])
+    link = storage.os.link
+
+    def fail_report(source, destination):
+        if destination.suffix == ".md":
+            raise OSError("simulated report write failure")
+        return link(source, destination)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(storage.os, "link", fail_report)
+        with pytest.raises(OSError, match="report write failure"):
+            run.persist(record, [])
+    archive = tmp_path / "data/runs/2026-09-14/alpha.json"
+    original = archive.read_bytes()
+    assert not list(tmp_path.rglob(".pending-*"))
+    assert not list(tmp_path.rglob("*.md"))
+    run.persist(RunRecord("held", "2026-09-14", 1, 1, []), ["held"])
+    recovered = report.recover_reports(tmp_path, "2026-09-14")
+    assert len(recovered) == 1
+    assert "# Alpha, measured 2026-09-14" in recovered[0].read_text(encoding="utf-8")
+    saved_report = recovered[0].read_bytes()
+    assert report.recover_reports(tmp_path, "2026-09-14") == []
+    with pytest.raises(ValueError):
+        report.recover_reports(tmp_path, "../escape")
+    with pytest.raises(FileExistsError):
+        report.write_report(json.loads(original), tmp_path)
+    assert archive.read_bytes() == original
+    assert recovered[0].read_bytes() == saved_report
+    invalid = json.loads(original)
+    invalid["category"] = "../escape"
+    with pytest.raises(ValueError, match="invalid category"):
+        report.write_report(invalid, tmp_path)
+    invalid["category"] = "alpha"
+    invalid["publication_checks"]["passed"] = False
+    with pytest.raises(ValueError, match="held records"):
+        report.write_report(invalid, tmp_path)
+    write_json(tmp_path / "data/runs/2026-09-14/wrong.json", json.loads(original))
+    with pytest.raises(ValueError, match="archive identity"):
+        report.recover_reports(tmp_path, "2026-09-14")
+
+
 def test_atomic_publication_and_lock(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "write_report", lambda data, root: root / "report.md")

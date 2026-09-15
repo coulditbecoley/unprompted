@@ -614,3 +614,22 @@ test keeps fetch available while breaking the push endpoint, verifies no new
 measurement invocation, and checks the failure status stays in local state.
 This verifies the push transport now, not future availability or server hooks.
 Credential repair is still required; no credentials or budget were changed.
+
+## September 15: recover missing reports without repeating paid work
+
+Publication saves immutable JSON before rendering its Markdown note. A failed
+report write therefore leaves a valid archive that cannot be measured again at
+the same identity, and vault sync cannot recreate the missing note. The report
+module now accepts an explicit date for offline recovery of missing notes from
+published records. Existing notes and held records stay untouched. Text and JSON
+share the existing durable atomic writer, including exclusive creation and
+temporary-file cleanup. Recovery uses today's renderer and available history;
+it does not claim to recreate the exact historical rendering environment.
+
+Verification: 170 Python tests, 35 Node tests, typecheck and the 84-page production
+build passed. The recovery test injects failure after JSON persistence, then
+verifies offline report recovery, immutable records/notes, held-record refusal,
+identity validation and temporary-file cleanup. The final date-scoping change
+passed all 23 recovery tests; the September 14 CLI invocation was a clean no-op.
+The missing August 21 retired-category note was left untouched. GitHub device
+login remained pending; no paid calls or notifications were sent.

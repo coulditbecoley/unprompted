@@ -7,12 +7,15 @@ from pathlib import Path
 
 
 def write_json(path: Path, value: object, *, replace: bool = False) -> None:
+    write_text(path, json.dumps(value, indent=2, sort_keys=True) + "\n", replace=replace)
+
+
+def write_text(path: Path, value: str, *, replace: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".pending-", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(value, stream, indent=2, sort_keys=True)
-            stream.write("\n")
+            stream.write(value)
             stream.flush()
             os.fsync(stream.fileno())
         if replace:

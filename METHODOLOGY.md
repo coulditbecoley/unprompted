@@ -394,6 +394,18 @@ answers in `data/runs/` allow readers to inspect the evidence behind each count.
 
 ## Corrections
 
+If a published JSON record survived a report-writing failure, recover missing
+Markdown notes without repeating measurement or extraction:
+
+```powershell
+.\.venv\Scripts\python.exe -m unprompted.report 2026-09-14
+```
+
+Supply the published run date. This uses the current report renderer and available comparison history. It only
+reads `data/runs/`, preserves existing reports and raw records, and never promotes
+held measurements. Review and commit recovered notes before the next scheduled
+run. Report writes are atomic and refuse to overwrite an existing note.
+
 If a result here is wrong, the raw data that produced it is in `data/runs/` and
 the code that produced it is in `src/`. Open an issue. Corrections are made by
 adding a new record, never by editing an old one.

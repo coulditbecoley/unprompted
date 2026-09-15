@@ -11,6 +11,9 @@ so the same file is readable on GitHub and in the vault.
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import re
+from datetime import date
 
 from .aggregate import (
     brand_week,
@@ -23,6 +26,7 @@ from .aggregate import (
     the_snub,
 )
 from .cost import cost_of_run
+from .storage import write_text
 
 
 def pretty(slug: str) -> str:
@@ -157,6 +161,12 @@ def build_report(run: dict, history: list[dict], aliases_path: Path) -> str:
 
 def write_report(run: dict, root: Path) -> Path:
     """Write the note into the repository, next to the data it describes."""
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", run["category"]):
+        raise ValueError("invalid category")
+    if date.fromisoformat(run["run_date"]).isoformat() != run["run_date"]:
+        raise ValueError("run date must be YYYY-MM-DD")
+    if run.get("publication_checks", {}).get("passed") is False:
+        raise ValueError("held records cannot produce a published report")
     history = load_history(root / "data" / "runs", run["category"])
     aliases = root / "aliases" / f"{run['category']}.yml"
     text = build_report(run, history, aliases)
@@ -164,5 +174,31 @@ def write_report(run: dict, root: Path) -> Path:
     out_dir = root / "reports" / run["run_date"]
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{run['category']}.md"
-    path.write_text(text, encoding="utf-8")
+    write_text(path, text)
     return path
+
+
+def recover_reports(root: Path, run_date: str) -> list[Path]:
+    """Render missing notes from published archives without provider calls."""
+    if date.fromisoformat(run_date).isoformat() != run_date:
+        raise ValueError("run date must be YYYY-MM-DD")
+    written = []
+    for source in sorted((root / "data" / "runs" / run_date).glob("*.json")):
+        destination = root / "reports" / source.parent.name / f"{source.stem}.md"
+        if destination.exists():
+            continue
+        run = json.loads(source.read_text(encoding="utf-8"))
+        if (run["category"], run["run_date"]) != (source.stem, source.parent.name):
+            raise ValueError(f"archive identity does not match path: {source}")
+        written.append(write_report(run, root))
+    return written
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Recover missing reports without provider calls")
+    parser.add_argument("date", help="Published run date (YYYY-MM-DD)")
+    args = parser.parse_args()
+    for path in recover_reports(Path(__file__).resolve().parents[2], args.date):
+        print(path)
