@@ -101,8 +101,8 @@ it absorbed in training; a model that searches reports which brands are findable
 today. Both are real questions and they are not the same one, and a chart that
 mixed them would answer neither.
 
-Gemini was evaluated as a fourth engine on 2026-08-26 and is not included, for
-reasons worth recording because they are not obvious from the outside:
+Gemini was evaluated as a fourth engine on 2026-08-26 and was not included then,
+for reasons worth recording because they are not obvious from the outside:
 
 - `gemini-3.5-flash` grounds every answer it gives, and failed **31%** of a full
   week with `503 UNAVAILABLE` — five of eight even when called one at a time, so
@@ -120,6 +120,14 @@ reasons worth recording because they are not obvious from the outside:
 The adapter is written, tested and kept, disabled in `providers.json` with that
 note attached. This is a fact about Gemini's current API, not a permanent
 judgement, and it should be re-measured rather than assumed.
+
+Re-measured on 2026-09-26, `gemini-3.5-flash` answered a full coding category
+(75 calls at the pipeline's normal concurrency) with no errors and grounded all
+75, so it joins from September 28. `gemini-3.8-flash` also answered without
+errors but searched on 1 of 30, so it is not used. Grounding still cannot be
+forced; the grounding check holds any week in which Gemini stops searching.
+Google's products are affiliated with the Gemini engine for self-preference:
+Gemini Code Assist, Imagen and Gemini.
 
 ## How much of a change is real
 
@@ -168,6 +176,7 @@ the thing worth measuring, so each engine is queried natively.
 | ChatGPT | OpenAI API (`gpt-6-sol`) with OpenAI's own web search | v1 |
 | Claude | Anthropic API (`claude-opus-5-5`) with Anthropic's web search | v1 |
 | Perplexity | Perplexity Agent API (`perplexity/sonar`) with Perplexity's web search | v1 |
+| Gemini | Gemini API (`gemini-3.5-flash`) with Google Search grounding | from September 28, 2026 |
 | Claude Code | Local CLI harness on the operator's machine | v2 |
 | Codex | Local CLI harness on the operator's machine | v2 |
 | Google AI Overviews | Planned, via a SERP data provider | not yet active |
@@ -185,6 +194,12 @@ The local adapter records no structured citations, so those answers contribute
 nothing to source counts and do not prove that a search occurred. It also records
 no token usage. A $0.00 usage estimate for these calls excludes subscription
 costs; it is not evidence that the calls or their service were free.
+
+A local harness picks its own default model and updates itself. From September
+28, 2026, each run first asks each harness which model is answering and records
+it in the run's methodology snapshot, with the harness version alongside. A
+different model from the last published week, without a method version bump,
+stops the run before any paid call, exactly as a changed hosted model would.
 
 Turning a local engine on changes the engine list, which is a method version
 bump. That rule is now enforced rather than merely written down: a run whose
@@ -325,7 +340,10 @@ from `claude-opus-5` to `claude-opus-5-5`, ChatGPT from `gpt-5` to `gpt-6-sol`,
 and the extractor that reads every answer from `claude-opus-5` to
 `claude-opus-5-5`. Opus 5.5 defaults to a lower effort than Opus 5; the Claude
 engine pins `high`, the depth Opus 5 used by default, and the extractor keeps
-`low`.
+`low`. Opus 5.5 always thinks before answering, and that thinking counts
+toward the output ceiling, so Claude's ceiling rises from 4,096 to 16,000 tokens
+and the extractor's from 2,048 to 8,000. The model is not told the ceiling;
+it only stops an answer being cut off.
 
 Perplexity retired Sonar Chat Completions on September 27, 2026. Its
 replacement, the Agent API, offers presets that run OpenAI models; using one
@@ -337,9 +355,11 @@ results it retrieved rather than a separate citation list.
 A different model is a different measurement, so every category takes a method
 version bump: coding moves to version 4, images and writing to version 5. Week-over-week movement is not reported across the change.
 Rates in `data/rates.json` were updated to the new models' published prices on
-September 26, which restates the dashboard's "at current rates" figures for
-earlier weeks. The monthly ceiling rises from $150 to $200 so that the three
-categories missed or held in September can all be measured on September 28.
+September 26. The previous list is kept under `history`, and every run is
+priced at the list in force on its own date, so earlier weeks and the monthly
+budget keep the prices they were actually billed at. The monthly ceiling rises from $150 to $350: a full week of three
+categories on five hosted and local engines is about $67, and a month can hold
+five Mondays.
 https://developers.openai.com/api/docs/pricing
 https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview
 

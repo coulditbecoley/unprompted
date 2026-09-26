@@ -90,8 +90,11 @@ canonical:
 # house here: it is barely a writing tool, which is precisely why it serves as
 # the neutral baseline.
 affiliations:
-  ChatGPT: chatgpt
-  Claude: claude
+  # Every engine whose vendor makes it, as in the other two categories.
+  ChatGPT: [chatgpt, codex]
+  Claude: [claude, claude-code]
+  Gemini: [gemini]
+  Perplexity: [perplexity]
 
 exclude:
   # Companies rather than products

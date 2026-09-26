@@ -160,10 +160,29 @@ class CliProvider:
         ) as jail:
             return self._run(prompt, jail)
 
-    def _run(self, prompt: str, cwd: str) -> str:
+    def identify(self) -> dict[str, str]:
+        """Which model and version answer for this harness, from a one-word probe.
+
+        A harness picks its own default model and updates itself, so without
+        this a chart row could change model between Mondays with nothing
+        recorded. Same pinned arguments and containment as ask(); only the
+        output format differs where the harness needs it to report a model.
+        """
+        exe = self.resolve()
+        version = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60,
+                                 encoding="utf-8", errors="replace", env=_child_env())
+        with tempfile.TemporaryDirectory(prefix="unprompted-identify-", ignore_cleanup_errors=True) as jail:
+            result = self._exec("Reply with just the word OK.", jail, _IDENTIFY_EXTRA.get(self.command, ()))
+        model = _reported_model(self.command, result.stdout or "", result.stderr or "")
+        if not model:
+            raise ProviderError(f"{self.id}: could not tell which model answered; "
+                                f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
+        return {"model": model, "version": (version.stdout or "").strip().splitlines()[0] if version.stdout.strip() else ""}
+
+    def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
         try:
-            result = subprocess.run(
-                [self.resolve(), *self.args],
+            return subprocess.run(
+                [self.resolve(), *self.args, *extra],
                 input=prompt,
                 capture_output=True,
                 text=True,
@@ -176,6 +195,8 @@ class CliProvider:
         except subprocess.TimeoutExpired as exc:
             raise ProviderError(f"{self.id}: timed out after {TIMEOUT_SECONDS}s") from exc
 
+    def _run(self, prompt: str, cwd: str) -> str:
+        result = self._exec(prompt, cwd)
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()[:300]
             raise ProviderError(
@@ -183,6 +204,29 @@ class CliProvider:
                 stdout=result.stdout or "",
             )
         return result.stdout.strip()
+
+
+# Appended to the pinned arguments for the identity probe only. Codex already
+# names its model on stderr; Claude Code needs JSON output to report one. For
+# codex the trailing "-" must stay last, so nothing is appended.
+_IDENTIFY_EXTRA: dict[str, tuple[str, ...]] = {"claude": ("--output-format", "json")}
+
+
+def _reported_model(command: str, stdout: str, stderr: str) -> str:
+    """The model a harness says answered, or "" when it did not say."""
+    if command == "claude":
+        try:
+            usage = json.loads(stdout).get("modelUsage") or {}
+        except (json.JSONDecodeError, AttributeError):
+            return ""
+        # Claude Code can hand side jobs to a smaller model; the one that wrote
+        # the most output is the one that answered.
+        best = max(usage.items(), key=lambda kv: kv[1].get("outputTokens", 0), default=None)
+        return (best[1].get("canonicalModel") or best[0]) if best else ""
+    if command == "codex":
+        found = re.search(r"^model:\s*(\S+)", stderr, re.MULTILINE)
+        return found.group(1) if found else ""
+    return ""
 
 
 def load_registry() -> list[dict]:

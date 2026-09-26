@@ -2023,15 +2023,15 @@ def test_budget_counts_held_runs_as_spent(tmp_path, monkeypatch):
     monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "runs")
     monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "held")
     for base, name in ((budget.RUNS_DIR, "published"), (budget.HELD_DIR, "held")):
-        day = base / "2026-08-10"
+        day = base / "2026-10-10"
         day.mkdir(parents=True)
         (day / f"{name}.json").write_text(
-            json.dumps(_priced_run(name, "2026-08-10", 100, 0.10)), encoding="utf-8"
+            json.dumps(_priced_run(name, "2026-10-10", 100, 0.10)), encoding="utf-8"
         )
 
     # Both, not just the one that published.
-    assert budget.spent_in_month(date(2026, 8, 26)) == pytest.approx(20.0, abs=0.1)
-    assert budget.spent_in_month(date(2026, 9, 1)) == 0.0
+    assert budget.spent_in_month(date(2026, 10, 26)) == pytest.approx(20.0, abs=0.1)
+    assert budget.spent_in_month(date(2026, 11, 1)) == 0.0
 
 
 def test_budget_refuses_a_run_that_would_pass_the_ceiling(monkeypatch):

@@ -35,6 +35,9 @@ from ..cli_provider import CliProvider, is_available
 from .base import SYSTEM_PROMPT, Engine
 
 
+_IDENTITY: dict[str, dict[str, str]] = {}
+
+
 class CliEngine(Engine):
     """Ask a local CLI harness a shopper's question."""
 
@@ -61,6 +64,13 @@ class CliEngine(Engine):
     @property
     def unavailable_reason(self) -> str:
         return f"not available: {self.provider.command} is not on PATH"
+
+    def identify(self) -> dict[str, str]:
+        """Model and version, probed once per process: every category in a week
+        is asked of the same harness, and each probe is a real call."""
+        if self.provider.id not in _IDENTITY:
+            _IDENTITY[self.provider.id] = self.provider.identify()
+        return _IDENTITY[self.provider.id]
 
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         # The harness gets the same instruction the hosted engines get, so the

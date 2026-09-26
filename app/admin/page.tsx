@@ -575,11 +575,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               )}
 
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-                Priced from usage the providers reported, against rates verified{" "}
-                {rates.verified}. Every run is priced at those rates, including
-                old ones, so this is what the archive would cost today rather
-                than what it was billed &mdash; an accurate reading of our usage,
-                not of an invoice. Reconcile against a real bill monthly.
+                Priced from usage the providers reported, each run at the rates
+                in force on its date (current list verified {rates.verified}),
+                so a price change never restates an earlier week &mdash; an
+                accurate reading of our usage, not of an invoice. Reconcile
+                against a real bill monthly.
               </p>
             </>
           )}

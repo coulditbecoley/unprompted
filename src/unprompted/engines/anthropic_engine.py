@@ -8,7 +8,10 @@ MODEL = "claude-opus-5-5"
 # Opus 5.5 defaults to medium effort where Opus 5 defaulted to high. Pinned so
 # the move to 5.5 changes the model, not also how hard it thinks.
 EFFORT = "high"
-MAX_TOKENS = 4096
+# Opus 5.5 always thinks, and thinking counts toward this. 4,096 was 3,812 deep
+# on 2026-09-14 before that; the model cannot see the cap, so raising it only
+# prevents truncation.
+MAX_TOKENS = 16000
 # See openai_engine: an uncapped call can hold a worker until the job timeout.
 TIMEOUT_SECONDS = 180
 # Dynamic-filtering web search. Requires Opus 5.5 / 5 / 4.8 / 4.7 / 4.6 or Sonnet 5/4.6.

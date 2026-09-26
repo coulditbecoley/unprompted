@@ -148,6 +148,7 @@ canonical:
 affiliations:
   Claude Code: [claude, claude-code]
   Codex: [chatgpt, codex]
+  Gemini Code Assist: [gemini]
 
 # Known, and deliberately not charted. Real things the engines name while
 # answering, but not coding assistants, so charting them would be wrong.

@@ -60,6 +60,7 @@ test("admin sessions expire and reject tampering", async () => {
 import {
   MAX_ENGINE_ERROR_RATE,
   batchBilled,
+  ratesFor,
   costOfRun,
   engineHealth,
   shortfall,
@@ -287,7 +288,8 @@ test("a Batch-billed run prices its extraction at half", () => {
   // One million in and one million out, at the checked-in extraction rates,
   // halved. Written as the sum rather than a constant so correcting a rate
   // corrects the expectation with it -- but the halving is asserted outright.
-  const list = rates.engines._extract.input_per_m + rates.engines._extract.output_per_m;
+  const extract = ratesFor(rates, run.run_date)._extract;
+  const list = extract.input_per_m + extract.output_per_m;
   const priced = costOfRun(run, rates);
   assert.equal(priced.total, Number((list * rates.batch_discount).toFixed(4)));
 
@@ -327,7 +329,8 @@ test("Python prices a Batch-billed run at half too", () => {
   const [batch, local, legacy, current] = JSON.parse(
     execFileSync(PYTHON, ["-c", script, JSON.stringify(run)], { encoding: "utf-8" }),
   );
-  const list = rates.engines._extract.input_per_m + rates.engines._extract.output_per_m;
+  const extract = ratesFor(rates, run.run_date)._extract;
+  const list = extract.input_per_m + extract.output_per_m;
   assert.equal(batch, Number((list * rates.batch_discount).toFixed(4)));
   assert.equal(local, Number(list.toFixed(4)));
   assert.equal(legacy, false, '"api" must no longer earn the discount');
@@ -338,8 +341,8 @@ test("Python prices a Batch-billed run at half too", () => {
  * An exact half, which the archive does not contain and the two languages used
  * to round in opposite directions.
  *
- * 25,000 ChatGPT input tokens at $1.25/M was $0.03125 exactly; at today's $2/M
- * the same tie is 15,625 tokens. Python's round()
+ * 25,000 ChatGPT input tokens at $1.25/M is $0.03125 exactly (the run is dated
+ * into the older price list, so that list prices it). Python's round()
  * took it to $0.0312 and JavaScript's Math.round to $0.0313, and every check
  * here passed because no real run has ever landed on a tie. A rule that agrees
  * except at the boundary is not a shared rule.
@@ -362,7 +365,7 @@ test("Python and TypeScript round an exact half the same way", () => {
         sources: [],
         refused: false,
         error: null,
-        usage: { input_tokens: 15_625, output_tokens: 0 },
+        usage: { input_tokens: 25_000, output_tokens: 0 },
       },
     ],
   };

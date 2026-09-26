@@ -555,7 +555,18 @@ export type Rates = {
   batch_billed_extractors: string[];
   verified: string;
   engines: Record<string, { input_per_m: number; output_per_m: number; per_search: number }>;
+  /** Earlier price lists, each with the last run date it priced. */
+  history?: { until: string; engines: Rates["engines"] }[];
 };
+
+/** The price list in force on `runDate`. Mirrors rates_for in cost.py. */
+export function ratesFor(rates: Rates, runDate: string | undefined): Rates["engines"] {
+  const past = [...(rates.history ?? [])].sort((a, b) => (a.until < b.until ? -1 : a.until > b.until ? 1 : 0));
+  for (const period of past) {
+    if (runDate && runDate <= period.until) return period.engines;
+  }
+  return rates.engines;
+}
 
 /**
  * Did this run's extraction go through the Batch API, and so at half price?
@@ -586,10 +597,11 @@ export type LineItem = {
 
 function price(
   rates: Rates,
+  engines: Rates["engines"],
   engine: string,
   usage: Usage,
 ): number {
-  const rate = rates.engines[engine];
+  const rate = engines[engine];
   if (!rate) return 0;
   const searches = usage.web_searches || usage.requests || 0;
   const cached = usage.cached_input_tokens ?? 0;
@@ -621,6 +633,7 @@ function price(
 export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; total: number } {
   const buckets = new Map<string, LineItem>();
   const extractRate = batchBilled(run.extractor, rates) ? rates.batch_discount : 1;
+  const engines = ratesFor(rates, run.run_date);
 
   const bucket = (key: string, label: string): LineItem => {
     let item = buckets.get(key);
@@ -641,7 +654,7 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
         + (usage.cache_creation_input_tokens ?? 0);
       item.outputTokens += usage.output_tokens ?? 0;
       item.searches += usage.web_searches || usage.requests || 0;
-      item.dollars += price(rates, engine, usage);
+      item.dollars += price(rates, engines, engine, usage);
     }
 
     const ein = usage.extract_input_tokens ?? 0;
@@ -654,7 +667,7 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
       ei.inputTokens += ein + read + created;
       ei.outputTokens += eout;
       ei.dollars +=
-        extractRate * price(rates, "_extract", { input_tokens: ein, output_tokens: eout,
+        extractRate * price(rates, engines, "_extract", { input_tokens: ein, output_tokens: eout,
           cache_read_input_tokens: read, cache_creation_input_tokens: created,
           cache_creation_1h_input_tokens: usage.extract_cache_creation_1h_input_tokens });
     }

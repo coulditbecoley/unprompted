@@ -178,14 +178,14 @@ def estimate_category(category: str, answers: int, runs: list[dict] | None = Non
     runs = [r for r in runs if not r.get("checkpoint_only")]
     # A re-read pays only extraction; it cannot price a fresh measurement.
     if extraction_only:
-        priced = [(r, sum(i.dollars for i in cost_of_run(r)[0] if i.label == "extract")) for r in runs]
+        priced = [(r, sum(i.dollars for i in cost_of_run(r, current_rates=True)[0] if i.label == "extract")) for r in runs]
     else:
         # Price the NEXT run's transport without restating historical spending.
         # Search fees stay full-price; only Claude's tokens earn the discount.
         priced = [(r, cost_of_run({**r, "extractions": [
             {**e, "usage": {**(e.get("usage") or {}), "batch_billed": 1}}
             if e.get("engine") == "claude" else e for e in r.get("extractions", [])
-        ]})[1]) for r in runs if not r.get("source_run")]
+        ]}, current_rates=True)[1]) for r in runs if not r.get("source_run")]
     priced = [(r, c) for r, c in priced if c > 0]
 
     def per_answer(record: dict, dollars: float) -> float:

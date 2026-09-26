@@ -99,9 +99,9 @@ def test_batch_rejects_incomplete_or_duplicate_result_sets(tmp_path, monkeypatch
 def test_budget_estimates_discount_without_repricing_history():
     historic = {"category": "alpha", "run_date": "2026-09-14", "extractions": [
         {"engine": "claude", "usage": {"input_tokens": 1_000_000, "output_tokens": 100_000, "web_searches": 4}}]}
-    assert cost_of_run(historic)[1] == 6.04
+    assert cost_of_run(historic)[1] == 7.54
     assert budget.estimate_category("alpha", 1, [historic]).dollars == 3.04
-    assert cost_of_run(historic)[1] == 6.04
+    assert cost_of_run(historic)[1] == 7.54
 
 
 def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch):
@@ -157,3 +157,14 @@ def test_perplexity_agent_response_reads_text_sources_and_searches():
     assert sources == ["https://a.example", "https://b.example"]
     assert usage == {"input_tokens": 4521, "output_tokens": 282, "web_searches": 1}
     assert read_response({**body, "status": "incomplete"})[2]["incomplete_response"] == 1
+
+
+def test_runs_are_priced_at_the_rates_of_their_own_date():
+    from unprompted.cost import rates_for, RATES
+    usage = {"input_tokens": 1_000_000, "output_tokens": 0}
+    old = {"run_date": "2026-09-14", "extractions": [{"engine": "chatgpt", "usage": usage}]}
+    new = {**old, "run_date": "2026-09-28"}
+    assert rates_for("2026-09-27")["chatgpt"]["input_per_m"] == 1.25
+    assert rates_for("2026-09-28") is RATES
+    assert cost_of_run(old)[1] == 1.25 and cost_of_run(new)[1] == 2.0
+    assert cost_of_run(old, current_rates=True)[1] == 2.0

@@ -22,9 +22,9 @@
       "label": "Gemini",
       "kind": "api",
       "role": "engine",
-      "enabled": false,
+      "enabled": true,
       "env": "GEMINI_API_KEY",
-      "note": "Adapter works and is tested; the models do not. Measured 2026-08-26: gemini-3.5-flash failed 31% of a full week with 503 UNAVAILABLE (and 5 of 8 sequentially, so it is Google's overload, not our concurrency). gemini-3.6-flash answers reliably but chooses to search on roughly a fifth of calls, which measures what the model remembers rather than what it retrieves. Grounding cannot be forced: google_search_retrieval returns 400 and tool_config ANY times out. The whole 2.5 line is 404 for new keys. Re-enable when a stable, reliably-grounded model exists, and bump method_version in the same change."
+      "note": "Re-measured 2026-09-26 and enabled from 2026-09-28. gemini-3.5-flash answered a full coding category (75 calls at the pipeline's 6 workers) with 0 errors and grounded 75 of 75; the 31% 503 rate seen on 2026-08-26 is gone. gemini-3.8-flash was also tried: 0 errors but grounded 1 of 30, so it measures memory rather than search and is not used. Grounding still cannot be forced; the grounding check (checks.py rule 7) holds a week where this stops searching."
     },
     {
       "id": "perplexity",

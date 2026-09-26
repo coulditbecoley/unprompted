@@ -435,7 +435,8 @@ def test_recovery_budget_prices_only_new_extraction_without_erasing_prior_spend(
               "extractions": [{"engine": "chatgpt", "error": None, "usage": {
                   "input_tokens": 1_000_000, "extract_input_tokens": 1000, "extract_output_tokens": 500}}]}
     spent = cost_of_run(record)[1]
-    extraction_cost = next(i.dollars for i in cost_of_run(record)[0] if i.label == "extract")
+    # Estimates price the next run at today's list, whatever the record's date.
+    extraction_cost = next(i.dollars for i in cost_of_run(record, current_rates=True)[0] if i.label == "extract")
     full = budget.estimate_category("alpha", 10, [record])
     reread = budget.estimate_category("alpha", 10, [record], extraction_only=True)
     assert reread.dollars == round(extraction_cost * 10, 2)
@@ -753,3 +754,55 @@ def test_truncated_provider_answer_preserves_text_and_usage(monkeypatch):
     assert answer.text == "Partial Alpha" and answer.usage["input_tokens"] == 123
     extraction, needed = _base_for(answer)
     assert not needed and extraction.error and extraction.answer == answer.text
+
+
+def test_local_harness_model_change_refuses_before_paid_calls(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "git_sha", lambda: "sha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 1,
+            "questions": [{"id": "q1", "text": "Which brand?"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: spec)
+    reported = {"model": "model-a"}
+    calls = []
+
+    class Harness:
+        name = "harness"
+        grounds = False
+        is_configured = True
+
+        def identify(self):
+            return {"model": reported["model"], "version": "1.0"}
+
+        def ask_one(self, qid, text, index):
+            calls.append(index)
+            return EngineAnswer(self.name, qid, text, index, text="Alpha")
+
+    monkeypatch.setattr(run, "all_engines", lambda: {"harness": Harness()})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
+    monkeypatch.setattr(run, "check_budget", lambda *a, **k: SimpleNamespace(ok=True, message="offline"))
+    monkeypatch.setattr(run, "extract_run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop")))
+    with pytest.raises(RuntimeError, match="stop"):
+        run.run_category("alpha", "2026-09-07")
+    snapshot = json.loads((tmp_path / ".unprompted/2026-09-07/alpha/methodology.json").read_text())
+    assert snapshot["engines"]["harness"]["model"] == "model-a"
+    write_json(tmp_path / "data/runs/2026-09-07/alpha.json",
+               {"category": "alpha", "run_date": "2026-09-07", "method_version": 1, "methodology": snapshot})
+    reported["model"] = "model-b"
+    asked = len(calls)
+    with pytest.raises(ValueError, match="harness: model-a -> model-b"):
+        run.run_category("alpha", "2026-09-14")
+    assert len(calls) == asked
+
+
+def test_harness_model_is_read_from_real_cli_output():
+    from unprompted.cli_provider import _reported_model
+    claude = json.dumps({"result": "OK", "modelUsage": {
+        "claude-haiku-4-5": {"outputTokens": 3, "canonicalModel": "claude-haiku-4-5"},
+        "claude-opus-5-5[1m]": {"outputTokens": 40, "canonicalModel": "claude-opus-5-5"}}})
+    assert _reported_model("claude", claude, "") == "claude-opus-5-5"
+    assert _reported_model("claude", "OK", "") == ""
+    codex_banner = "OpenAI Codex v0.157.1\n--------\nworkdir: /tmp/x\nmodel: gpt-6-astra\nprovider: openai\n"
+    assert _reported_model("codex", "OK", codex_banner) == "gpt-6-astra"
+    assert _reported_model("codex", "OK", "") == ""

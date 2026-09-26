@@ -170,6 +170,20 @@ def _run_category(
 
     print(f"  engines queried: {', '.join(sorted(engines))}", file=sys.stderr)
 
+    # A local harness chooses its own model and updates itself. Ask which model
+    # is answering before anything is paid for, so the snapshot below records it
+    # and a change since the last published week stops the run like any other
+    # unversioned method change.
+    identities: dict[str, dict[str, str]] = {}
+    for name, e in sorted(engines.items()):
+        if hasattr(e, "identify"):
+            try:
+                identities[name] = e.identify()
+            except ProviderError as exc:
+                raise SystemExit(f"{name} could not report which model it uses, so this week "
+                                 f"could not say what that row measured:\n{exc}") from exc
+            print(f"  {name}: {identities[name]['model']} ({identities[name]['version']})", file=sys.stderr)
+
     # Same pre-flight, same reason. Extraction happens after every engine call
     # has been paid for, so an extractor that cannot run is found at the worst
     # possible moment: a full run's spend with nothing readable at the end of
@@ -194,7 +208,7 @@ def _run_category(
     checkpoint = ROOT / ".unprompted" / run_date / category
     methodology = {
         "questions": spec,
-        "engines": {name: {"model": getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {})}
+        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {})}
                     for name, e in engines.items()},
         "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
         "system_prompt": SYSTEM_PROMPT,
@@ -207,8 +221,15 @@ def _run_category(
     prior = load_history(ROOT / "data" / "runs", category)
     if prior and prior[-1].get("method_version") == spec["method_version"]:
         before = prior[-1].get("methodology", {})
-        if before and any(before.get(k) != methodology[k] for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")):
-            raise ValueError("methodology changed without a version bump; refusing before paid calls")
+        changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
+                   if before and before.get(k) != methodology[k]]
+        if changed:
+            models = [f"{n}: {before['engines'].get(n, {}).get('model')} -> {c['model']}"
+                      for n, c in methodology["engines"].items()
+                      if "engines" in changed and before.get("engines", {}).get(n, {}).get("model") != c["model"]]
+            raise ValueError("methodology changed without a version bump; refusing before paid calls. "
+                             f"Changed: {', '.join(changed)}" + (f" ({'; '.join(models)})" if models else "")
+                             + ". If a local harness switched model, bump method_version in the question bank.")
     manifest = checkpoint / "methodology.json"
     if manifest.exists():
         if json.loads(manifest.read_text(encoding="utf-8")) != methodology:
@@ -328,6 +349,7 @@ def _run_category(
         measured_on=run_date,
         git_sha=measurement_commit,
         methodology=methodology,
+        harness_versions={n: i["version"] for n, i in identities.items()},
         extractions=extractions,
         quarantined=quarantined,
     )

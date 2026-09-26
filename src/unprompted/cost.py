@@ -25,10 +25,24 @@ ROOT = Path(__file__).resolve().parents[2]
 # the week cost", and the wrong one is always the one being read.
 _RATES_FILE = json.loads((ROOT / "data" / "rates.json").read_text(encoding="utf-8"))
 
-RATES: dict[str, dict[str, float]] = {
-    name: {k: v for k, v in rate.items() if isinstance(v, (int, float))}
-    for name, rate in _RATES_FILE["engines"].items()
-}
+def _numeric(engines: dict) -> dict[str, dict[str, float]]:
+    return {name: {k: v for k, v in rate.items() if isinstance(v, (int, float))}
+            for name, rate in engines.items()}
+
+
+RATES: dict[str, dict[str, float]] = _numeric(_RATES_FILE["engines"])
+# Older price lists, oldest first, each with the last run date it priced.
+HISTORY: list[tuple[str, dict[str, dict[str, float]]]] = sorted(
+    (h["until"], _numeric(h["engines"])) for h in _RATES_FILE.get("history", [])
+)
+
+
+def rates_for(run_date: str) -> dict[str, dict[str, float]]:
+    """The price list in force on `run_date`. Mirrored by ratesFor in lib/metrics.ts."""
+    for until, engines in HISTORY:
+        if run_date and run_date <= until:
+            return engines
+    return RATES
 BATCH_DISCOUNT: float = _RATES_FILE["batch_discount"]
 BATCH_BILLED: frozenset[str] = frozenset(_RATES_FILE["batch_billed_extractors"])
 
@@ -82,8 +96,8 @@ def batch_billed(extractor: str | None) -> bool:
     return bool(extractor) and extractor in BATCH_BILLED
 
 
-def _price(engine: str, usage: dict[str, int]) -> float:
-    rate = RATES.get(engine)
+def _price(engine: str, usage: dict[str, int], rates: dict[str, dict[str, float]] = RATES) -> float:
+    rate = rates.get(engine)
     if not rate:
         return 0.0
     searches = usage.get("web_searches", 0) or usage.get("requests", 0)
@@ -105,12 +119,17 @@ def _price(engine: str, usage: dict[str, int]) -> float:
     )
 
 
-def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
+def cost_of_run(run: dict, *, current_rates: bool = False) -> tuple[list[LineItem], float]:
     """Per-engine line items plus the total, from reported usage only.
 
     Runs recorded before usage was instrumented return zeros rather than a
     guess. A missing measurement should look missing.
+
+    Priced at the rates in force on the run's date; `current_rates` prices the
+    same usage at today's list instead, which is what an estimate of the next
+    run wants.
     """
+    rates = RATES if current_rates else rates_for(str(run.get("run_date", "")))
     buckets: dict[str, LineItem] = {}
     extract_rate = BATCH_DISCOUNT if batch_billed(run.get("extractor")) else 1.0
 
@@ -126,7 +145,7 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
                                   + usage.get("cache_creation_input_tokens", 0))
             item.output_tokens += usage.get("output_tokens", 0)
             item.searches += usage.get("web_searches", 0) or usage.get("requests", 0)
-            item.dollars += _price(engine, usage)
+            item.dollars += _price(engine, usage, rates)
 
         # The extraction pass rides on the same record but is billed separately,
         # so it gets its own line rather than inflating the engine it read.
@@ -142,7 +161,7 @@ def cost_of_run(run: dict) -> tuple[list[LineItem], float]:
             ex_item.input_tokens += ein + eread + ecreated
             ex_item.output_tokens += eout
             ex_item.dollars += extract_rate * _price(
-                "_extract", {k.removeprefix("extract_"): v for k, v in usage.items() if k.startswith("extract_")}
+                "_extract", {k.removeprefix("extract_"): v for k, v in usage.items() if k.startswith("extract_")}, rates
             )
 
     items = sorted(buckets.values(), key=lambda i: -i.dollars)

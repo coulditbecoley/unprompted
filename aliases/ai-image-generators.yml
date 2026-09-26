@@ -127,6 +127,7 @@ affiliations:
   # Every engine whose vendor makes it, so a second OpenAI engine does not get
   # counted as a neutral rival of the first. See aggregate.load_affiliations.
   DALL-E: [chatgpt, codex]
+  Imagen: [gemini]
 
 exclude:
   # Companies rather than products

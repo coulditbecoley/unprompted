@@ -129,6 +129,10 @@ class RunRecord:
     # without it, "which same-day commit was this" has no answer.
     git_sha: str = ""
     methodology: dict[str, Any] = field(default_factory=dict)
+    # Local harness versions, e.g. {"codex": "codex-cli 0.157.1"}. Kept out of
+    # `methodology` on purpose: they update themselves most weeks, and the
+    # model they report (which is in methodology) is what changes a reading.
+    harness_versions: dict[str, str] = field(default_factory=dict)
     extractions: list[Extraction] = field(default_factory=list)
     quarantined: list[str] = field(default_factory=list)
 
@@ -145,6 +149,7 @@ class RunRecord:
             "source_run": self.source_run,
             "git_sha": self.git_sha,
             "methodology": self.methodology,
+            **({"harness_versions": self.harness_versions} if self.harness_versions else {}),
             "extractions": [e.to_dict() for e in self.extractions],
             # Sorted, not deduplicated. checks.py counts occurrences to decide
             # whether an unrecognised name is material enough to hold the week,
