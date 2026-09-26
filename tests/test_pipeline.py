@@ -561,11 +561,11 @@ def test_cost_is_computed_from_reported_usage():
     }
     items, total = cost_of_run(run)
     by = {i.label: i for i in items}
-    # claude: $5 in + $2.50 out + 4 searches at $0.01
-    assert round(by["claude"].dollars, 3) == 7.540
-    # perplexity: $1 in + $1 out + one request at $0.005
-    assert round(by["perplexity"].dollars, 3) == 2.005
-    assert round(total, 3) == 9.545
+    # claude: $4 in + $2 out + 4 searches at $0.01
+    assert round(by["claude"].dollars, 3) == 6.040
+    # perplexity: $0.25 in + $2.50 out + one search at $0.0025
+    assert by["perplexity"].dollars == pytest.approx(2.7525)
+    assert total == pytest.approx(8.7925)
 
 
 def test_runs_without_usage_report_zero_rather_than_a_guess():
@@ -1977,7 +1977,7 @@ def test_the_local_schema_fallback_matches_the_sdk_transform():
 def _priced_run(category, date_, answers, dollars_per_answer):
     """A priced run with `answers` clean rows costing a known amount each."""
     per = {
-        "input_tokens": int(dollars_per_answer / 1.25 * 1_000_000),
+        "input_tokens": int(dollars_per_answer / 2.0 * 1_000_000),
         "output_tokens": 0,
     }
     return {

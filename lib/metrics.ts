@@ -30,6 +30,7 @@ export type BrandMention = { name: string; position: number; sentiment: string }
 export type Usage = {
   batch_billed?: number;
   cached_input_tokens?: number;
+  cache_write_tokens?: number;
   reasoning_tokens?: number;
   cache_read_input_tokens?: number;
   cache_creation_input_tokens?: number;
@@ -594,7 +595,9 @@ function price(
   const cached = usage.cached_input_tokens ?? 0;
   const created = usage.cache_creation_input_tokens ?? 0;
   const hour = usage.cache_creation_1h_input_tokens ?? 0;
-  const inputEquivalent = (usage.input_tokens ?? 0) - cached + cached * 0.1
+  // OpenAI cache writes sit inside input_tokens; this adds only the surcharge.
+  const written = usage.cache_write_tokens ?? 0;
+  const inputEquivalent = (usage.input_tokens ?? 0) - cached + cached * 0.1 + written * 0.25
     + (usage.cache_read_input_tokens ?? 0) * 0.1 + (created - hour) * 1.25 + hour * 2;
   const discount = engine === "claude" && usage.batch_billed === 1 ? rates.batch_discount : 1;
   return (

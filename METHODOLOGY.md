@@ -165,9 +165,9 @@ the thing worth measuring, so each engine is queried natively.
 
 | Engine | How it is queried | Status |
 |---|---|---|
-| ChatGPT | OpenAI API with OpenAI's own web search | v1 |
-| Claude | Anthropic API with Anthropic's web search | v1 |
-| Perplexity | Perplexity Sonar API | v1 |
+| ChatGPT | OpenAI API (`gpt-6-sol`) with OpenAI's own web search | v1 |
+| Claude | Anthropic API (`claude-opus-5-5`) with Anthropic's web search | v1 |
+| Perplexity | Perplexity Agent API (`perplexity/sonar`) with Perplexity's web search | v1 |
 | Claude Code | Local CLI harness on the operator's machine | v2 |
 | Codex | Local CLI harness on the operator's machine | v2 |
 | Google AI Overviews | Planned, via a SERP data provider | not yet active |
@@ -317,6 +317,31 @@ cannot guarantee provider balances or the token usage of a changed reader.
 Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
+
+### Model upgrade (September 28, 2026)
+
+From the September 28 week the hosted engines move to current models: Claude
+from `claude-opus-5` to `claude-opus-5-5`, ChatGPT from `gpt-5` to `gpt-6-sol`,
+and the extractor that reads every answer from `claude-opus-5` to
+`claude-opus-5-5`. Opus 5.5 defaults to a lower effort than Opus 5; the Claude
+engine pins `high`, the depth Opus 5 used by default, and the extractor keeps
+`low`.
+
+Perplexity retired Sonar Chat Completions on September 27, 2026. Its
+replacement, the Agent API, offers presets that run OpenAI models; using one
+would chart ChatGPT under Perplexity's name. The engine instead pins
+Perplexity's own `perplexity/sonar` and passes the `web_search` tool, because
+without it that model answers from memory. Its sources are now the search
+results it retrieved rather than a separate citation list.
+
+A different model is a different measurement, so every category takes a method
+version bump: coding moves to version 4, images and writing to version 5. Week-over-week movement is not reported across the change.
+Rates in `data/rates.json` were updated to the new models' published prices on
+September 26, which restates the dashboard's "at current rates" figures for
+earlier weeks. The monthly ceiling rises from $150 to $200 so that the three
+categories missed or held in September can all be measured on September 28.
+https://developers.openai.com/api/docs/pricing
+https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview
 
 ### Claude engine batching (September 14, 2026)
 

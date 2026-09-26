@@ -92,7 +92,9 @@ def _price(engine: str, usage: dict[str, int]) -> float:
     cached = usage.get("cached_input_tokens", 0)
     created = usage.get("cache_creation_input_tokens", 0)
     hour = usage.get("cache_creation_1h_input_tokens", 0)
-    input_equivalent = (usage.get("input_tokens", 0) - cached + cached * 0.1
+    # OpenAI cache writes sit inside input_tokens; this adds only the surcharge.
+    written = usage.get("cache_write_tokens", 0)
+    input_equivalent = (usage.get("input_tokens", 0) - cached + cached * 0.1 + written * 0.25
                         + usage.get("cache_read_input_tokens", 0) * 0.1
                         + (created - hour) * 1.25 + hour * 2)
     discount = BATCH_DISCOUNT if engine == "claude" and usage.get("batch_billed") == 1 else 1.0

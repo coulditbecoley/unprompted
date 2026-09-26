@@ -46,9 +46,14 @@ $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Hours 8) `
     -MultipleInstances IgnoreNew
 
+# Interactive, never "run whether logged on or not". That mode (S4U) gets no
+# access to Windows Credential Manager, so git cannot read the saved GitHub
+# sign-in and the publication preflight fails before anything is measured.
+# That is what stopped 2026-09-21.
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
-    # Retain the installed principal and credentials when correcting settings.
-    Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings | Out-Null
+    Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal | Out-Null
 } else {
     Register-ScheduledTask `
     -TaskName    $taskName `
@@ -56,6 +61,7 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     -Trigger     $trigger `
     -Action      $action `
     -Settings    $settings `
+    -Principal   $principal `
     -Force | Out-Null
 }
 

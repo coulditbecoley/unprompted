@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from .base import SYSTEM_PROMPT, Engine
 
-MODEL = "gpt-5"
+MODEL = "gpt-6-sol"
 WEB_SEARCH_TOOL = {"type": "web_search"}
 # A web-search answer runs long, but not this long. Without an explicit cap the
 # SDK default plus three retries can hold a worker for the whole job timeout,
@@ -43,6 +43,8 @@ class OpenAIEngine(Engine):
                 "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
                 "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
                 "cached_input_tokens": int(getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0),
+                # Part of input_tokens, billed at 1.25x input on gpt-6-sol.
+                "cache_write_tokens": int(getattr(getattr(u, "input_tokens_details", None), "cache_write_tokens", 0) or 0),
                 "reasoning_tokens": int(getattr(getattr(u, "output_tokens_details", None), "reasoning_tokens", 0) or 0),
             }
             if u

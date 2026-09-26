@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from .base import SYSTEM_PROMPT, Engine
 
-MODEL = "claude-opus-5"
+MODEL = "claude-opus-5-5"
+# Opus 5.5 defaults to medium effort where Opus 5 defaulted to high. Pinned so
+# the move to 5.5 changes the model, not also how hard it thinks.
+EFFORT = "high"
 MAX_TOKENS = 4096
 # See openai_engine: an uncapped call can hold a worker until the job timeout.
 TIMEOUT_SECONDS = 180
-# Dynamic-filtering web search. Requires Opus 5 / 4.8 / 4.7 / 4.6 or Sonnet 5/4.6.
+# Dynamic-filtering web search. Requires Opus 5.5 / 5 / 4.8 / 4.7 / 4.6 or Sonnet 5/4.6.
 WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 4}
 
 
 def request_params(question: str) -> dict:
-    return dict(model=MODEL, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT,
+    return dict(model=MODEL, max_tokens=MAX_TOKENS, system=SYSTEM_PROMPT, output_config={"effort": EFFORT},
                 tools=[WEB_SEARCH_TOOL], messages=[{"role": "user", "content": question}])
 
 

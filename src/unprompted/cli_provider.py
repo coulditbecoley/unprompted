@@ -280,7 +280,7 @@ API_EXTRACTORS: dict[str, ApiExtractor] = {
     "claude-api-extract": ApiExtractor(
         id="claude-api-extract",
         label="Claude (API, batch)",
-        model="claude-opus-5",
+        model="claude-opus-5-5",
         env="ANTHROPIC_API_KEY",
     ),
 }

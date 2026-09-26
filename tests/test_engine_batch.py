@@ -99,9 +99,9 @@ def test_batch_rejects_incomplete_or_duplicate_result_sets(tmp_path, monkeypatch
 def test_budget_estimates_discount_without_repricing_history():
     historic = {"category": "alpha", "run_date": "2026-09-14", "extractions": [
         {"engine": "claude", "usage": {"input_tokens": 1_000_000, "output_tokens": 100_000, "web_searches": 4}}]}
-    assert cost_of_run(historic)[1] == 7.54
-    assert budget.estimate_category("alpha", 1, [historic]).dollars == 3.79
-    assert cost_of_run(historic)[1] == 7.54
+    assert cost_of_run(historic)[1] == 6.04
+    assert budget.estimate_category("alpha", 1, [historic]).dollars == 3.04
+    assert cost_of_run(historic)[1] == 6.04
 
 
 def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch):
@@ -143,3 +143,17 @@ def test_orchestrator_uses_batch_and_restarts_without_sync_fallback(tmp_path, mo
         with pytest.raises(RuntimeError, match="stop before publication"):
             run.run_category("alpha", "2026-09-14")
     assert len(submitted) == 1
+
+
+def test_perplexity_agent_response_reads_text_sources_and_searches():
+    from unprompted.engines.perplexity_engine import read_response
+    body = {"status": "completed", "output": [
+        {"type": "search_results", "results": [{"url": "https://a.example"}, {"url": "https://b.example"}]},
+        {"type": "message", "content": [{"type": "output_text", "text": "Use Alpha.", "annotations": []}]}],
+        "usage": {"input_tokens": 4521, "output_tokens": 282,
+                  "tool_calls_details": {"search_web": {"cost_usd": 0.0025, "invocation": 1}}}}
+    text, sources, usage = read_response(body)
+    assert text == "Use Alpha."
+    assert sources == ["https://a.example", "https://b.example"]
+    assert usage == {"input_tokens": 4521, "output_tokens": 282, "web_searches": 1}
+    assert read_response({**body, "status": "incomplete"})[2]["incomplete_response"] == 1

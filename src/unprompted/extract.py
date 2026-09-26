@@ -45,7 +45,7 @@ from .engines.anthropic_engine import _usage as anthropic_usage
 # two should be free to diverge.
 _PUNCT = re.compile(r"[^a-z0-9]+")
 
-MODEL = "claude-opus-5"
+MODEL = "claude-opus-5-5"
 MAX_TOKENS = 2048
 # The CLI path is capped in cli_provider; cap the API path too, so one hung
 # extraction cannot hold a worker for the length of the job.

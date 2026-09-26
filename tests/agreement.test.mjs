@@ -338,7 +338,8 @@ test("Python prices a Batch-billed run at half too", () => {
  * An exact half, which the archive does not contain and the two languages used
  * to round in opposite directions.
  *
- * 25,000 ChatGPT input tokens at $1.25/M is $0.03125 exactly. Python's round()
+ * 25,000 ChatGPT input tokens at $1.25/M was $0.03125 exactly; at today's $2/M
+ * the same tie is 15,625 tokens. Python's round()
  * took it to $0.0312 and JavaScript's Math.round to $0.0313, and every check
  * here passed because no real run has ever landed on a tie. A rule that agrees
  * except at the boundary is not a shared rule.
@@ -361,7 +362,7 @@ test("Python and TypeScript round an exact half the same way", () => {
         sources: [],
         refused: false,
         error: null,
-        usage: { input_tokens: 25_000, output_tokens: 0 },
+        usage: { input_tokens: 15_625, output_tokens: 0 },
       },
     ],
   };
@@ -389,14 +390,14 @@ test("batch and cached usage have the same explicit price in Python and TypeScri
       output_tokens: 100_000, cache_read_input_tokens: 1_000_000,
       cache_creation_input_tokens: 1_000_000, cache_creation_1h_input_tokens: 400_000,
       web_searches: 4, extract_cache_read_input_tokens: 500_000 } },
-    { engine: "chatgpt", usage: { input_tokens: 1_000_000, cached_input_tokens: 400_000,
+    { engine: "chatgpt", usage: { input_tokens: 1_000_000, cached_input_tokens: 400_000, cache_write_tokens: 200_000,
       output_tokens: 100_000, reasoning_tokens: 10_000, web_searches: 2 } },
   ] };
   const script = ["import json, sys", SRC_PATH_LINE,
     "from unprompted.cost import cost_of_run",
     "print(cost_of_run(json.loads(sys.argv[1]))[1])"].join(NEWLINE);
   const ours = costOfRun(run, rates);
-  assert.equal(ours.total, 9.86);
+  assert.equal(ours.total, 8.84);
   assert.equal(ours.items.find(i => i.label === "claude").inputTokens, 3_000_000);
   assert.equal(ours.items.find(i => i.label === "extract").inputTokens, 500_000);
   assert.equal(Number(execFileSync(PYTHON, ["-c", script, JSON.stringify(run)], { encoding: "utf-8" })), ours.total);

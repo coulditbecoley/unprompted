@@ -1,7 +1,9 @@
-"""Perplexity, queried natively through the Sonar API.
+"""Perplexity, queried through its Agent API with its own Sonar model.
 
-Sonar carries its own retrieval rather than having search bolted on, so its
-answers reflect Perplexity's ranking rather than a third party's index.
+Sonar Chat Completions was retired on 2026-09-27. The Agent API's presets run
+OpenAI models, which would measure ChatGPT twice, so the model is pinned to
+`perplexity/sonar`. Unlike the old endpoint it does not search unless given
+the web_search tool: without it, a probe named DALL-E from memory.
 """
 
 from __future__ import annotations
@@ -11,8 +13,8 @@ import urllib.request
 
 from .base import SYSTEM_PROMPT, Engine
 
-ENDPOINT = "https://api.perplexity.ai/chat/completions"
-MODEL = "sonar"
+ENDPOINT = "https://api.perplexity.ai/v1/agent"
+MODEL = "perplexity/sonar"
 TIMEOUT_SECONDS = 90
 
 
@@ -24,10 +26,9 @@ class PerplexityEngine(Engine):
         payload = json.dumps(
             {
                 "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": question},
-                ],
+                "instructions": SYSTEM_PROMPT,
+                "input": question,
+                "tools": [{"type": "web_search"}],
             }
         ).encode("utf-8")
 
@@ -43,29 +44,35 @@ class PerplexityEngine(Engine):
 
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             body = json.loads(response.read().decode("utf-8"))
+        return read_response(body)
 
-        text = ""
-        choices = body.get("choices") or []
-        if choices:
-            text = (choices[0].get("message", {}).get("content") or "").strip()
 
-        # Sonar has returned citations under two different keys across versions;
-        # accept either rather than silently losing the sources.
-        raw = body.get("citations") or body.get("search_results") or []
-        sources: list[str] = []
-        for entry in raw:
-            if isinstance(entry, str):
-                sources.append(entry)
-            elif isinstance(entry, dict) and entry.get("url"):
-                sources.append(entry["url"])
+def read_response(body: dict) -> tuple[str, list[str], dict[str, int]]:
+    text_parts: list[str] = []
+    sources: list[str] = []
+    for item in body.get("output") or []:
+        if item.get("type") == "message":
+            for block in item.get("content") or []:
+                if block.get("type") == "output_text" and block.get("text"):
+                    text_parts.append(block["text"])
+                for ann in block.get("annotations") or []:
+                    if isinstance(ann, dict) and ann.get("url"):
+                        sources.append(ann["url"])
+        elif item.get("type") == "search_results":
+            for result in item.get("results") or []:
+                if isinstance(result, dict) and result.get("url"):
+                    sources.append(result["url"])
 
-        u = body.get("usage") or {}
-        usage = {
-            "input_tokens": int(u.get("prompt_tokens", 0) or 0),
-            "output_tokens": int(u.get("completion_tokens", 0) or 0),
-            # Sonar bills a per-request search fee on top of tokens.
-            "requests": 1,
-        }
-        if not choices or choices[0].get("finish_reason") not in {None, "stop"}:
-            usage["incomplete_response"] = 1
-        return text, list(dict.fromkeys(sources)), usage
+    u = body.get("usage") or {}
+    searches = ((u.get("tool_calls_details") or {}).get("search_web") or {}).get("invocation", 0)
+    # Cache writes are part of input_tokens and billed at the input rate, so
+    # input_tokens alone prices them. Cache reads are left at full input
+    # price: a small overestimate rather than a second multiplier.
+    usage = {
+        "input_tokens": int(u.get("input_tokens", 0) or 0),
+        "output_tokens": int(u.get("output_tokens", 0) or 0),
+        "web_searches": int(searches or 0),
+    }
+    if body.get("status") not in {None, "completed"}:
+        usage["incomplete_response"] = 1
+    return "\n".join(text_parts).strip(), list(dict.fromkeys(sources)), usage
