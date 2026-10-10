@@ -180,8 +180,8 @@ def test_read_record_is_consumable_and_the_shadow_store_is_append_only(monkeypat
     week = {b.brand: b for b in brand_week(reading)}
     assert week["SGC"].named == 2 and week["SGC"].total_runs == 2
 
-    target = jev_reader.shadow_path(source)
-    assert target == tmp_path / "audit" / "jev-shadow" / "runs" / "2026-09-14" / "grading.json"
+    target = jev_reader.shadow_path(source, "2026-10-10")
+    assert target == tmp_path / "audit/jev-shadow/2026-10-10/runs/2026-09-14/grading.json"
     write_shadow(target, reading)
     with pytest.raises(FileExistsError):
         write_shadow(target, reading)
@@ -257,3 +257,48 @@ def test_a_cited_lowercase_label_does_not_rename_the_brand():
     aliases = {"canonical": {"Aider": ["aider", "aider chat"]}, "exclude": []}
     found = Finder(aliases).find("Best terminal tool: Aider. ([aider.chat](https://aider.chat/docs))")
     assert [(c.name, c.offset) for c in found if c.source == "alias"] == [("Aider", 20)]
+
+
+def test_reading_sets_are_named_explicitly_and_never_replace_each_other(monkeypatch, tmp_path):
+    shadow_setup(monkeypatch, tmp_path)
+    source, _ = run_record(tmp_path)
+    first = jev_reader.shadow_path(source, "2026-10-10")
+    second = jev_reader.shadow_path(source, "2026-10-10-r2")
+    assert first == tmp_path / "audit/jev-shadow/2026-10-10/runs/2026-09-14/grading.json"
+    write_shadow(first, {"n": 1})
+    write_shadow(second, {"n": 2})
+    with pytest.raises(FileExistsError):
+        write_shadow(first, {"n": 3})
+    assert json.loads(first.read_text(encoding="utf-8")) == {"n": 1}
+    for bad in ("latest", "../2026-10-10", "2026-10-10/x", "2026-10-10-v2", "runs"):
+        with pytest.raises(ValueError):
+            jev_reader.shadow_path(source, bad)
+
+
+def test_shadow_readings_are_gitignored_so_published_git_sha_stays_clean():
+    import subprocess
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    probe = "audit/jev-shadow/2026-10-12/runs/2026-10-12/ai-coding-assistants.json"
+    assert subprocess.run(["git", "check-ignore", "-q", probe], cwd=root).returncode == 0
+    assert subprocess.run(["git", "check-ignore", "-q", "audit/2026-10-10/jev-shadow-report.md"], cwd=root).returncode == 1
+
+
+def test_compare_refuses_a_partial_set_and_an_existing_output(monkeypatch, tmp_path):
+    import sys
+    import scripts.compare_jev as compare_jev
+
+    shadow_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    run_record(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["compare_jev.py", "compare", "--set", "2026-10-10"])
+    with pytest.raises(SystemExit, match="has no reading of: data/runs/2026-09-14/grading.json"):
+        compare_jev.main()
+    existing = tmp_path / "out.json"
+    existing.write_text("{}")
+    def must_not_read(*args):
+        raise AssertionError("read before checking the output path")
+    monkeypatch.setattr(compare_jev, "_load_or_read", must_not_read)
+    monkeypatch.setattr(sys, "argv", ["compare_jev.py", "compare", "--set", "2026-10-10", "--out", str(existing)])
+    with pytest.raises(SystemExit, match="already exists"):
+        compare_jev.main()

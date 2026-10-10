@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from unprompted.aggregate import brand_week, exceeds_noise  # noqa: E402
-from unprompted.jev_reader import (PRICE_PER_MTOK, SHADOW_ROOT, Finder, alias_policy,  # noqa: E402
+from unprompted.jev_reader import (PRICE_PER_MTOK, Finder, alias_policy, reading_set,  # noqa: E402
                                    shadow_path, write_shadow)
 from unprompted.models import BrandMention, Extraction  # noqa: E402
 from unprompted.normalize import AliasMap, _key, normalize  # noqa: E402
@@ -34,7 +34,8 @@ OPUS_DOLLARS_PER_1K = 14.10  # extract.py's measured figure for Opus extraction
 LABEL = "Agreement with the published Opus reading, not accuracy. Neither reader is ground truth."
 
 
-def sources(root: Path = ROOT) -> list[Path]:
+def sources(root: Path | None = None) -> list[Path]:
+    root = root or ROOT
     return sorted((root / "data").glob("runs/*/*.json")) + sorted((root / "data").glob("held/*/*.json"))
 
 
@@ -211,19 +212,30 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
     }
 
 
-def _load_or_read(source: Path, read: bool, client) -> dict | None:
-    target = shadow_path(source)
+def _fresh_output(path: Path) -> Path:
+    """Checked before any reading: paid work must never end in a refused write."""
+    out = path.resolve()
+    if out.is_relative_to((ROOT / "data").resolve()):
+        raise SystemExit("output must be outside data/")
+    if out.exists():
+        raise SystemExit(f"{path} already exists; choose a new path")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _load_or_read(source: Path, read: bool, client, set_name: str) -> dict | None:
+    target = shadow_path(source, set_name)
     if target.exists():
         return json.loads(target.read_text(encoding="utf-8"))
     if not read:
         return None
     from unprompted.jev_reader import read_record
-    reading = read_record(source, client)
-    if reading["errors"]:
-        print(f"  {source.relative_to(ROOT)}: {reading['errors']} answers failed; reading kept for review",
+    shadow = read_record(source, client)
+    if shadow["errors"]:
+        print(f"  {source.relative_to(ROOT)}: {shadow['errors']} answers failed; reading kept for review",
               file=sys.stderr)
-    write_shadow(target, reading)
-    return reading
+    write_shadow(target, shadow)
+    return shadow
 
 
 def main() -> int:
@@ -231,11 +243,14 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("coverage")
     run = commands.add_parser("compare")
+    run.add_argument("--set", dest="set_name", required=True, help="reading set to compare, e.g. 2026-10-10")
     run.add_argument("--read", action="store_true", help="read records that have no shadow reading yet (paid)")
     run.add_argument("--out", type=Path)
+    run.add_argument("--allow-partial", action="store_true", help="compare even if the set lacks some sources")
     alarm = commands.add_parser("alarm")
     alarm.add_argument("date")
     alarm.add_argument("--category", required=True)
+    alarm.add_argument("--set", dest="set_name", help="reading set (default: the date)")
     args = parser.parse_args()
 
     if args.command == "coverage":
@@ -245,6 +260,8 @@ def main() -> int:
         return 0
 
     from unprompted.run import load_local_env
+    set_name = reading_set(args.set_name or (args.date if args.command == "alarm" else None))
+    out = _fresh_output(args.out) if getattr(args, "out", None) else None
     client = None
     if args.command == "alarm" or args.read:
         from unprompted.jev_reader import client as make_client
@@ -256,28 +273,27 @@ def main() -> int:
         # it never holds, alters or reports into a published week.
         from unprompted.jev_reader import find_source
         source = find_source(args.date, args.category)
-        reading = _load_or_read(source, True, client)
-        result = compare(json.loads(source.read_text(encoding="utf-8")), reading, source.relative_to(ROOT).as_posix())
+        shadow = _load_or_read(source, True, client, set_name)
+        result = compare(json.loads(source.read_text(encoding="utf-8")), shadow, source.relative_to(ROOT).as_posix())
         brief = {k: result[k] for k in ("label", "source", "reader", "overall", "disagreement_counts",
                                          "rotation_beyond_noise")}
-        write_shadow(shadow_path(source).with_suffix(".alarm.json"), brief)
+        write_shadow(shadow_path(source, set_name).with_suffix(".alarm.json"), brief)
         print(json.dumps(brief, indent=2))
         return 0
 
-    results = []
+    results, missing = [], []
     for source in sources():
         raw = source.read_bytes()
-        reading = _load_or_read(source, args.read, client)
-        if reading is None:
-            print(f"  {source.relative_to(ROOT)}: no shadow reading", file=sys.stderr)
+        shadow = _load_or_read(source, args.read, client, set_name)
+        if shadow is None:
+            missing.append(source.relative_to(ROOT).as_posix())
             continue
-        results.append(compare(json.loads(raw), reading, source.relative_to(ROOT).as_posix(),
+        results.append(compare(json.loads(raw), shadow, source.relative_to(ROOT).as_posix(),
                                hashlib.sha256(raw).hexdigest()))
-    payload = {"label": LABEL, "results": results}
-    if args.out:
-        out = args.out.resolve()
-        if out.is_relative_to((ROOT / "data").resolve()):
-            raise SystemExit("comparison output must be outside data/")
+    if missing and not args.allow_partial:
+        raise SystemExit(f"set {set_name} has no reading of: " + ", ".join(missing))
+    payload = {"label": LABEL, "reading_set": set_name, "missing": missing, "results": results}
+    if out:
         with out.open("x", encoding="utf-8") as stream:
             stream.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
         print(f"wrote {out}")

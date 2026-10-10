@@ -39,7 +39,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -427,10 +427,24 @@ def find_source(date: str, category: str, bucket: str | None = None) -> Path:
     return found[0]
 
 
-def shadow_path(source: Path) -> Path:
-    """audit/jev-shadow/<bucket>/<date>/<category>.json, mirroring the source."""
+_SET = re.compile(r"\d{4}-\d{2}-\d{2}(?:-r\d{1,3})?")
+
+
+def reading_set(name: str | None = None) -> str:
+    """One pass of reading, named YYYY-MM-DD or YYYY-MM-DD-rN. Always chosen
+    explicitly: sets are never picked by sorting, because a later set can be
+    partial (one week) or hold only a triage note."""
+    name = name or date.today().isoformat()
+    if not _SET.fullmatch(name):
+        raise ValueError("a reading set is YYYY-MM-DD or YYYY-MM-DD-rN")
+    date.fromisoformat(name[:10])
+    return name
+
+
+def shadow_path(source: Path, set_name: str) -> Path:
+    """audit/jev-shadow/<set>/<bucket>/<date>/<category>.json, mirroring the source."""
     relative = source.resolve().relative_to((ROOT / "data").resolve())
-    return SHADOW_ROOT / relative
+    return SHADOW_ROOT / reading_set(set_name) / relative
 
 
 def write_shadow(path: Path, value: dict) -> None:
@@ -575,6 +589,8 @@ def main() -> int:
     parser.add_argument("date")
     parser.add_argument("--category", required=True)
     parser.add_argument("--bucket", choices=["runs", "held"])
+    parser.add_argument("--set", dest="set_name",
+                        help="reading set, YYYY-MM-DD or YYYY-MM-DD-rN (default today; required for health)")
     parser.add_argument("--allow-failures", action="store_true",
                         help="write the reading even if some answers failed to read")
     args = parser.parse_args()
@@ -582,7 +598,9 @@ def main() -> int:
 
     source = find_source(args.date, args.category, args.bucket)
     if args.command == "health":
-        reading = json.loads(shadow_path(source).read_text(encoding="utf-8"))
+        if not args.set_name:
+            raise SystemExit("health needs --set")
+        reading = json.loads(shadow_path(source, args.set_name).read_text(encoding="utf-8"))
         print(json.dumps(health(reading), indent=2, ensure_ascii=False))
         return 0
 
@@ -595,14 +613,14 @@ def main() -> int:
         record = json.loads(source.read_text(encoding="utf-8"))
         alias_data = yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8")) \
             if (ROOT / "aliases" / f"{args.category}.yml").exists() else alias_policy(record)[0]
-        out = SHADOW_ROOT / "triage" / f"{args.date}-{args.category}.md"
+        out = SHADOW_ROOT / reading_set(args.set_name) / "triage" / f"{args.date}-{args.category}.md"
         if out.exists():
             raise SystemExit(f"refusing to overwrite {out}")
         write_text(out, triage(source, quarantine, alias_data, jev) + "\n")
         print(f"wrote {out.relative_to(ROOT).as_posix()}")
         return 0
 
-    target = shadow_path(source)
+    target = shadow_path(source, reading_set(args.set_name))
     if target.exists():
         raise SystemExit(f"already read: {target.relative_to(ROOT).as_posix()}")
     reading = read_record(source, jev)
