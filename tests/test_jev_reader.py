@@ -401,3 +401,27 @@ def test_review_rejects_duplicate_altered_or_malformed_shadow_rows(monkeypatch, 
         paths[1].write_text(json.dumps(shadow), encoding="utf-8")
     with pytest.raises(ValueError):
         shadow_predictions(tmp_path, packet, paths)
+
+
+def test_probes_save_auditable_per_sample_results(monkeypatch, tmp_path):
+    import hashlib
+    import scripts.compare_jev as compare_jev
+
+    shadow_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    source, _ = run_record(tmp_path)
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases" / "ai-coding-assistants.yml").write_text("canonical: {Cursor: [cursor]}\n")
+    fake = FakeJev({"PSA": "option", "SGC": "option", "TAG": "avoid"})
+    write_shadow(jev_reader.shadow_path(source, "2026-10-10"), jev_reader.read_record(source, fake, workers=1))
+    result = compare_jev.probes("2026-10-10", fake, sample=3, seed="fixed")
+    assert result["option_order"]["judgments"] > 0
+    assert result["option_order"]["same_role"] == result["option_order"]["judgments"]
+    sample = result["samples"][0]
+    assert sample["source"] == "data/runs/2026-09-14/grading.json" and "original" in sample and "reversed" in sample
+    assert result["source_hashes"]["data/runs/2026-09-14/grading.json"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert set(result["planted"]) == {"plain", "quoted page", "direct", "refusal", "off topic"}
+    role_questions = [q for s, qs, _ in fake.requests for k, q in qs.items() if k.startswith("role_")]
+    assert any(list(q.criteria)[0] == "not_a_company" for q in role_questions)
+    again = compare_jev.probes("2026-10-10", fake, sample=3, seed="fixed")
+    assert [s["run_index"] for s in again["samples"]] == [s["run_index"] for s in result["samples"]]

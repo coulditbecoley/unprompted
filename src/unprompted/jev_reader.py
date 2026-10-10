@@ -276,7 +276,7 @@ def _ref(i: int) -> str:
     return f"c{i:03d}"
 
 
-def questions_for(candidates: list[Candidate], has_question: bool) -> dict:
+def questions_for(candidates: list[Candidate], has_question: bool, role: dict = ROLE) -> dict:
     """Every judgment for one answer. Candidates are referred to by their key in state."""
     from typesafe_sdk import Choice, Noul, NoulCriteria
 
@@ -312,7 +312,7 @@ def questions_for(candidates: list[Candidate], has_question: bool) -> dict:
     for i, _ in enumerate(candidates):
         questions[f"role_{i}"] = Choice(
             instructions=f"`candidates.{_ref(i)}` is a name or phrase taken from `answer`. Which describes it?",
-            criteria=ROLE)
+            criteria=role)
         questions[f"sentiment_{i}"] = Choice(
             instructions=f"What is the sentiment of `answer` toward `candidates.{_ref(i)}`?", criteria=SENTIMENT)
     return questions
@@ -347,8 +347,10 @@ def _batches(state: dict, questions: dict) -> list[dict]:
 
 
 def read_answer(client, answer: EngineAnswer, finder: Finder, question_text: str | None = None,
-                model: str = MODEL) -> tuple[Extraction, dict]:
-    """Read one stored answer. Never raises: a failure becomes `error`."""
+                model: str = MODEL, role: dict = ROLE) -> tuple[Extraction, dict]:
+    """Read one stored answer. Never raises: a failure becomes `error`.
+
+    `role` replaces the role options, only for the option-order probe."""
     base, needed = _base_for(answer)
     meta: dict = {"input_tokens": 0, "requests": 0, "candidates": []}
     if not needed:
@@ -363,7 +365,7 @@ def read_answer(client, answer: EngineAnswer, finder: Finder, question_text: str
 
     answers, models = {}, set()
     try:
-        for batch in _batches(state, questions_for(candidates, bool(question_text))):
+        for batch in _batches(state, questions_for(candidates, bool(question_text), role)):
             response = client.system_one(state=state, questions=batch, model=model)
             meta["requests"] += 1
             meta["input_tokens"] += (response.usage.input_tokens or 0) if response.usage else 0
@@ -374,12 +376,12 @@ def read_answer(client, answer: EngineAnswer, finder: Finder, question_text: str
             meta[qid] = round(float(answers[qid].noul), 4)
         rows = []
         for i, c in enumerate(candidates):
-            role, sentiment = answers[f"role_{i}"], answers[f"sentiment_{i}"]
-            if role.choice not in ROLE or sentiment.choice not in SENTIMENT:
+            judged, sentiment = answers[f"role_{i}"], answers[f"sentiment_{i}"]
+            if judged.choice not in role or sentiment.choice not in SENTIMENT:
                 raise ValueError(f"answer outside the offered options for candidate {i}")
             rows.append({"name": c.name, "offset": c.offset, "source": c.source, "canonical": c.canonical,
-                         "role": role.choice, "role_confidence": round(role.confidence, 4),
-                         "role_probabilities": {k: round(v, 4) for k, v in role.probabilities.items()},
+                         "role": judged.choice, "role_confidence": round(judged.confidence, 4),
+                         "role_probabilities": {k: round(v, 4) for k, v in judged.probabilities.items()},
                          "sentiment": sentiment.choice, "sentiment_confidence": round(sentiment.confidence, 4),
                          "sentiment_probabilities": {k: round(v, 4) for k, v in sentiment.probabilities.items()}})
     except Exception as exc:  # noqa: BLE001 - recorded on the reading, not raised
