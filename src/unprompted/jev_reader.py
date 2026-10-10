@@ -130,6 +130,10 @@ class Candidate:
     canonical: str | None = None   # alias-map resolution, for coverage
 
 
+def _spelling(written: str) -> tuple[bool, int]:
+    return not written.islower(), len(written)
+
+
 def _alias_pattern(name: str) -> re.Pattern | None:
     tokens = _key(name).split()
     if not tokens:
@@ -192,8 +196,9 @@ class Finder:
                 continue
             if canonical not in known:
                 known[canonical] = Candidate(written, start, "alias", canonical)
-            elif len(written) > len(known[canonical].name):
-                # Offset stays the first mention; the name is the fullest spelling.
+            elif _spelling(written) > _spelling(known[canonical].name):
+                # Offset stays the first mention; the name is the fullest
+                # capitalised spelling, so "Aider" beats a cited "aider.chat".
                 known[canonical].name = written
 
         unknown: dict[str, Candidate] = {}

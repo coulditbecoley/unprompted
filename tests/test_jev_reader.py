@@ -251,3 +251,9 @@ def test_an_excluded_grade_or_compound_still_names_its_brand():
     found = Finder(aliases).find("A PSA 10 sells best. Budget: GMA/Premier. Edit in Adobe Photoshop.")
     # "a PSA 10" is PSA, as EXTRACT_PROMPT says; an unrelated exclusion implies nothing.
     assert {c.canonical for c in found if c.source == "alias"} == {"PSA", "GMA"}
+
+
+def test_a_cited_lowercase_label_does_not_rename_the_brand():
+    aliases = {"canonical": {"Aider": ["aider", "aider chat"]}, "exclude": []}
+    found = Finder(aliases).find("Best terminal tool: Aider. ([aider.chat](https://aider.chat/docs))")
+    assert [(c.name, c.offset) for c in found if c.source == "alias"] == [("Aider", 20)]
