@@ -1,0 +1,245 @@
+"""Offline checks for the shadow Jev reader. The client is always a fake."""
+from copy import deepcopy
+import hashlib
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from unprompted import jev_reader
+from unprompted.aggregate import brand_week
+from unprompted.jev_reader import Finder, read_answer, write_shadow
+from unprompted.models import EngineAnswer
+
+ALIASES = {
+    "canonical": {
+        "PSA": ["psa", "professional sports authenticator"],
+        "SGC": ["sgc"], "TAG": ["tag grading"], "AGS": ["ags"],
+        "Cursor": ["cursor"], "Aider": ["aider"],
+        "DALL-E": ["dall-e", "openai image generation"],
+    },
+    "exclude": ["ChatGPT"],
+}
+
+
+def names(found, source=None):
+    return [c.name for c in found if source is None or c.source == source]
+
+
+def test_candidates_cover_aliases_compounds_and_unknowns():
+    text = ("**Best overall:** PSA, then SGC/TAG/Ace for speed. TAG and AGS are cheaper. "
+            "OpenAI's image generation and DALL·E both work; skip ChatGPT Plus.\n"
+            "- **Kestrel Grading**: new.\n"
+            "Read more at [psa.com](https://www.psa.com/cursor-guide) or [kestrel.com](https://kestrel.com).")
+    found = Finder(ALIASES).find(text)
+    alias = {c.canonical: c for c in found if c.source == "alias"}
+    assert set(alias) == {"PSA", "SGC", "TAG", "AGS", "DALL-E"}
+    # The fullest spelling names the brand; the first mention fixes its offset.
+    assert alias["DALL-E"].name == "OpenAI's image generation"
+    assert alias["DALL-E"].offset == text.index("OpenAI's")
+    assert alias["TAG"].offset == text.index("TAG/")
+    unknown = names(found, "unknown")
+    assert "Ace" in unknown and "Kestrel Grading" in unknown       # compound split, bold list head
+    assert "ChatGPT Plus" not in unknown                              # excluded name claims its span
+    assert "Cursor" not in alias and "kestrel.com" not in unknown     # URLs and domains are citations
+    assert not {"Best", "Best overall", "Read"} & set(unknown)        # sentence words are not names
+    assert [c.offset for c in found] == sorted(c.offset for c in found)
+
+
+def test_lowercase_hits_only_when_the_brand_is_never_cased():
+    finder = Finder(ALIASES)
+    # Lowercase only, so offered; Jev judges whether it is the product.
+    assert {c.canonical for c in finder.find("Move the cursor to the end.")} == {"Cursor"}
+    common = finder.find("Cursor is best. Move the cursor anywhere.")
+    assert [c.offset for c in common if c.canonical == "Cursor"] == [0]
+    lowercase_brand = finder.find("Open-source agents like aider are free.")
+    assert {c.canonical for c in lowercase_brand} == {"Aider"}
+
+
+class FakeJev:
+    """Answers from fixed tables keyed by candidate name; records every request."""
+
+    def __init__(self, roles, sentiments=None, refused=0.02, fail=None):
+        self.roles, self.sentiments, self.refused, self.fail = roles, sentiments or {}, refused, fail
+        self.requests = []
+
+    def system_one(self, state, questions, model):
+        self.requests.append((state, questions, model))
+        if self.fail:
+            raise self.fail
+        answers = {}
+        for qid in questions:
+            if qid.startswith(("role_", "sentiment_")):
+                kind, index = qid.split("_")
+                name = state["candidates"][f"c{int(index):03d}"]
+                pick = (self.roles if kind == "role" else self.sentiments).get(
+                    name, "not_a_company" if kind == "role" else "neutral")
+                answers[qid] = SimpleNamespace(choice=pick, confidence=0.9, probabilities={pick: 0.95})
+            else:
+                answers[qid] = SimpleNamespace(noul=self.refused if qid == "refused" else 0.03)
+        return SimpleNamespace(model="jev-1.13.0", usage=SimpleNamespace(input_tokens=1000), answers=answers)
+
+
+def answer(text, **kwargs):
+    return EngineAnswer(engine="claude", question_id="q1", question="", run_index=0, text=text, **kwargs)
+
+
+def test_positions_come_from_offsets_and_only_options_are_kept():
+    text = "Try SGC first. AGS is fine. Avoid TAG. PSA owns the market."
+    fake = FakeJev({"PSA": "option", "AGS": "option", "SGC": "option", "TAG": "avoid"}, {"AGS": "positive"})
+    ex, meta = read_answer(fake, answer(text), Finder(ALIASES), question_text="Who grades best?")
+    assert [(b.name, b.position) for b in ex.brands] == [("SGC", 1), ("AGS", 2), ("PSA", 3)]
+    assert [b.sentiment for b in ex.brands] == ["neutral", "positive", "neutral"]
+    assert ex.refused is False and ex.error is None
+    assert meta["requests"] == 1 and meta["input_tokens"] == 1000 and meta["model"] == "jev-1.13.0"
+    assert {c["name"]: c["role"] for c in meta["candidates"]}["TAG"] == "avoid"
+    state, questions, model = fake.requests[0]
+    # Untrusted text lives only in state; instructions point at it by key.
+    assert set(state) == {"shopper_question", "answer", "candidates"} and model == jev_reader.MODEL
+    assert all("SGC" not in json.dumps(q.model_dump()) for q in questions.values())
+    assert "off_topic" in questions
+
+
+def test_refusal_mirrors_the_extraction_prompt():
+    empty = FakeJev({}, refused=0.97)
+    ex, meta = read_answer(empty, answer("I can't recommend a grader."), Finder(ALIASES))
+    assert ex.refused is True and ex.brands == [] and "off_topic" not in empty.requests[0][1]
+    conflict = FakeJev({"PSA": "option"}, refused=0.9)
+    ex, meta = read_answer(conflict, answer("PSA, I suppose."), Finder(ALIASES))
+    assert ex.refused is False and meta["refusal_conflict"] is True
+    blank, _ = read_answer(FakeJev({}), answer("   "), Finder(ALIASES))
+    assert blank.refused is True                                   # same rule as extract._base_for
+    engine_error, meta = read_answer(FakeJev({}), answer("", error="engine timed out"), Finder(ALIASES))
+    assert engine_error.error == "engine timed out" and meta["requests"] == 0
+
+
+def test_api_failure_becomes_a_recorded_error_and_a_missing_key_stops_first(monkeypatch):
+    from typesafe_sdk import TypeSafeAPIConnectionError
+
+    ex, meta = read_answer(FakeJev({}, fail=TypeSafeAPIConnectionError("down")), answer("PSA."), Finder(ALIASES))
+    assert ex.error.startswith("jev failed: TypeSafeAPIConnectionError") and ex.brands == []
+    assert not ex.error.startswith("extract failed")               # never mistaken for the published reader's
+    bad = FakeJev({"PSA": "option"})
+    bad.roles = {"PSA": "invented"}
+    ex, _ = read_answer(bad, answer("PSA."), Finder(ALIASES))
+    assert "outside the offered options" in ex.error
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    with pytest.raises(SystemExit, match="missing or invalid"):
+        jev_reader.client()
+
+
+def test_large_requests_split_without_separating_a_candidates_questions(monkeypatch):
+    monkeypatch.setattr(jev_reader, "REQUEST_TOKEN_BUDGET", 600)
+    text = " ".join(f"Brand{i:02d} Labs is good." for i in range(12))
+    fake = FakeJev({f"Brand{i:02d} Labs": "option" for i in range(12)})
+    ex, meta = read_answer(fake, answer(text), Finder(ALIASES))
+    assert meta["requests"] > 1 and len(ex.brands) == 12
+    for _, questions, _ in fake.requests:
+        roles = {q.split("_")[1] for q in questions if q.startswith("role_")}
+        assert roles == {q.split("_")[1] for q in questions if q.startswith("sentiment_")}
+
+
+def run_record(tmp_path):
+    rows = [
+        {"engine": "claude", "question_id": "q1", "run_index": 0, "answer": "PSA first, then SGC. Avoid TAG.",
+         "brands": [{"name": "PSA", "position": 1, "sentiment": "positive"},
+                    {"name": "TAG", "position": 2, "sentiment": "neutral"}], "refused": False, "error": None},
+        {"engine": "claude", "question_id": "q1", "run_index": 1, "answer": "SGC is best.",
+         "brands": [{"name": "SGC", "position": 1, "sentiment": "positive"}], "refused": False, "error": None},
+        {"engine": "chatgpt", "question_id": "q1", "run_index": 0, "answer": "No recommendation.",
+         "brands": [], "refused": True, "error": None},
+        {"engine": "chatgpt", "question_id": "q1", "run_index": 1, "answer": "",
+         "brands": [], "refused": False, "error": "engine failed"},
+    ]
+    record = {"category": "grading", "run_date": "2026-09-14", "engines": ["chatgpt", "claude"],
+              "method_version": 1, "runs_per_question": 2, "methodology": {"aliases": ALIASES},
+              "extractions": rows, "quarantined": ["Kestrel"]}
+    path = tmp_path / "data" / "runs" / "2026-09-14" / "grading.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return path, record
+
+
+def shadow_setup(monkeypatch, tmp_path):
+    monkeypatch.setattr(jev_reader, "ROOT", tmp_path)
+    monkeypatch.setattr(jev_reader, "SHADOW_ROOT", tmp_path / "audit" / "jev-shadow")
+
+
+def test_read_record_is_consumable_and_the_shadow_store_is_append_only(monkeypatch, tmp_path):
+    shadow_setup(monkeypatch, tmp_path)
+    source, record = run_record(tmp_path)
+    fake = FakeJev({"PSA": "option", "SGC": "option", "TAG": "avoid"}, {"PSA": "positive"}, refused=0.95)
+    reading = jev_reader.read_record(source, fake, workers=1)
+    assert reading["reader"] == "jev-1.13.0" and reading["source"] == "data/runs/2026-09-14/grading.json"
+    assert reading["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert reading["input_tokens"] == 3000 and reading["errors"] == 0
+    by_run = {(e["engine"], e["run_index"]): e for e in reading["extractions"]}
+    assert [b["name"] for b in by_run[("claude", 0)]["brands"]] == ["PSA", "SGC"]
+    assert by_run[("chatgpt", 0)]["refused"] is True
+    assert by_run[("chatgpt", 1)]["error"] == "engine failed"
+    week = {b.brand: b for b in brand_week(reading)}
+    assert week["SGC"].named == 2 and week["SGC"].total_runs == 2
+
+    target = jev_reader.shadow_path(source)
+    assert target == tmp_path / "audit" / "jev-shadow" / "runs" / "2026-09-14" / "grading.json"
+    write_shadow(target, reading)
+    with pytest.raises(FileExistsError):
+        write_shadow(target, reading)
+    for outside in (source, tmp_path / "data" / "runs" / "x.json", tmp_path / "audit" / "other.json"):
+        with pytest.raises(ValueError, match="only under"):
+            write_shadow(outside, reading)
+    assert json.loads(source.read_text(encoding="utf-8")) == record   # the source is untouched
+
+
+def test_comparison_math_on_a_small_fixture(monkeypatch, tmp_path):
+    import scripts.compare_jev as compare_jev
+
+    shadow_setup(monkeypatch, tmp_path)
+    source, record = run_record(tmp_path)
+    reading = jev_reader.read_record(source, FakeJev({"PSA": "option", "SGC": "option", "TAG": "avoid"},
+                                                     {"PSA": "positive"}, refused=0.95), workers=1)
+    result = compare_jev.compare(record, reading, "data/runs/2026-09-14/grading.json",
+                                 hashlib.sha256(source.read_bytes()).hexdigest())
+    claude = result["by_engine"]["claude"]
+    # Run 0: Opus {PSA, TAG}, Jev {PSA, SGC}. Run 1: both {SGC}.
+    assert claude["compared"] == 2 and claude["first_brand"] == 1.0 and claude["exact_set"] == 0.5
+    assert claude["set_overlap"] == round(2 / 4, 4)           # intersections 1+1, unions 3+1
+    # Run 1: Opus read SGC as positive, the fake Jev as neutral.
+    assert claude["position_of_shared_brands"] == 1.0 and claude["sentiment_flips"] == 1
+    assert result["by_engine"]["chatgpt"]["compared"] == 1 and result["by_engine"]["chatgpt"]["refusal"] == 1.0
+    assert result["overall"]["not_comparable"] == 1 and result["overall"]["opus_errors"] == 0
+    assert result["disagreement_counts"] == {"jev_found_opus_missed": 1, "opus_listed_jev_called_avoid": 1,
+                                             "sentiment_flip": 1}
+    assert result["disagreements"]["opus_listed_jev_called_avoid"][0]["brand"] == "TAG"
+    rotation = {r["brand"]: r for r in result["rotation_changes"]}
+    assert rotation["TAG"]["opus"] == 0.5 and rotation["TAG"]["jev"] == 0.0 and rotation["SGC"]["jev"] == 1.0
+    assert result["rotation_beyond_noise"] == []               # two answers cannot clear the noise test
+    assert result["cost"]["input_tokens"] == 3000 and result["cost"]["answers_read"] == 3
+    assert result["label"].startswith("Agreement with the published Opus reading, not accuracy")
+    bad = deepcopy(reading)
+    bad["source_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="does not belong"):
+        compare_jev.compare(record, bad, "data/runs/2026-09-14/grading.json", hashlib.sha256(source.read_bytes()).hexdigest())
+
+
+def test_review_scores_a_shadow_reading_on_identical_items(monkeypatch, tmp_path):
+    from scripts.review_extractions import prepare, score
+
+    shadow_setup(monkeypatch, tmp_path)
+    source, _ = run_record(tmp_path)
+    packet, _ = prepare(tmp_path, ["data/runs/2026-09-14/grading.json"], 2, "fixed")
+    reading = jev_reader.read_record(source, FakeJev({"PSA": "option", "SGC": "option"}, refused=0.95), workers=1)
+    shadow = tmp_path / "jev.json"
+    shadow.write_text(json.dumps(reading), encoding="utf-8")
+    for item in packet["items"]:
+        item["review"] = {"reviewer": "fixture", "brands": ["PSA", "SGC"] if item["run_index"] == 0 else ["SGC"],
+                          "refused": False, "notes": "synthetic"}
+    jev_score = score(tmp_path, packet, [shadow])
+    assert jev_score["status"] == "complete" and jev_score["reader"].startswith("shadow readings")
+    claude = [d for d in jev_score["disagreements"]]
+    assert len(claude) == 1 and claude[0]["predicted"]["refused"] is True    # chatgpt's refusal, labelled not refused
+    assert score(tmp_path, packet)["metrics"] != jev_score["metrics"]      # the published reader scores differently
+    reading["source_sha256"] = "0" * 64
+    shadow.write_text(json.dumps(reading), encoding="utf-8")
+    with pytest.raises(ValueError, match="same hash"):
+        score(tmp_path, packet, [shadow])

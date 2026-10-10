@@ -99,6 +99,7 @@ or the tests.
 | `BUTTONDOWN_API_KEY` | the weekly email signup | signups fall back to the operator's inbox via Web3Forms |
 | `NEXT_PUBLIC_WEB3FORMS_KEY` | the contact form | the form says so rather than failing silently |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | audience counting, rate limiting | nothing is counted and the dashboard says so; rate limiting fails open |
+| `TYPESAFE_API_KEY` | the shadow Jev reader only (`python -m unprompted.jev_reader`), not the web app and not the weekly run | the reader stops before reading anything and says so |
 
 The Web3Forms key is public by design — the provider puts it in client HTML, so
 every visitor can read it, and it is inlined into the JavaScript bundle at build
@@ -201,6 +202,33 @@ filesystem by absolute path. Per-harness flags in the allowlist remove more
 --sandbox read-only` for Codex). Note that `claude --tools ""` is **not** relied
 on: its help says it disables all tools, and it was observed reading a file from
 disk anyway.
+
+### A second reader, in shadow
+
+TypeSafe's Jev model can read the stored answers beside the published Opus
+reader. It never queries an engine and never changes a published number: it
+reads answers already in `data/runs/` or `data/held/` and writes only under
+`audit/jev-shadow/`, which the site, the publication checks and the weekly
+commit never read. That directory is append-only in the same way `data/runs/`
+is; a second reading of the same source refuses rather than replacing the
+first. The weekly run does not call it.
+
+```powershell
+.\.venv\Scripts\python.exe -m unprompted.jev_reader 2026-09-07 --category ai-image-generators
+.\.venv\Scripts\python.exe scripts\compare_jev.py compare --out audit\<date>\jev-shadow-comparison.json
+.\.venv\Scripts\python.exe scripts\review_extractions.py score <labelled packet> --reading audit\jev-shadow\held\2026-09-07\ai-image-generators.json
+```
+
+Code finds the candidate names (every alias map spelling, plus unknown names
+from lists, bold text, headings and capitalised spans) and fixes their order
+from character offsets. Jev then judges, for every candidate at once, whether
+the answer presents it as an option, as context, as something to avoid, or as
+no company at all, the same four outcomes the extraction prompt draws. Its
+reading has the shape of an ordinary extraction, so `normalize()` and the
+aggregate code read it unchanged. Comparisons with the published reading are
+agreement with Opus, not accuracy; the blinded review in `READING-REVIEW.md`
+is the accuracy test. Adopting it as the published reader would be a method
+change with its own version bump.
 
 ---
 
