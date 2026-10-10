@@ -59,11 +59,13 @@ MODEL = "jev-1.13.0"
 # Input tokens only; output tokens are free. Read from
 # https://docs.typesafe.ai/models on 2026-10-10: $0.042 per million tokens.
 PRICE_PER_MTOK = 0.042
-# 64k tokens per request covers the state plus every question. Characters over
-# three is a deliberately pessimistic token estimate, so a split happens early
-# rather than a request failing late.
-REQUEST_TOKEN_BUDGET = 48_000
-CHARS_PER_TOKEN = 3
+# TypeSafe allows 64k tokens per request and 32k for the state plus the longest
+# question (https://docs.typesafe.ai/models). Requests are kept under these
+# limits counted in UTF-8 bytes. That bounds tokens only if the tokenizer
+# spends at least one byte per token, which TypeSafe does not document, so a
+# provider rejection is still possible and is recorded as a failed reading.
+REQUEST_BYTE_LIMIT = 58_000
+STATE_BYTE_LIMIT = 29_000
 # ponytail: a cap, not a queue. The longest stored answer yields well under
 # this; past it the tail is dropped and counted on the record.
 MAX_CANDIDATES = 120
@@ -318,20 +320,28 @@ def questions_for(candidates: list[Candidate], has_question: bool) -> dict:
 
 def _size(value) -> int:
     dump = getattr(value, "model_dump", None)
-    return len(json.dumps(dump() if dump else value, ensure_ascii=False, default=str))
+    return len(json.dumps(dump() if dump else value, ensure_ascii=False, default=str).encode("utf-8"))
 
 
 def _batches(state: dict, questions: dict) -> list[dict]:
-    """Normally one request. Split only when the 64k request budget requires it,
-    keeping each candidate's role and sentiment together."""
-    budget = REQUEST_TOKEN_BUDGET * CHARS_PER_TOKEN - _size(state)
-    out, current, used = [], {}, 0
+    """Normally one request. Split by whole candidates when the byte bound requires it."""
+    base = _size(state)
+    if base + max((_size(q) for q in questions.values()), default=0) > STATE_BYTE_LIMIT:
+        raise ValueError("answer too large for one Jev request")
+    groups: list[dict] = [{}]
     for qid, question in questions.items():
-        cost = _size(question) + len(qid)
-        if current and used + cost > budget and not qid.startswith("sentiment_"):
+        if qid.startswith("role_"):
+            groups.append({})
+        groups[-1][qid] = question
+    out, current, used = [], {}, base
+    for group in (g for g in groups if g):
+        cost = sum(_size(q) + len(k) for k, q in group.items())
+        if base + cost > REQUEST_BYTE_LIMIT:
+            raise ValueError("answer too large for one Jev request")
+        if current and used + cost > REQUEST_BYTE_LIMIT:
             out.append(current)
-            current, used = {}, 0
-        current[qid] = question
+            current, used = {}, base
+        current.update(group)
         used += cost
     return out + ([current] if current else [])
 

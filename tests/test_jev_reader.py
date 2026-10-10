@@ -137,15 +137,23 @@ def test_api_failure_becomes_a_recorded_error_and_a_missing_key_stops_first(monk
         jev_reader.client()
 
 
-def test_large_requests_split_without_separating_a_candidates_questions(monkeypatch):
-    monkeypatch.setattr(jev_reader, "REQUEST_TOKEN_BUDGET", 600)
+def test_requests_split_by_candidate_and_stay_under_the_byte_limit(monkeypatch):
+    monkeypatch.setattr(jev_reader, "REQUEST_BYTE_LIMIT", 6_000)
     text = " ".join(f"Brand{i:02d} Labs is good." for i in range(12))
     fake = FakeJev({f"Brand{i:02d} Labs": "option" for i in range(12)})
     ex, meta = read_answer(fake, answer(text), Finder(ALIASES))
     assert meta["requests"] > 1 and len(ex.brands) == 12
-    for _, questions, _ in fake.requests:
-        roles = {q.split("_")[1] for q in questions if q.startswith("role_")}
-        assert roles == {q.split("_")[1] for q in questions if q.startswith("sentiment_")}
+    for state, questions, _ in fake.requests:
+        size = jev_reader._size(state) + sum(jev_reader._size(q) + len(k) for k, q in questions.items())
+        assert size <= 6_000
+        assert {q.split("_")[1] for q in questions if q.startswith("role_")} ==                {q.split("_")[1] for q in questions if q.startswith("sentiment_")}
+
+
+def test_an_answer_too_large_for_jev_fails_locally_without_a_request():
+    fake = FakeJev({"PSA": "option"})
+    ex, meta = read_answer(fake, answer("PSA " + "é" * 30_000), Finder(ALIASES))
+    assert ex.error.startswith("jev failed: ValueError: answer too large") and fake.requests == []
+    assert meta["requests"] == 0
 
 
 def run_record(tmp_path):
