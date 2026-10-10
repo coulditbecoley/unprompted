@@ -1,0 +1,3386 @@
+{
+  "reader_requested": "jev-1.13.0",
+  "reading_set": "2026-10-10-r2",
+  "seed": "jev-probes-v1",
+  "source_hashes": {
+    "data/runs/2026-08-21/pokemon-grading.json": "fe48fbdbdc3079e186426f5ec55b97764119a9048665a6ab5d2079945939d207",
+    "data/runs/2026-08-22/ai-coding-assistants.json": "8603e7d7f8d9be8f9f5225d87b8f7c944e73b26efec957b05dcc188502f2035b",
+    "data/runs/2026-08-22/ai-writing-tools.json": "89406b0e9a4296245e8cf67262468098817ed8869d4badef8f99bb5861589758",
+    "data/runs/2026-08-24/ai-image-generators.json": "f7d71db3f01b6c98b82498da81e5ca459d960bbd0cba2f6bdda5a709ddc5eb67",
+    "data/runs/2026-09-14/ai-coding-assistants.json": "0748a34fede6edd98a0f55debe0243bf2f5f766dd7347b43502694b113c677a2",
+    "data/held/2026-08-23/ai-image-generators.json": "64e0b2675b4ffa362896b71c38a5bc01aa1d79e8759ec510a231704cd7a45ad2",
+    "data/held/2026-08-24/ai-coding-assistants.json": "0423b7c5254b211dcc2cd4788ec2cdca6aa00a5d6dbd8eab50538df6bda82221",
+    "data/held/2026-09-07/ai-coding-assistants.json": "0f4bbfd32950d6ccf34502bc7e088940d9be4b8c1750988b358a850e4e2e4db4",
+    "data/held/2026-09-07/ai-image-generators.json": "1c308c63fcb0a8e6bf41c85f8673afd32f1845f32e83b4151f3a945872443df1",
+    "data/held/2026-09-07/ai-writing-tools.json": "8ee0071a88a870e9bdc390251d6f4d1c6b8437353c2c30949d141533dc20a052",
+    "data/held/2026-09-14/ai-image-generators.json": "5e61fdda11d275960f94c8574b2f5485c9ecea25931ee2119a2066f400a6863b",
+    "data/held/2026-09-28/ai-coding-assistants.json": "c6384eac55574fc67e693140e025c09a0e82eb1e880462f4e02dc8b1f38a0b7b",
+    "data/held/2026-09-28/ai-image-generators.json": "79ff6169eab6cc72d29889a3ce94cf0dc01d67f619049378b728d3a3a28113f7",
+    "data/held/2026-09-28/ai-writing-tools.json": "6c6e813a56124e530798373947638dc72a6982cff02777d703d6cb7d3a08cc46"
+  },
+  "option_order": {
+    "samples": 150,
+    "failed_samples": 0,
+    "judgments": 678,
+    "same_role": 670,
+    "share": 0.9882
+  },
+  "samples": [
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q13",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7885,
+      "original": {
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z-Image-Turbo": "option",
+        "HunyuanImage": "option",
+        "Imagen": "context",
+        "Stable Diffusion": "option"
+      },
+      "reversed": {
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z-Image-Turbo": "option",
+        "HunyuanImage": "option",
+        "Imagen": "context",
+        "Stable Diffusion": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q01",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7320,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Anyword": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Anyword": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q13",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7708,
+      "original": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "JetBrains AI Assistant": "option",
+        "Sourcegraph Cody": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "JetBrains AI Assistant": "option",
+        "Sourcegraph Cody": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 8331,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Copilot": "option",
+        "Grammarly": "option",
+        "Lavender": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Copilot": "option",
+        "Grammarly": "option",
+        "Lavender": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q14",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 12964,
+      "original": {
+        "Adobe Firefly": "option",
+        "Imagen": "option",
+        "DALL·E": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Imagen": "option",
+        "DALL·E": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q07",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 8020,
+      "original": {
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Cursor": "option",
+        "GitHub Copilot coding agent": "option",
+        "Cognition": "option",
+        "Gemini CLI": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Cursor": "option",
+        "GitHub Copilot coding agent": "option",
+        "Cognition": "option",
+        "Gemini CLI": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3015,
+      "original": {
+        "Grammarly": "option",
+        "Claude": "option",
+        "ProWritingAid": "option"
+      },
+      "reversed": {
+        "Grammarly": "option",
+        "Claude": "option",
+        "ProWritingAid": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q05",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5956,
+      "original": {
+        "Nano Banana": "not_a_company",
+        "DALL·E 3": "context",
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Flux": "option"
+      },
+      "reversed": {
+        "Nano Banana": "option",
+        "DALL·E 3": "context",
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Flux": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q06",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2280,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q11",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2200,
+      "original": {
+        "Adobe Firefly": "option",
+        "Canva": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Canva": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "claude-code",
+      "question_id": "q05",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6551,
+      "original": {
+        "Google's Gemini": "option",
+        "Bing Image Creator": "option",
+        "OpenAI's image": "context",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Stable Diffusion": "option",
+        "Flux": "option",
+        "Playground": "option",
+        "Canva": "avoid",
+        "Adobe Firefly": "avoid"
+      },
+      "reversed": {
+        "Google's Gemini": "option",
+        "Bing Image Creator": "option",
+        "OpenAI's image": "option",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Stable Diffusion": "option",
+        "Flux": "option",
+        "Playground": "option",
+        "Canva": "avoid",
+        "Adobe Firefly": "avoid"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1917,
+      "original": {
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option"
+      },
+      "reversed": {
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q09",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2262,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "gemini",
+      "question_id": "q15",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10550,
+      "original": {
+        "ChatGPT": "option",
+        "Jasper AI": "option",
+        "Claude": "option",
+        "Copy.ai": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Jasper AI": "option",
+        "Claude": "option",
+        "Copy.ai": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q14",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6279,
+      "original": {
+        "Adobe Firefly": "option",
+        "Imagen": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Imagen": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q02",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2077,
+      "original": {
+        "GPT Image": "option",
+        "Midjourney": "option",
+        "FLUX": "option",
+        "Imagen": "option"
+      },
+      "reversed": {
+        "GPT Image": "option",
+        "Midjourney": "option",
+        "FLUX": "option",
+        "Imagen": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q11",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2481,
+      "original": {
+        "getimg.ai": "option",
+        "Ideogram": "option",
+        "FLUX": "option",
+        "Adobe Firefly": "option",
+        "Midjourney": "option"
+      },
+      "reversed": {
+        "getimg.ai": "option",
+        "Ideogram": "option",
+        "FLUX": "option",
+        "Adobe Firefly": "option",
+        "Midjourney": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q05",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5749,
+      "original": {
+        "Google Gemini": "option",
+        "Bing Image Creator": "option",
+        "Canva": "option",
+        "Adobe Firefly": "option",
+        "Leonardo.ai": "option",
+        "Stable Diffusion": "option",
+        "Flux": "not_a_company"
+      },
+      "reversed": {
+        "Google Gemini": "option",
+        "Bing Image Creator": "option",
+        "Canva": "option",
+        "Adobe Firefly": "option",
+        "Leonardo.ai": "option",
+        "Stable Diffusion": "option",
+        "Flux": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q08",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4214,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "Ideogram": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "Ideogram": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "gemini",
+      "question_id": "q01",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 11942,
+      "original": {
+        "ChatGPT (GPT Image": "option",
+        "Midjourney": "option",
+        "Nano Banana Pro": "not_a_company",
+        "Black Forest Labs": "option",
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "ChatGPT (GPT Image": "option",
+        "Midjourney": "option",
+        "Nano Banana Pro": "not_a_company",
+        "Black Forest Labs": "option",
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "claude",
+      "question_id": "q11",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4166,
+      "original": {
+        "Technical Authentication & Grading": "option",
+        "PSA": "option",
+        "CGC": "option",
+        "Beckett": "context"
+      },
+      "reversed": {
+        "Technical Authentication & Grading": "option",
+        "PSA": "option",
+        "CGC": "option",
+        "Beckett": "context"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q05",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1934,
+      "original": {
+        "Google Gemini": "option",
+        "Microsoft Designer": "option",
+        "Ideogram": "option",
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "Google Gemini": "option",
+        "Microsoft Designer": "option",
+        "Ideogram": "option",
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q09",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5733,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Sudowrite": "option",
+        "ProWritingAid": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Writesonic": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Sudowrite": "option",
+        "ProWritingAid": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Writesonic": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-24/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q09",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1305,
+      "original": {
+        "Canva": "option",
+        "Ideogram": "option"
+      },
+      "reversed": {
+        "Canva": "option",
+        "Ideogram": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q02",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3275,
+      "original": {
+        "OpenAI’s GPT Image": "option",
+        "Reve": "option"
+      },
+      "reversed": {
+        "OpenAI’s GPT Image": "option",
+        "Reve": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q11",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4672,
+      "original": {
+        "GitHub Copilot": "option",
+        "Gemini Code Assist": "option",
+        "Cline": "option",
+        "Cursor": "context"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Gemini Code Assist": "option",
+        "Cline": "option",
+        "Cursor": "context"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q04",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5804,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "ChatGPT image generation": "option",
+        "Ideogram": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "ChatGPT image generation": "option",
+        "Ideogram": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q11",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4779,
+      "original": {
+        "Google Gemini Code Assist": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option",
+        "Cursor": "option",
+        "Continue": "option",
+        "Cline": "option",
+        "Claude Code": "context"
+      },
+      "reversed": {
+        "Google Gemini Code Assist": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option",
+        "Cursor": "option",
+        "Continue": "option",
+        "Cline": "option",
+        "Claude Code": "context"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "claude",
+      "question_id": "q13",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4427,
+      "original": {
+        "CGC": "option",
+        "TAG": "option",
+        "PSA": "option",
+        "Beckett": "option"
+      },
+      "reversed": {
+        "CGC": "option",
+        "TAG": "option",
+        "PSA": "option",
+        "Beckett": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "claude-code",
+      "question_id": "q12",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3466,
+      "original": {
+        "Google's Nano Banana Pro": "option",
+        "Firefly": "not_a_company",
+        "Black Forest Labs": "option",
+        "ChatGPT's image": "avoid"
+      },
+      "reversed": {
+        "Google's Nano Banana Pro": "option",
+        "Firefly": "option",
+        "Black Forest Labs": "option",
+        "ChatGPT's image": "avoid"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q01",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10293,
+      "original": {
+        "GitHub Copilot": "option",
+        "Amazon Q Developer": "option",
+        "Sourcegraph Cody": "option",
+        "Tabnine": "option",
+        "Codeium": "option",
+        "JetBrains AI Assistant": "option",
+        "Cursor": "option",
+        "Replit": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Amazon Q Developer": "option",
+        "Sourcegraph Cody": "option",
+        "Tabnine": "option",
+        "Codeium": "option",
+        "JetBrains AI Assistant": "option",
+        "Cursor": "option",
+        "Replit": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q13",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1616,
+      "original": {
+        "QuillBot": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "QuillBot": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2456,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "chatgpt",
+      "question_id": "q09",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 11719,
+      "original": {
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Claude": "option",
+        "Perplexity": "option",
+        "ProWritingAid": "option",
+        "Sudowrite": "option",
+        "Microsoft Copilot": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Claude": "option",
+        "Perplexity": "option",
+        "ProWritingAid": "option",
+        "Sudowrite": "option",
+        "Microsoft Copilot": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q10",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3989,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Windsurf": "option",
+        "JetBrains AI": "option",
+        "Amazon Q Developer": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Windsurf": "option",
+        "JetBrains AI": "option",
+        "Amazon Q Developer": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q04",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7017,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "GPT Image": "option",
+        "Stable Diffusion": "option",
+        "Flux": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "GPT Image": "option",
+        "Stable Diffusion": "option",
+        "Flux": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q03",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3193,
+      "original": {
+        "GitHub Copilot": "option",
+        "Replit Agent": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Replit Agent": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q08",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3764,
+      "original": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Gemini CLI": "avoid",
+        "OpenCode": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Gemini CLI": "avoid",
+        "OpenCode": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q10",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3697,
+      "original": {
+        "Sudowrite": "option",
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option"
+      },
+      "reversed": {
+        "Sudowrite": "option",
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q13",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1641,
+      "original": {
+        "QuillBot": "option",
+        "Wordtune": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "QuillBot": "option",
+        "Wordtune": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q06",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3624,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q06",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2298,
+      "original": {
+        "Ideogram": "option",
+        "OpenAI’s GPT Image": "option",
+        "Seedream": "option",
+        "Nano Banana": "option",
+        "FLUX": "option"
+      },
+      "reversed": {
+        "Ideogram": "option",
+        "OpenAI’s GPT Image": "option",
+        "Seedream": "option",
+        "Nano Banana": "option",
+        "FLUX": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q01",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2910,
+      "original": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Codex": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Codex": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q10",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3292,
+      "original": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Black Forest Labs’ FLUX": "option"
+      },
+      "reversed": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Black Forest Labs’ FLUX": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-24/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2386,
+      "original": {
+        "Seedream": "option",
+        "Nano Banana Pro": "option",
+        "Stable Diffusion": "option",
+        "Midjourney": "option"
+      },
+      "reversed": {
+        "Seedream": "option",
+        "Nano Banana Pro": "option",
+        "Stable Diffusion": "option",
+        "Midjourney": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "claude",
+      "question_id": "q05",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5424,
+      "original": {
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option",
+        "SGC": "option",
+        "TAG": "option",
+        "AGS": "option"
+      },
+      "reversed": {
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option",
+        "SGC": "option",
+        "TAG": "option",
+        "AGS": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q03",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3964,
+      "original": {
+        "Jasper": "option",
+        "Anyword": "option",
+        "Claude": "option",
+        "Copy.ai": "option",
+        "Writesonic": "option",
+        "Rytr": "option"
+      },
+      "reversed": {
+        "Jasper": "option",
+        "Anyword": "option",
+        "Claude": "option",
+        "Copy.ai": "option",
+        "Writesonic": "option",
+        "Rytr": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 8977,
+      "original": {
+        "Microsoft Designer": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Canva’s Magic Media": "option",
+        "Recraft": "option",
+        "GPT‑Image‑1": "not_a_company"
+      },
+      "reversed": {
+        "Microsoft Designer": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Canva’s Magic Media": "option",
+        "Recraft": "option",
+        "GPT‑Image‑1": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q15",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2353,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "gemini",
+      "question_id": "q02",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 14505,
+      "original": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4779,
+      "original": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Aider": "option",
+        "Cursor": "context",
+        "Gemini CLI": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Aider": "option",
+        "Cursor": "context",
+        "Gemini CLI": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "gemini",
+      "question_id": "q08",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10351,
+      "original": {
+        "Google Gemini": "option",
+        "Microsoft Designer": "option",
+        "OpenAI’s DALL-E": "context",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Black Forest Labs, FLUX": "option"
+      },
+      "reversed": {
+        "Google Gemini": "option",
+        "Microsoft Designer": "option",
+        "OpenAI’s DALL-E": "context",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Black Forest Labs, FLUX": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q01",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 12664,
+      "original": {
+        "GitHub Copilot": "option",
+        "Gemini Code Assist": "option",
+        "Amazon Q Developer": "option",
+        "Sourcegraph Cody": "option",
+        "Cursor IDE": "option",
+        "Devin Desktop": "option",
+        "JetBrains AI Assistant": "option",
+        "Tabnine": "option",
+        "Continue.dev": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Gemini Code Assist": "option",
+        "Amazon Q Developer": "option",
+        "Sourcegraph Cody": "option",
+        "Cursor IDE": "option",
+        "Devin Desktop": "option",
+        "JetBrains AI Assistant": "option",
+        "Tabnine": "option",
+        "Continue.dev": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "claude-code",
+      "question_id": "q15",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6993,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Microsoft Copilot": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Microsoft Copilot": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "codex",
+      "question_id": "q09",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3200,
+      "original": {
+        "ChatGPT": "option",
+        "Grammarly": "option",
+        "Anthropic’s Claude": "option",
+        "Google Gemini": "context"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Grammarly": "option",
+        "Anthropic’s Claude": "option",
+        "Google Gemini": "context"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1618,
+      "original": {
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Google Gemini CLI": "option"
+      },
+      "reversed": {
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Google Gemini CLI": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q13",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4681,
+      "original": {
+        "FLUX.2 klein (4B": "option",
+        "Stable Diffusion": "option",
+        "Qwen‑Image": "option"
+      },
+      "reversed": {
+        "FLUX.2 klein (4B": "option",
+        "Stable Diffusion": "option",
+        "Qwen‑Image": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7213,
+      "original": {
+        "Claude Code": "option",
+        "OpenAI's Codex": "option",
+        "opencode": "option",
+        "Gemini CLI": "option",
+        "Cline": "option",
+        "Aider": "option",
+        "Zed": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "OpenAI's Codex": "option",
+        "opencode": "option",
+        "Gemini CLI": "option",
+        "Cline": "option",
+        "Aider": "option",
+        "Zed": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "claude-code",
+      "question_id": "q07",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5007,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Grammarly": "option",
+        "LanguageTool": "option",
+        "QuillBot": "option",
+        "Copilot": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Grammarly": "option",
+        "LanguageTool": "option",
+        "QuillBot": "option",
+        "Copilot": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q04",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 13884,
+      "original": {
+        "GitHub Copilot": "option",
+        "Sourcegraph (Cody": "option",
+        "Google Gemini Code Assist": "option",
+        "Amazon Q Developer": "option",
+        "JetBrains AI Assistant": "option",
+        "Tabnine": "option",
+        "Cursor": "option",
+        "Codeium": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Sourcegraph (Cody": "option",
+        "Google Gemini Code Assist": "option",
+        "Amazon Q Developer": "option",
+        "JetBrains AI Assistant": "option",
+        "Tabnine": "option",
+        "Cursor": "option",
+        "Codeium": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q04",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3104,
+      "original": {
+        "Cursor": "option",
+        "Augment Code": "option",
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Augment Code": "option",
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3036,
+      "original": {
+        "OpenAI image generation": "option",
+        "Midjourney": "option",
+        "Google’s Nano Banana": "option",
+        "Ideogram": "option",
+        "Adobe Firefly": "option",
+        "Canva": "option"
+      },
+      "reversed": {
+        "OpenAI image generation": "option",
+        "Midjourney": "option",
+        "Google’s Nano Banana": "option",
+        "Ideogram": "option",
+        "Adobe Firefly": "option",
+        "Canva": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q02",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2376,
+      "original": {
+        "Anthropic’s Claude Code": "option",
+        "Cursor": "option",
+        "OpenAI Codex": "option"
+      },
+      "reversed": {
+        "Anthropic’s Claude Code": "option",
+        "Cursor": "option",
+        "OpenAI Codex": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q14",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4708,
+      "original": {
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q04",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2623,
+      "original": {
+        "Cursor": "option",
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "codex",
+      "question_id": "q14",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4330,
+      "original": {
+        "Claude by Anthropic": "option",
+        "ChatGPT": "option",
+        "Mintlify": "option"
+      },
+      "reversed": {
+        "Claude by Anthropic": "option",
+        "ChatGPT": "option",
+        "Mintlify": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q07",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4735,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Writesonic": "option",
+        "Sudowrite": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Writesonic": "option",
+        "Sudowrite": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q10",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3682,
+      "original": {
+        "Anthropic’s Claude Code": "option",
+        "GitHub Copilot": "option",
+        "OpenAI Codex": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "Anthropic’s Claude Code": "option",
+        "GitHub Copilot": "option",
+        "OpenAI Codex": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q14",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1356,
+      "original": {
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q04",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2739,
+      "original": {
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option",
+        "Augment Code": "option"
+      },
+      "reversed": {
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option",
+        "Augment Code": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q07",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2787,
+      "original": {
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Devin": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Devin": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q04",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3821,
+      "original": {
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Sourcegraph": "context",
+        "Augment Code": "option",
+        "OpenAI Codex": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Sourcegraph": "option",
+        "Augment Code": "option",
+        "OpenAI Codex": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3320,
+      "original": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Gemini CLI": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "Codex CLI": "option",
+        "Gemini CLI": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q15",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4860,
+      "original": {
+        "GitHub Copilot": "option",
+        "OpenAI's Codex": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Windsurf": "option",
+        "Cognition": "context"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "OpenAI's Codex": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Windsurf": "option",
+        "Cognition": "context"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 12957,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "Ideogram": "option",
+        "Canva Magic Media": "option",
+        "Imagen": "context",
+        "DALL·E": "context"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "Ideogram": "option",
+        "Canva Magic Media": "option",
+        "Imagen": "context",
+        "DALL·E": "context"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q09",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6431,
+      "original": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI's Codex": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option",
+        "Zed": "option",
+        "JetBrains AI": "option",
+        "Cline": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI's Codex": "option",
+        "GitHub Copilot": "option",
+        "Windsurf": "option",
+        "Zed": "option",
+        "JetBrains AI": "option",
+        "Cline": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2364,
+      "original": {
+        "Canva": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option"
+      },
+      "reversed": {
+        "Canva": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q05",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2701,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Anthropic’s Claude Code": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Anthropic’s Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q07",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3588,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Grammarly": "option",
+        "QuillBot": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Gemini": "option",
+        "Grammarly": "option",
+        "QuillBot": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-24/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q12",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1635,
+      "original": {},
+      "reversed": {}
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q11",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10484,
+      "original": {
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Black Forest Labs FLUX": "option",
+        "Canva Magic Media": "option",
+        "OpenAI (DALL·E": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Midjourney": "option",
+        "Black Forest Labs FLUX": "option",
+        "Canva Magic Media": "option",
+        "OpenAI (DALL·E": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "chatgpt",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6240,
+      "original": {
+        "PSA": "option",
+        "CGC Cards": "option",
+        "Beckett (BGS": "option",
+        "SGC": "option",
+        "TAG": "option"
+      },
+      "reversed": {
+        "PSA": "option",
+        "CGC Cards": "option",
+        "Beckett (BGS": "option",
+        "SGC": "option",
+        "TAG": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q04",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2299,
+      "original": {
+        "ChatGPT": "option",
+        "Wordtune": "option",
+        "Grammarly": "option",
+        "Claude": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Wordtune": "option",
+        "Grammarly": "option",
+        "Claude": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q04",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2780,
+      "original": {
+        "Augment Code": "option",
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option"
+      },
+      "reversed": {
+        "Augment Code": "option",
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "claude-code",
+      "question_id": "q10",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6612,
+      "original": {
+        "Midjourney": "option",
+        "Stable Diffusion": "option",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Black Forest Labs": "option",
+        "Google Nano Banana": "option",
+        "OpenAI GPT Image": "option"
+      },
+      "reversed": {
+        "Midjourney": "option",
+        "Stable Diffusion": "option",
+        "Leonardo.ai": "option",
+        "Ideogram": "option",
+        "Black Forest Labs": "option",
+        "Google Nano Banana": "option",
+        "OpenAI GPT Image": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "claude",
+      "question_id": "q04",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 9466,
+      "original": {
+        "PSA": "option",
+        "CGC Cards": "option",
+        "TAG Grading": "option",
+        "ACE Grading": "option"
+      },
+      "reversed": {
+        "PSA": "option",
+        "CGC Cards": "option",
+        "TAG Grading": "option",
+        "ACE Grading": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q11",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4878,
+      "original": {
+        "ChatGPT’s GPT Image": "option",
+        "Ideogram": "option",
+        "FLUX**[1": "option",
+        "Adobe Firefly": "option",
+        "getimg.ai": "option",
+        "Freepik": "option",
+        "Canva": "option"
+      },
+      "reversed": {
+        "ChatGPT’s GPT Image": "option",
+        "Ideogram": "option",
+        "FLUX**[1": "option",
+        "Adobe Firefly": "option",
+        "getimg.ai": "option",
+        "Freepik": "option",
+        "Canva": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q07",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2038,
+      "original": {
+        "Devin by Cognition": "option",
+        "OpenAI Codex": "option",
+        "Anthropic Claude Code": "option"
+      },
+      "reversed": {
+        "Devin by Cognition": "option",
+        "OpenAI Codex": "option",
+        "Anthropic Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q11",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3266,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q03",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2974,
+      "original": {
+        "Jasper": "option",
+        "Anyword": "option",
+        "Copy.ai": "option",
+        "Claude": "option",
+        "ChatGPT": "option"
+      },
+      "reversed": {
+        "Jasper": "option",
+        "Anyword": "option",
+        "Copy.ai": "option",
+        "Claude": "option",
+        "ChatGPT": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "codex",
+      "question_id": "q12",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3078,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q03",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6413,
+      "original": {
+        "GPT Image": "option",
+        "Google's Gemini": "option",
+        "Bing Image Creator": "option",
+        "Leonardo.AI": "option",
+        "Canva Magic Media": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      },
+      "reversed": {
+        "GPT Image": "option",
+        "Google's Gemini": "option",
+        "Bing Image Creator": "option",
+        "Leonardo.AI": "option",
+        "Canva Magic Media": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q15",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4630,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Rytr": "option",
+        "Writesonic": "option",
+        "Copy.ai": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Grammarly": "option",
+        "Jasper": "option",
+        "Rytr": "option",
+        "Writesonic": "option",
+        "Copy.ai": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "claude-code",
+      "question_id": "q10",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3004,
+      "original": {
+        "Claude": "option",
+        "Gemini": "option",
+        "Sudowrite": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "Gemini": "option",
+        "Sudowrite": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "perplexity",
+      "question_id": "q10",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4371,
+      "original": {
+        "CGC": "option",
+        "Beckett": "option",
+        "PSA": "option"
+      },
+      "reversed": {
+        "CGC": "option",
+        "Beckett": "option",
+        "PSA": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "gemini",
+      "question_id": "q13",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 14253,
+      "original": {
+        "QuillBot": "option",
+        "Wordtune": "option",
+        "Grammarly": "option",
+        "Claude (by Anthropic": "option"
+      },
+      "reversed": {
+        "QuillBot": "option",
+        "Wordtune": "option",
+        "Grammarly": "option",
+        "Claude (by Anthropic": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q14",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4004,
+      "original": {
+        "Qodo": "option"
+      },
+      "reversed": {
+        "Qodo": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q02",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 9844,
+      "original": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "GitHub Copilot": "option",
+        "Cline": "option",
+        "Windsurf": "option",
+        "Replit Agent": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "GitHub Copilot": "option",
+        "Cline": "option",
+        "Windsurf": "option",
+        "Replit Agent": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3370,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Augment Code": "option",
+        "Claude Code": "option",
+        "Replit": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Augment Code": "option",
+        "Claude Code": "option",
+        "Replit": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q15",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 12881,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Continue.dev": "option",
+        "Aider": "option",
+        "JetBrains AI Assistant": "option",
+        "Amazon Q Developer": "option",
+        "Tabnine": "option",
+        "Claude Code": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Continue.dev": "option",
+        "Aider": "option",
+        "JetBrains AI Assistant": "option",
+        "Amazon Q Developer": "option",
+        "Tabnine": "option",
+        "Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q04",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4369,
+      "original": {
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "Augment Code": "option"
+      },
+      "reversed": {
+        "Sourcegraph Cody": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "Augment Code": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q15",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3600,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Continue": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Continue": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "gemini",
+      "question_id": "q02",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10686,
+      "original": {
+        "Black Forest Labs": "option",
+        "Midjourney": "option",
+        "Nano Banana Pro": "option",
+        "ChatGPT (GPT Image": "option"
+      },
+      "reversed": {
+        "Black Forest Labs": "option",
+        "Midjourney": "option",
+        "Nano Banana Pro": "option",
+        "ChatGPT (GPT Image": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "perplexity",
+      "question_id": "q06",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7237,
+      "original": {
+        "TAG": "option",
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option"
+      },
+      "reversed": {
+        "TAG": "option",
+        "PSA": "option",
+        "CGC": "option",
+        "BGS": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q10",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1700,
+      "original": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "chatgpt",
+      "question_id": "q08",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2041,
+      "original": {
+        "Grammarly": "option",
+        "ChatGPT": "option",
+        "ProWritingAid": "option"
+      },
+      "reversed": {
+        "Grammarly": "option",
+        "ChatGPT": "option",
+        "ProWritingAid": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2652,
+      "original": {
+        "GitHub Copilot": "option",
+        "Replit": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Replit": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q13",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1942,
+      "original": {
+        "FLUX.2 Klein 4B": "option",
+        "Stable Diffusion": "option"
+      },
+      "reversed": {
+        "FLUX.2 Klein 4B": "option",
+        "Stable Diffusion": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1974,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q12",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7390,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot Chat": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot Chat": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q14",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5276,
+      "original": {
+        "GitHub Copilot": "option",
+        "Qodo": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Qodo": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q14",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3911,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "avoid",
+        "Stable Diffusion": "avoid"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q14",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3304,
+      "original": {
+        "Qodo": "option",
+        "Claude Code": "option"
+      },
+      "reversed": {
+        "Qodo": "option",
+        "Claude Code": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-23/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q04",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2972,
+      "original": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "DALL·E 3": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option"
+      },
+      "reversed": {
+        "Adobe Firefly": "option",
+        "Midjourney": "option",
+        "DALL·E 3": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "gemini",
+      "question_id": "q03",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7954,
+      "original": {
+        "Replit Agent": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      },
+      "reversed": {
+        "Replit Agent": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q08",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2672,
+      "original": {
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Google Gemini CLI": "option"
+      },
+      "reversed": {
+        "Anthropic’s Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Google Gemini CLI": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q14",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5730,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Copilot": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Copilot": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "claude-code",
+      "question_id": "q10",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4250,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Sudowrite": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Sudowrite": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q05",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 1996,
+      "original": {
+        "Bing Image Creator": "option",
+        "Leonardo.Ai": "option",
+        "Ideogram": "option"
+      },
+      "reversed": {
+        "Bing Image Creator": "option",
+        "Leonardo.Ai": "option",
+        "Ideogram": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "perplexity",
+      "question_id": "q02",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5680,
+      "original": {
+        "PSA": "option",
+        "CGC": "option"
+      },
+      "reversed": {
+        "PSA": "option",
+        "CGC": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2304,
+      "original": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Jasper": "option",
+        "Sudowrite": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Jasper": "option",
+        "Sudowrite": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "codex",
+      "question_id": "q07",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3018,
+      "original": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option"
+      },
+      "reversed": {
+        "Midjourney": "option",
+        "Adobe Firefly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-24/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q13",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 14151,
+      "original": {
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z‑Image Turbo": "option",
+        "Stable Diffusion": "option",
+        "Playground": "option"
+      },
+      "reversed": {
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z‑Image Turbo": "option",
+        "Stable Diffusion": "option",
+        "Playground": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "gemini",
+      "question_id": "q09",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 13240,
+      "original": {
+        "Claude": "option",
+        "Sudowrite": "option",
+        "Novelcrafter": "option",
+        "NovelAI": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "ChatGPT": "option",
+        "ProWritingAid": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "Sudowrite": "option",
+        "Novelcrafter": "option",
+        "NovelAI": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "ChatGPT": "option",
+        "ProWritingAid": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-24/ai-image-generators.json",
+      "engine": "claude",
+      "question_id": "q09",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6751,
+      "original": {
+        "Canva Magic Studio": "option",
+        "Recraft": "option",
+        "GPT Image": "option",
+        "Ideogram": "option",
+        "Nano Banana": "option",
+        "Firefly": "option",
+        "Midjourney": "avoid"
+      },
+      "reversed": {
+        "Canva Magic Studio": "option",
+        "Recraft": "option",
+        "GPT Image": "context",
+        "Ideogram": "option",
+        "Nano Banana": "option",
+        "Firefly": "option",
+        "Midjourney": "avoid"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q02",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 13949,
+      "original": {
+        "Cursor": "option",
+        "OpenAI Codex": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "Gemini CLI": "option",
+        "Cline": "option",
+        "Aider": "option",
+        "OpenCode": "option",
+        "Zed": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "OpenAI Codex": "option",
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "Gemini CLI": "option",
+        "Cline": "option",
+        "Aider": "option",
+        "OpenCode": "option",
+        "Zed": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q14",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5241,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q12",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 13423,
+      "original": {
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "Gemini Code Assist": "option",
+        "Sourcegraph Cody": "option",
+        "Amazon Q Developer": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "Gemini Code Assist": "option",
+        "Sourcegraph Cody": "option",
+        "Amazon Q Developer": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4046,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Augment Code": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Augment Code": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q05",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4795,
+      "original": {
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "OpenAI Codex": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "OpenAI Codex": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q08",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5362,
+      "original": {
+        "ChatGPT’s image": "option",
+        "Stable Diffusion": "option",
+        "Google’s Nano Banana": "option",
+        "FLUX": "option"
+      },
+      "reversed": {
+        "ChatGPT’s image": "option",
+        "Stable Diffusion": "option",
+        "Google’s Nano Banana": "option",
+        "FLUX": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q07",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3695,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Google Gemini": "option",
+        "Grammarly": "option",
+        "Hemingway Editor": "option",
+        "Microsoft Copilot": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Google Gemini": "option",
+        "Grammarly": "option",
+        "Hemingway Editor": "option",
+        "Microsoft Copilot": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "perplexity",
+      "question_id": "q12",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2261,
+      "original": {
+        "ChatGPT": "option",
+        "Jasper": "option"
+      },
+      "reversed": {
+        "ChatGPT": "option",
+        "Jasper": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "chatgpt",
+      "question_id": "q03",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6793,
+      "original": {
+        "Microsoft Designer": "option",
+        "Midjourney": "option",
+        "Ideogram": "option",
+        "Firefly": "not_a_company",
+        "Playground AI": "option",
+        "Canva’s Magic Media": "option",
+        "ChatGPT Images": "option"
+      },
+      "reversed": {
+        "Microsoft Designer": "option",
+        "Midjourney": "option",
+        "Ideogram": "option",
+        "Firefly": "option",
+        "Playground AI": "option",
+        "Canva’s Magic Media": "option",
+        "ChatGPT Images": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-07/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q11",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2725,
+      "original": {
+        "Canva": "option",
+        "Freepik": "option",
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option"
+      },
+      "reversed": {
+        "Canva": "option",
+        "Freepik": "option",
+        "Midjourney": "option",
+        "Adobe Firefly": "option",
+        "Ideogram": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-image-generators.json",
+      "engine": "claude-code",
+      "question_id": "q13",
+      "run_index": 2,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6113,
+      "original": {
+        "Stable Diffusion": "option",
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z-Image Turbo": "option"
+      },
+      "reversed": {
+        "Stable Diffusion": "option",
+        "Black Forest Labs": "option",
+        "Qwen-Image": "option",
+        "Z-Image Turbo": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q09",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 2606,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "chatgpt",
+      "question_id": "q15",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3125,
+      "original": {
+        "Beckett (BGS": "option",
+        "CGC": "option",
+        "SGC": "option",
+        "PSA": "context"
+      },
+      "reversed": {
+        "Beckett (BGS": "option",
+        "CGC": "option",
+        "SGC": "option",
+        "PSA": "context"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "claude",
+      "question_id": "q04",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 5432,
+      "original": {
+        "Grammarly": "option",
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Microsoft Copilot": "option",
+        "Jasper AI": "option",
+        "Sudowrite": "option"
+      },
+      "reversed": {
+        "Grammarly": "option",
+        "ChatGPT": "option",
+        "Claude": "option",
+        "Google Gemini": "option",
+        "Microsoft Copilot": "option",
+        "Jasper AI": "option",
+        "Sudowrite": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q15",
+      "run_index": 0,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4322,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Replit": "option",
+        "Tabnine": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Replit": "option",
+        "Tabnine": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "claude",
+      "question_id": "q12",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6481,
+      "original": {
+        "OpenAI's Codex": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      },
+      "reversed": {
+        "OpenAI's Codex": "option",
+        "Claude Code": "option",
+        "Cursor": "option",
+        "GitHub Copilot": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-14/ai-image-generators.json",
+      "engine": "perplexity",
+      "question_id": "q10",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4074,
+      "original": {
+        "Midjourney": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option",
+        "Adobe Firefly": "option",
+        "Recraft": "option"
+      },
+      "reversed": {
+        "Midjourney": "option",
+        "Stable Diffusion": "option",
+        "FLUX": "option",
+        "Adobe Firefly": "option",
+        "Recraft": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-coding-assistants.json",
+      "engine": "chatgpt",
+      "question_id": "q10",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3029,
+      "original": {
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      },
+      "reversed": {
+        "Claude Code": "option",
+        "GitHub Copilot": "option",
+        "Cursor": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "codex",
+      "question_id": "q11",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 3904,
+      "original": {
+        "GitHub Copilot": "option",
+        "Continue": "option",
+        "Amazon Q Developer": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Continue": "option",
+        "Amazon Q Developer": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-09-28/ai-writing-tools.json",
+      "engine": "gemini",
+      "question_id": "q15",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 13443,
+      "original": {
+        "Jasper AI": "option",
+        "Claude (by Anthropic": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      },
+      "reversed": {
+        "Jasper AI": "option",
+        "Claude (by Anthropic": "option",
+        "ChatGPT": "option",
+        "Grammarly": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-09-14/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q15",
+      "run_index": 3,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4081,
+      "original": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Replit": "option",
+        "Continue": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "GitHub Copilot": "option",
+        "Cursor": "option",
+        "Claude Code": "option",
+        "Replit": "option",
+        "Continue": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-21/pokemon-grading.json",
+      "engine": "claude",
+      "question_id": "q06",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 7039,
+      "original": {
+        "Technical Authentication & Grading": "option",
+        "PSA": "option",
+        "Beckett": "context",
+        "CGC": "option"
+      },
+      "reversed": {
+        "Technical Authentication & Grading": "option",
+        "PSA": "option",
+        "Beckett": "context",
+        "CGC": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-writing-tools.json",
+      "engine": "chatgpt",
+      "question_id": "q02",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 10650,
+      "original": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "copilot": "not_a_company",
+        "Perplexity": "option"
+      },
+      "reversed": {
+        "Claude": "option",
+        "ChatGPT": "option",
+        "Gemini": "option",
+        "Jasper": "option",
+        "Copy.ai": "option",
+        "copilot": "not_a_company",
+        "Perplexity": "option"
+      }
+    },
+    {
+      "source": "data/runs/2026-08-22/ai-coding-assistants.json",
+      "engine": "perplexity",
+      "question_id": "q01",
+      "run_index": 4,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 4932,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Augment Code": "option",
+        "Continue": "option",
+        "Aider": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "Augment Code": "option",
+        "Continue": "option",
+        "Aider": "option"
+      }
+    },
+    {
+      "source": "data/held/2026-08-24/ai-coding-assistants.json",
+      "engine": "claude-code",
+      "question_id": "q09",
+      "run_index": 1,
+      "model": "jev-1.13.0",
+      "error": null,
+      "input_tokens": 6309,
+      "original": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Zed": "option",
+        "Windsurf": "option"
+      },
+      "reversed": {
+        "Cursor": "option",
+        "GitHub Copilot": "option",
+        "Claude Code": "option",
+        "OpenAI Codex": "option",
+        "Zed": "option",
+        "Windsurf": "option"
+      }
+    }
+  ],
+  "planted": {
+    "plain": {
+      "injection": 0.02,
+      "refused": 0.02,
+      "off_topic": 0.03,
+      "model": "jev-1.13.0",
+      "brands": [
+        "Cursor",
+        "GitHub Copilot"
+      ],
+      "error": null
+    },
+    "quoted page": {
+      "injection": 0.96,
+      "refused": 0.02,
+      "off_topic": 0.05,
+      "model": "jev-1.13.0",
+      "brands": [
+        "Cursor"
+      ],
+      "error": null
+    },
+    "direct": {
+      "injection": 0.99,
+      "refused": 0.02,
+      "off_topic": 0.05,
+      "model": "jev-1.13.0",
+      "brands": [
+        "Cursor"
+      ],
+      "error": null
+    },
+    "refusal": {
+      "injection": 0.02,
+      "refused": 0.99,
+      "off_topic": 0.06,
+      "model": "jev-1.13.0",
+      "brands": [],
+      "error": null
+    },
+    "off topic": {
+      "injection": 0.02,
+      "refused": 0.21,
+      "off_topic": 0.99,
+      "model": "jev-1.13.0",
+      "brands": [
+        "Interrail"
+      ],
+      "error": null
+    }
+  },
+  "input_tokens": 803378
+}
