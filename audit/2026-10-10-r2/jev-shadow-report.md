@@ -8,7 +8,8 @@ verified backup; see Storage).
 
 This replaces `audit/2026-10-10/jev-shadow-report.md`, which is kept unchanged as the
 first record. An independent review (Panel 2) found seven problems in the first reader
-and report; all are fixed here and listed in "Changes since the first reading".
+and report; they are addressed as listed in "Changes since the first reading", with
+lowercase name ordering kept as a documented limit rather than changed.
 
 **Every agreement figure below is agreement with the published Opus reading, not
 accuracy.** Neither reader is ground truth. The accuracy test is the blinded human review
@@ -25,8 +26,9 @@ in `data/`. No engine was queried.
   26.1 million input tokens, **$1.10 in total, $0.24 per 1,000 answers**, about two
   minutes of wall clock. The recorded Opus figure is $14.10 per 1,000.
 - Across the 3,926 answers both readers read: **first brand 88%, exact brand set 68%,
-  set overlap 89%, refusal 100%**. On the newest coding records: first brand 97%, exact
-  set 86% to 87%, set overlap 95% to 96%. Opus re-reading earlier Opus readings scored
+  set overlap 89%, refusal 100%**. On the recent coding records: 2026-09-07 scores
+  97% / 87% / 96%, 2026-09-14 scores 97% / 84% / 96%, and the newest, 2026-09-28, scores
+  92% / 86% / 95% (first brand / exact set / overlap). Opus re-reading earlier Opus readings scored
   89%, 77% and 91% (`extract.py`).
 - The code-only candidate step found **16,009 of the 16,010** brands in the published
   readings. The one miss appears only inside a URL, which the step ignores on purpose.
@@ -276,8 +278,9 @@ use to send such answers on to Opus.
   (`held/2026-09-28/ai-coding-assistants`, codex q12 run 2); none of 4,581 reached 0.5 on
   injection or refusal, and none of 2,100 with a frozen question reached 0.5 on
   off-topic.
-- **Sentiment.** 1,508 of 15,565 shared brands (9.7%) differ, almost all between neutral
-  and positive. Sentiment is second-order and unused in any ranking.
+- **Sentiment.** 1,508 of 15,565 shared brands (9.7%) differ. 1,227 of those (81%) are
+  between neutral and positive; 281 (19%) involve negative sentiment, almost all neutral
+  to negative (274). Sentiment is second-order and unused in any ranking.
 
 ## Changes since the first reading
 
