@@ -19,7 +19,9 @@ from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
+import time
 
 import yaml
 
@@ -28,7 +30,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from unprompted.aggregate import _answered, brand_week, exceeds_noise  # noqa: E402
 from unprompted.jev_reader import (MODEL, PRICE_PER_MTOK, ROLE, Finder, alias_policy,  # noqa: E402
-                                   read_answer, reading_set, shadow_path, stored_answers, write_shadow)
+                                   find_source, read_answer, reading_set, shadow_path, stored_answers,
+                                   write_shadow)
 from unprompted.models import BrandMention, Extraction  # noqa: E402
 from unprompted.normalize import AliasMap, _key, normalize  # noqa: E402
 
@@ -315,6 +318,78 @@ def _load_or_read(source: Path, read: bool, client, set_name: str) -> dict | Non
     return shadow
 
 
+WEEKLY_BUDGET_SECONDS = 30 * 60
+SCHEDULER_LIMIT_SECONDS = 8 * 3600     # ExecutionTimeLimit in scripts/install-weekly-task.ps1
+SCHEDULER_MARGIN_SECONDS = 20 * 60
+MIN_CATEGORY_SECONDS = 60          # not worth starting a category with less
+
+
+def alarm_for(source: Path, set_name: str, client) -> dict:
+    """Read one record if needed, compare it, and save a short summary beside the reading."""
+    shadow = _load_or_read(source, True, client, set_name)
+    raw = source.read_bytes()
+    result = compare(json.loads(raw), shadow, source.relative_to(ROOT).as_posix(), hashlib.sha256(raw).hexdigest())
+    brief = {k: result[k] for k in ("label", "source", "reader", "overall", "disagreement_counts",
+                                     "rotation_beyond_noise")}
+    write_shadow(shadow_path(source, set_name).with_suffix(".alarm.json"), brief)
+    return brief
+
+
+def _started(unprompted: Path) -> float | None:
+    try:
+        return float((unprompted / "weekly-started").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def measured_day(unprompted: Path) -> str | None:
+    """The run date this launcher invocation measured, from the summary run.py
+    wrote. Ignored unless written after this invocation started: an older
+    summary belongs to an earlier week. Never the wall-clock date, because a
+    catch-up run can cross midnight before reaching this step."""
+    start, summary = _started(unprompted), unprompted / "weekly-summary.json"
+    try:
+        if start is None or summary.stat().st_mtime < start:
+            return None
+        return reading_set(json.loads(summary.read_text(encoding="utf-8"))["run_date"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def budget(unprompted: Path, now: float) -> float:
+    """Seconds the shadow step may use: at most 30 minutes, and never into the
+    last 20 minutes before the scheduler's 8-hour limit. 0 without a marker."""
+    start = _started(unprompted)
+    if start is None:
+        return 0.0
+    left = SCHEDULER_LIMIT_SECONDS - SCHEDULER_MARGIN_SECONDS - (now - start)
+    return max(0.0, min(WEEKLY_BUDGET_SECONDS, left))
+
+
+def weekly(day: str, seconds: float, command: list[str] | None = None) -> int:
+    """Shadow second reading of one measured day, for the Monday launcher.
+
+    Each category is a child process killed when the budget runs out, so a slow
+    TypeSafe cannot hold the scheduled task. Always returns 0; the launcher
+    ignores this exit code anyway.
+    """
+    command = command or [sys.executable, str(Path(__file__).resolve())]
+    stop = time.monotonic() + seconds
+    for category in sorted(p.stem for p in (ROOT / "questions").glob("*.yml")):
+        if not any((ROOT / "data" / b / day / f"{category}.json").exists() for b in ("runs", "held")):
+            continue
+        left = stop - time.monotonic()
+        if left < MIN_CATEGORY_SECONDS:
+            print(f"  jev shadow {category}: skipped, {int(left)}s of the budget left", file=sys.stderr)
+            continue
+        try:
+            done = subprocess.run([*command, "alarm", day, "--category", category], timeout=left)
+            print(f"  jev shadow {category}: exit {done.returncode}", file=sys.stderr)
+        except subprocess.TimeoutExpired:
+            print(f"  jev shadow {category}: stopped at the time budget", file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -328,6 +403,9 @@ def main() -> int:
     alarm.add_argument("date")
     alarm.add_argument("--category", required=True)
     alarm.add_argument("--set", dest="set_name", help="reading set (default: the date)")
+    weekly_parser = commands.add_parser("weekly", help="shadow reading after the Monday run (launcher)")
+    weekly_parser.add_argument("--date", help="measured date (default: this run's summary)")
+    weekly_parser.add_argument("--seconds", type=float, help="time budget (default: from the start marker)")
     probe = commands.add_parser("probes", help="option-order and planted-text checks (paid)")
     probe.add_argument("--set", dest="set_name", required=True)
     probe.add_argument("--sample", type=int, default=150)
@@ -340,6 +418,17 @@ def main() -> int:
                for p in sources()}
         print(json.dumps(out, indent=2))
         return 0
+
+    if args.command == "weekly":
+        day = reading_set(args.date) if args.date else measured_day(ROOT / ".unprompted")
+        if day is None:
+            print("  jev shadow skipped: no measurement summary from this run", file=sys.stderr)
+            return 0
+        seconds = args.seconds if args.seconds is not None else budget(ROOT / ".unprompted", time.time())
+        if seconds < 60:
+            print(f"  jev shadow skipped: {int(seconds)}s available", file=sys.stderr)
+            return 0
+        return weekly(day, seconds)
 
     from unprompted.run import load_local_env
     set_name = reading_set(args.set_name or (args.date if args.command == "alarm" else None))
@@ -359,16 +448,9 @@ def main() -> int:
         client = make_client()
 
     if args.command == "alarm":
-        # A second-reader alarm for a normal week. Writes to the shadow tree only;
+        # A second-reader alarm for one week. Writes to the shadow tree only;
         # it never holds, alters or reports into a published week.
-        from unprompted.jev_reader import find_source
-        source = find_source(args.date, args.category)
-        shadow = _load_or_read(source, True, client, set_name)
-        result = compare(json.loads(source.read_text(encoding="utf-8")), shadow, source.relative_to(ROOT).as_posix())
-        brief = {k: result[k] for k in ("label", "source", "reader", "overall", "disagreement_counts",
-                                         "rotation_beyond_noise")}
-        write_shadow(shadow_path(source, set_name).with_suffix(".alarm.json"), brief)
-        print(json.dumps(brief, indent=2))
+        print(json.dumps(alarm_for(find_source(args.date, args.category), set_name, client), indent=2))
         return 0
 
     results, missing = [], []

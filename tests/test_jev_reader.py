@@ -425,3 +425,72 @@ def test_probes_save_auditable_per_sample_results(monkeypatch, tmp_path):
     assert any(list(q.criteria)[0] == "not_a_company" for q in role_questions)
     again = compare_jev.probes("2026-10-10", fake, sample=3, seed="fixed")
     assert [s["run_index"] for s in again["samples"]] == [s["run_index"] for s in result["samples"]]
+
+
+def _launcher_state(tmp_path, day, started_ago, summary_after_start=True):
+    import os, time
+    state = tmp_path / ".unprompted"
+    state.mkdir(exist_ok=True)
+    start = time.time() - started_ago
+    (state / "weekly-started").write_text(str(start))
+    summary = state / "weekly-summary.json"
+    summary.write_text(json.dumps({"run_date": day, "detail": "x"}))
+    stamp = start + 5 if summary_after_start else start - 3600
+    os.utime(summary, (stamp, stamp))
+    return state
+
+
+def test_weekly_main_reads_the_measured_date_with_a_bounded_budget(monkeypatch, tmp_path):
+    import sys
+    import scripts.compare_jev as compare_jev
+
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    _launcher_state(tmp_path, "2026-09-14", started_ago=3 * 3600)   # measured date differs from today
+    calls = []
+    monkeypatch.setattr(compare_jev, "weekly", lambda day, seconds: calls.append((day, seconds)) or 0)
+    monkeypatch.setattr(sys, "argv", ["compare_jev.py", "weekly"])
+    assert compare_jev.main() == 0
+    assert calls[0][0] == "2026-09-14" and 60 < calls[0][1] <= 1800
+
+
+def test_weekly_main_skips_a_stale_summary_or_a_run_near_the_scheduler_limit(monkeypatch, tmp_path):
+    import sys
+    import scripts.compare_jev as compare_jev
+
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    calls = []
+    monkeypatch.setattr(compare_jev, "weekly", lambda day, seconds: calls.append(day) or 0)
+    monkeypatch.setattr(sys, "argv", ["compare_jev.py", "weekly"])
+    _launcher_state(tmp_path, "2026-09-14", started_ago=600, summary_after_start=False)
+    assert compare_jev.main() == 0 and calls == []                   # an earlier week's summary
+    _launcher_state(tmp_path, "2026-09-14", started_ago=8 * 3600 - 600)
+    assert compare_jev.main() == 0 and calls == []                   # inside 20 minutes of the 8-hour limit
+
+
+def test_weekly_kills_a_hung_child_at_its_budget(monkeypatch, tmp_path, capsys):
+    import sys, time
+    import scripts.compare_jev as compare_jev
+
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    run_record(tmp_path)
+    (tmp_path / "questions").mkdir()
+    for slug in ("grading", "absent"):
+        (tmp_path / "questions" / f"{slug}.yml").write_text("questions: []")
+    monkeypatch.setattr(compare_jev, "MIN_CATEGORY_SECONDS", 1)
+    hang = [sys.executable, "-c", "import time; time.sleep(60)"]
+    started = time.monotonic()
+    assert compare_jev.weekly("2026-09-14", seconds=2, command=hang) == 0
+    assert time.monotonic() - started < 20
+    assert "stopped at the time budget" in capsys.readouterr().err
+
+
+def test_alarm_for_reads_compares_and_saves(monkeypatch, tmp_path):
+    import scripts.compare_jev as compare_jev
+
+    shadow_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(compare_jev, "ROOT", tmp_path)
+    source, _ = run_record(tmp_path)
+    brief = compare_jev.alarm_for(source, "2026-09-14", FakeJev({"PSA": "option"}))
+    saved = jev_reader.shadow_path(source, "2026-09-14").with_suffix(".alarm.json")
+    assert json.loads(saved.read_text(encoding="utf-8")) == brief
+    assert brief["source"] == "data/runs/2026-09-14/grading.json"
