@@ -243,3 +243,11 @@ def test_review_scores_a_shadow_reading_on_identical_items(monkeypatch, tmp_path
     shadow.write_text(json.dumps(reading), encoding="utf-8")
     with pytest.raises(ValueError, match="same hash"):
         score(tmp_path, packet, [shadow])
+
+
+def test_an_excluded_grade_or_compound_still_names_its_brand():
+    aliases = {"canonical": {"PSA": ["psa"], "GMA": ["gma"], "Adobe Firefly": ["adobe"]},
+               "exclude": ["psa 10", "gma/premier", "adobe photoshop"]}
+    found = Finder(aliases).find("A PSA 10 sells best. Budget: GMA/Premier. Edit in Adobe Photoshop.")
+    # "a PSA 10" is PSA, as EXTRACT_PROMPT says; an unrelated exclusion implies nothing.
+    assert {c.canonical for c in found if c.source == "alias"} == {"PSA", "GMA"}

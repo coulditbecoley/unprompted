@@ -46,7 +46,7 @@ import yaml
 
 from .extract import _base_for
 from .models import BrandMention, EngineAnswer, Extraction
-from .normalize import AliasMap, _key, normalize
+from .normalize import AliasMap, _key, _strippings, normalize
 from .storage import write_json, write_text
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -174,12 +174,20 @@ class Finder:
         cased = {m[2] for m in matches if not m[4]}
         matches = [m[:4] for m in matches if not m[4] or (m[2] is not None and m[2] not in cased)]
         matches.sort(key=lambda m: (m[0], -(m[1] - m[0])))
-        claimed: list[tuple[int, int]] = []
+        claimed: list[tuple[int, int, set[str]]] = []
         known: dict[str, Candidate] = {}
         for start, end, canonical, written in matches:
-            if any(start < b and a < end for a, b in claimed):
-                continue  # longest match at a position wins
-            claimed.append((start, end))
+            overlapping = [c for c in claimed if start < c[1] and c[0] < end]
+            # Longest match at a position wins, except that an excluded grade or
+            # compound still names its brand: "a PSA 10" is PSA, as
+            # EXTRACT_PROMPT says, and "GMA/Premier" is GMA.
+            if overlapping and not any(canonical in c[2] for c in overlapping):
+                continue
+            if not overlapping:
+                implied = {canonical} if canonical else {
+                    found for form in [*_strippings(written), *_PIECE.split(written)]
+                    if (found := self.aliases.resolve(form))}
+                claimed.append((start, end, implied))
             if canonical is None:
                 continue
             if canonical not in known:
@@ -192,7 +200,7 @@ class Finder:
         for start, span in self._spans(text):
             for piece_start, piece in self._pieces(start, span):
                 key = _key(piece)
-                if key in unknown or any(a <= piece_start and piece_start + len(piece) <= b for a, b in claimed):
+                if key in unknown or any(a <= piece_start and piece_start + len(piece) <= b for a, b, _ in claimed):
                     continue
                 if (self.aliases.is_excluded(piece) or self.aliases.resolve(piece) is not None
                         or self.aliases.is_excluded_loosely(piece)):

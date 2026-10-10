@@ -103,6 +103,7 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
         alias_data.get("canonical", {}) or {}, alias_data.get("exclude", []) or []))}
     jev = {_identity(r): r for r in reading["extractions"]}
 
+    quarantined = sorted({n for n in record.get("quarantined", []) if _key(n)}, key=len, reverse=True)
     tallies: dict[str, Counter] = defaultdict(Counter)
     disagreements: dict[str, list] = defaultdict(list)
     for identity, o in opus.items():
@@ -134,12 +135,25 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
         t["same_order"] += [n for n in a if n in shared] == [n for n in b if n in shared]
 
         link = {"source": source, "engine": engine, "question_id": identity[1], "run_index": identity[2]}
-        roles = {}
+        roles, written = {}, {}
         for c in j.get("jev", {}).get("candidates", []):
             canonical = c.get("canonical") or c["name"]
             roles.setdefault(canonical, c.get("role"))
+            written.setdefault(canonical, c["name"])
         for name in sorted(sb - sa):
-            disagreements["jev_found_opus_missed"].append({**link, "brand": name})
+            # Did Opus write a longer phrase around this name, which then failed
+            # alias resolution and went to quarantine? Then the readers agree it
+            # was named and differ only in where the name ends, which is the
+            # candidate step's doing, not a judgment.
+            # Opus restates names ("OpenAI's GPT Image in ChatGPT"), so the test
+            # is that every word of the quarantined name occurs in this answer.
+            spelled = _key(written.get(name, name))
+            words = set(_key(o.get("answer", "")).split())
+            longer = next((q for q in quarantined if spelled in _key(q) and set(_key(q).split()) <= words), None)
+            if longer:
+                disagreements["jev_found_opus_likely_quarantined_longer_name"].append({**link, "brand": name, "opus_wrote": longer})
+            else:
+                disagreements["jev_found_opus_missed"].append({**link, "brand": name})
         for name in sorted(sa - sb):
             role = roles.get(name, "never a candidate")
             disagreements[f"opus_listed_jev_called_{role.replace(' ', '_')}"].append({**link, "brand": name})
@@ -160,15 +174,16 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
                 "set_overlap": _rate(t["intersection"], t["union"]), "refusal": _rate(t["refusal"], n),
                 "position_of_shared_brands": _rate(t["same_position"], t["shared"]),
                 "order_of_shared_brands": _rate(t["same_order"], n),
-                "sentiment_flips": t["sentiment_flip"]}
+                "sentiment_flips": t["sentiment_flip"], "counts": dict(t)}
 
     overall = sum(tallies.values(), Counter())
-    published = brand_week(record)
+    # A record whose every extraction failed has no Opus Rotation to change.
+    published = brand_week(record) if overall["compared"] else []
     shadow = brand_week(reading)
     before = {b.brand: b for b in published}
     after = {b.brand: b for b in shadow}
     rotation = []
-    for name in sorted(set(before) | set(after)):
+    for name in sorted(set(before) | set(after)) if published else []:
         p, q = before.get(name), after.get(name)
         pr, pn = (p.rotation, p.total_runs) if p else (0.0, published[0].total_runs if published else 0)
         qr, qn = (q.rotation, q.total_runs) if q else (0.0, shadow[0].total_runs if shadow else 0)
@@ -183,7 +198,7 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
         "overall": summary(overall), "by_engine": {e: summary(t) for e, t in sorted(tallies.items())},
         "disagreement_counts": {k: len(v) for k, v in sorted(disagreements.items())},
         "disagreements": dict(disagreements),
-        "rotation_changes": rotation,
+        "rotation_changes": rotation if published else "no Opus reading to compare",
         "rotation_beyond_noise": [r for r in rotation if r["exceeds_noise"]],
         "cost": {"answers_read": answers, "input_tokens": reading["input_tokens"],
                  "dollars": round(reading["input_tokens"] / 1e6 * PRICE_PER_MTOK, 6),
