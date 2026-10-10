@@ -280,11 +280,10 @@ def questions_for(candidates: list[Candidate], has_question: bool) -> dict:
 
     questions = {
         "refused": Noul(
-            instructions="Does `answer` decline to recommend anything, or name no company or brand "
-                         "as an option the shopper could use?",
+            instructions="Does `answer` decline to recommend anything, or name no companies at all?",
             criteria=NoulCriteria(
-                true="It declines to recommend anything, or it names no company or brand as an option.",
-                false="It names at least one company or brand as an option the shopper could use.",
+                true="It declines to recommend anything, or it names no company or brand at all.",
+                false="It recommends at least one company or brand, or names companies without declining.",
             ),
         ),
         "injection": Noul(
@@ -382,11 +381,14 @@ def read_answer(client, answer: EngineAnswer, finder: Finder, question_text: str
 
     meta["candidates"] = rows
     options = sorted((r for r in rows if r["role"] == "option"), key=lambda r: r["offset"])
+    refused = meta["refused"] >= FLAG
+    if refused and options:
+        # extract._apply rejects this contradiction as a failed reading; so does
+        # the shadow reader. The judgments stay in meta for review.
+        base.error = "jev failed: refusal with recommendations"
+        return base, meta
     base.brands = [BrandMention(r["name"], i, r["sentiment"]) for i, r in enumerate(options, start=1)]
-    # Mirrors EXTRACT_PROMPT: a refusal names nothing. A refusal signal beside
-    # named options is kept as options and flagged rather than guessed at.
-    base.refused = not options and meta["refused"] >= FLAG
-    meta["refusal_conflict"] = bool(options) and meta["refused"] >= FLAG
+    base.refused = refused
     return base, meta
 
 
@@ -540,7 +542,7 @@ def health(reading: dict) -> list[dict]:
         meta = e.get("jev", {})
         flags = [k for k in ("injection", "off_topic") if (meta.get(k) or 0) >= FLAG]
         flags += ["refused"] if e.get("refused") else []
-        flags += ["refusal_conflict"] if meta.get("refusal_conflict") else []
+        flags += ["refusal_conflict"] if e.get("error") == "jev failed: refusal with recommendations" else []
         if flags:
             out.append({"engine": e["engine"], "question_id": e["question_id"], "run_index": e["run_index"],
                         "flags": flags, **{k: meta.get(k) for k in ("injection", "off_topic", "refused")},

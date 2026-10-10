@@ -8,7 +8,7 @@ import pytest
 
 from unprompted import jev_reader
 from unprompted.aggregate import brand_week
-from unprompted.jev_reader import Finder, read_answer, write_shadow
+from unprompted.jev_reader import Finder, questions_for, read_answer, write_shadow
 from unprompted.models import EngineAnswer
 
 ALIASES = {
@@ -76,7 +76,10 @@ class FakeJev:
                     name, "not_a_company" if kind == "role" else "neutral")
                 answers[qid] = SimpleNamespace(choice=pick, confidence=0.9, probabilities={pick: 0.95})
             else:
-                answers[qid] = SimpleNamespace(noul=self.refused if qid == "refused" else 0.03)
+                recommends = any(self.roles.get(n) == "option" for n in state["candidates"].values())
+                forced = getattr(self, "force_refused", False)
+                score = (self.refused if forced or not recommends else 0.02) if qid == "refused" else 0.03
+                answers[qid] = SimpleNamespace(noul=score)
         return SimpleNamespace(model="jev-1.13.0", usage=SimpleNamespace(input_tokens=1000), answers=answers)
 
 
@@ -102,15 +105,21 @@ def test_positions_come_from_offsets_and_only_options_are_kept():
 
 def test_refusal_mirrors_the_extraction_prompt():
     empty = FakeJev({}, refused=0.97)
-    ex, meta = read_answer(empty, answer("I can't recommend a grader."), Finder(ALIASES))
-    assert ex.refused is True and ex.brands == [] and "off_topic" not in empty.requests[0][1]
+    ex, _ = read_answer(empty, answer("I can't recommend a grader."), Finder(ALIASES))
+    assert ex.refused is True and ex.brands == [] and ex.error is None
     conflict = FakeJev({"PSA": "option"}, refused=0.9)
+    conflict.force_refused = True
     ex, meta = read_answer(conflict, answer("PSA, I suppose."), Finder(ALIASES))
-    assert ex.refused is False and meta["refusal_conflict"] is True
+    assert ex.error == "jev failed: refusal with recommendations" and ex.brands == []
+    assert meta["refused"] == 0.9 and meta["candidates"][0]["role"] == "option"
+    context_only = FakeJev({"PSA": "context"}, refused=0.1)
+    ex, _ = read_answer(context_only, answer("PSA once dominated; today I'd grade elsewhere."), Finder(ALIASES))
+    assert ex.refused is False and ex.brands == [] and ex.error is None
     blank, _ = read_answer(FakeJev({}), answer("   "), Finder(ALIASES))
-    assert blank.refused is True                                   # same rule as extract._base_for
+    assert blank.refused is True
     engine_error, meta = read_answer(FakeJev({}), answer("", error="engine timed out"), Finder(ALIASES))
     assert engine_error.error == "engine timed out" and meta["requests"] == 0
+    assert "name no companies at all" in questions_for([], False)["refused"].instructions
 
 
 def test_api_failure_becomes_a_recorded_error_and_a_missing_key_stops_first(monkeypatch):
