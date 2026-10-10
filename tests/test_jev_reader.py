@@ -370,3 +370,34 @@ def test_rotation_uses_each_readings_usable_answers():
     assert compare_jev._rotation(run(["PSA"]), run([]))[0]["exceeds_noise"] is True
     assert compare_jev._rotation(run(["PSA"], "extract failed: x"), run(["PSA"])) == "no usable Opus reading to compare"
     assert compare_jev._rotation(run(["PSA"]), run(["PSA"], "jev failed: x")) == "no usable Jev reading to compare"
+
+
+@pytest.mark.parametrize("damage", ["duplicate_row", "changed_answer", "duplicate_name", "bad_position",
+                                    "missing_name", "two_readings"])
+def test_review_rejects_duplicate_altered_or_malformed_shadow_rows(monkeypatch, tmp_path, damage):
+    from scripts.review_extractions import prepare, shadow_predictions
+
+    shadow_setup(monkeypatch, tmp_path)
+    source, _ = run_record(tmp_path)
+    packet, _ = prepare(tmp_path, ["data/runs/2026-09-14/grading.json"], 2, "fixed")
+    shadow = jev_reader.read_record(source, FakeJev({"PSA": "option", "SGC": "option"}), workers=1)
+    first = shadow["extractions"][0]
+    if damage == "duplicate_row":
+        extra = deepcopy(first)
+        extra["brands"] = [{"name": "Invented", "position": 1, "sentiment": "neutral"}]
+        shadow["extractions"].append(extra)
+    if damage == "changed_answer":
+        first["answer"] = "A completely different answer."
+    if damage == "duplicate_name":
+        first["brands"] = [{"name": "PSA", "position": 1}, {"name": "PSA", "position": 2}]
+    if damage == "bad_position":
+        first["brands"] = [{"name": "PSA", "position": 0}]
+    if damage == "missing_name":
+        first["brands"] = [{"position": 1}]
+    paths = [tmp_path / "jev.json"]
+    paths[0].write_text(json.dumps(shadow), encoding="utf-8")
+    if damage == "two_readings":
+        paths.append(tmp_path / "jev-copy.json")
+        paths[1].write_text(json.dumps(shadow), encoding="utf-8")
+    with pytest.raises(ValueError):
+        shadow_predictions(tmp_path, packet, paths)

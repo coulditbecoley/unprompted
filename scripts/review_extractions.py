@@ -88,14 +88,26 @@ def shadow_predictions(root: Path, packet: dict, readings: list[Path]) -> dict:
         for row in reading["extractions"]:
             item_id = digest(json.dumps([reading["source"], row["engine"], row["question_id"], row["run_index"]],
                                         ensure_ascii=False).encode())
+            if item_id in rows:
+                raise ValueError(f"duplicate shadow identity for item {item_id}")
             rows[item_id] = row
     out = {}
     for item in packet["items"]:
         row = rows.get(item["id"])
         if row is None or row.get("error"):
             raise ValueError(f"no usable second reading for item {item['id']}")
-        out[item["id"]] = {"brands": [b["name"] for b in sorted(row["brands"], key=lambda b: b["position"])],
-                           "refused": row["refused"]}
+        if row.get("answer") != item["answer"]:
+            raise ValueError(f"shadow answer differs from the packet for item {item['id']}")
+        brands = row.get("brands")
+        if (not isinstance(brands, list) or type(row.get("refused")) is not bool
+                or any(not isinstance(b, dict) or not isinstance(b.get("name"), str) or not b["name"].strip()
+                       or type(b.get("position")) is not int or b["position"] < 1 for b in brands)
+                or len({b["position"] for b in brands}) != len(brands)):
+            raise ValueError(f"invalid shadow brands for item {item['id']}")
+        names = [b["name"] for b in sorted(brands, key=lambda b: b["position"])]
+        if len(set(names)) != len(names) or (row["refused"] and names):
+            raise ValueError(f"invalid shadow brands for item {item['id']}")
+        out[item["id"]] = {"brands": names, "refused": row["refused"]}
     return out
 
 
