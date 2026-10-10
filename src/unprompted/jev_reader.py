@@ -46,7 +46,7 @@ import yaml
 
 from .extract import _base_for
 from .models import BrandMention, EngineAnswer, Extraction
-from .normalize import AliasMap, _key, _strippings, normalize
+from .normalize import AliasMap, _NOISE_WORDS, _VERSION, _key, normalize
 from .storage import write_json, write_text
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -122,6 +122,13 @@ monday tuesday wednesday thursday friday saturday sunday
 _SOLO = _STOP | {"ai", "api", "usd", "faq", "ui", "ux", "ide", "cli", "pdf", "seo", "llm", "llms"}
 
 
+# Tiers and outcomes EXTRACT_PROMPT names ("PSA 10", "BGS Pristine 10", "Black
+# Label", "Bulk"). An excluded name made of a brand plus only these words,
+# numbers or normalize's tier words still names that brand. "Adobe Photoshop"
+# does not: "photoshop" is a product, not a tier.
+_GRADE_WORDS = frozenset({"bulk", "pristine", "black", "label"})
+
+
 @dataclass
 class Candidate:
     name: str          # as written in the answer; the fullest spelling for a known brand
@@ -188,9 +195,7 @@ class Finder:
             if overlapping and not any(canonical in c[2] for c in overlapping):
                 continue
             if not overlapping:
-                implied = {canonical} if canonical else {
-                    found for form in [*_strippings(written), *_PIECE.split(written)]
-                    if (found := self.aliases.resolve(form))}
+                implied = {canonical} if canonical else self._implied(written)
                 claimed.append((start, end, implied))
             if canonical is None:
                 continue
@@ -205,7 +210,13 @@ class Finder:
         for start, span in self._spans(text):
             for piece_start, piece in self._pieces(start, span):
                 key = _key(piece)
-                if key in unknown or any(a <= piece_start and piece_start + len(piece) <= b for a, b, _ in claimed):
+                if any(a <= piece_start and piece_start + len(piece) <= b for a, b, _ in claimed):
+                    continue
+                if key in unknown:
+                    # Spans are visited by kind (bold before plain text), so the
+                    # first one seen is not necessarily the first in the answer.
+                    if piece_start < unknown[key].offset:
+                        unknown[key] = Candidate(piece, piece_start, "unknown")
                     continue
                 if (self.aliases.is_excluded(piece) or self.aliases.resolve(piece) is not None
                         or self.aliases.is_excluded_loosely(piece)):
@@ -213,6 +224,16 @@ class Finder:
                 unknown[key] = Candidate(piece, piece_start, "unknown")
 
         found = sorted([*known.values(), *unknown.values()], key=lambda c: c.offset)
+        return found
+
+    def _implied(self, written: str) -> set[str]:
+        found = {brand for form in _PIECE.split(written) if (brand := self.aliases.resolve(form))}
+        tokens = _key(written).split()
+        for cut in range(len(tokens) - 1, 0, -1):
+            brand = self.aliases.resolve(" ".join(tokens[:cut]))
+            if brand and all(t in _GRADE_WORDS or t in _NOISE_WORDS or _VERSION.match(t) for t in tokens[cut:]):
+                found.add(brand)
+                break
         return found
 
     @staticmethod

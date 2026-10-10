@@ -302,3 +302,25 @@ def test_compare_refuses_a_partial_set_and_an_existing_output(monkeypatch, tmp_p
     monkeypatch.setattr(sys, "argv", ["compare_jev.py", "compare", "--set", "2026-10-10", "--out", str(existing)])
     with pytest.raises(SystemExit, match="already exists"):
         compare_jev.main()
+
+
+def test_an_unknown_name_keeps_its_earliest_mention():
+    found = Finder(ALIASES).find("Kestrel Grading works. Try SGC next. **Kestrel Grading** is cheap.")
+    assert [(c.name, c.offset) for c in found] == [("Kestrel Grading", 0), ("SGC", 27)]
+
+
+def test_a_tier_on_the_exclude_list_names_its_brand_but_a_product_does_not():
+    aliases = {"canonical": {"CGC": ["cgc"], "PSA": ["psa"], "Beckett": ["bgs"], "Adobe Firefly": ["adobe"]},
+               "exclude": ["cgc bulk", "psa 10", "bgs pristine 10", "adobe photoshop"]}
+    found = Finder(aliases).find("CGC Bulk is best. PSA is next. BGS Pristine 10 is rare. Use Adobe Photoshop.")
+    assert [(c.canonical, c.offset) for c in found if c.source == "alias"] == [
+        ("CGC", 0), ("PSA", 18), ("Beckett", 31)]
+
+
+def test_the_known_lowercase_limit_is_unchanged():
+    # Documented limit: a lowercase product mention before a capitalised one
+    # takes the capitalised offset. 1 of 3,926 archived answers is affected.
+    found = Finder(ALIASES).find("Try aider first, Cursor second. Aider is free.")
+    assert [(c.canonical, c.offset) for c in found if c.source == "alias"] == [("Cursor", 17), ("Aider", 32)]
+    noun = Finder(ALIASES).find("Friendly cursor here. Cursor is recommended.")
+    assert [(c.canonical, c.offset) for c in noun if c.source == "alias"] == [("Cursor", 22)]
