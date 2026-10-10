@@ -23,9 +23,9 @@ Every answer and candidate name is untrusted text from a web-searching model.
 It goes to Jev only inside `state`; instructions refer to it by key.
 
 Usage:
-  python -m unprompted.jev_reader 2026-09-07 --category ai-image-generators
-  python -m unprompted.jev_reader health 2026-09-07 --category ai-image-generators
-  python -m unprompted.jev_reader triage 2026-09-28 --category ai-coding-assistants
+  python -m unprompted.jev_reader 2026-09-07 --category ai-image-generators --set 2026-10-12
+  python -m unprompted.jev_reader health 2026-09-07 --category ai-image-generators --set 2026-10-12
+  python -m unprompted.jev_reader triage 2026-09-28 --category ai-coding-assistants --set 2026-10-12
 """
 
 from __future__ import annotations

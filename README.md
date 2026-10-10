@@ -208,16 +208,28 @@ disk anyway.
 TypeSafe's Jev model can read the stored answers beside the published Opus
 reader. It never queries an engine and never changes a published number: it
 reads answers already in `data/runs/` or `data/held/` and writes only under
-`audit/jev-shadow/`, which the site, the publication checks and the weekly
-commit never read. That directory is append-only in the same way `data/runs/`
-is; a second reading of the same source refuses rather than replacing the
-first. The weekly run does not call it.
+`audit/jev-shadow/<reading set>/`, which the site, the publication checks and
+the weekly commit never read. That directory is gitignored, so readings stay
+on the machine that made them and can never mark a measurement's commit as
+dirty; keep a backup. It is append-only in the same way `data/runs/` is: a
+second reading into the same set refuses rather than replacing the first. A
+reading set is always named (`YYYY-MM-DD` or `YYYY-MM-DD-rN`), never chosen
+as "the latest", and a comparison refuses a set that lacks any source.
 
 ```powershell
-.\.venv\Scripts\python.exe -m unprompted.jev_reader 2026-09-07 --category ai-image-generators
-.\.venv\Scripts\python.exe scripts\compare_jev.py compare --out audit\<date>\jev-shadow-comparison.json
-.\.venv\Scripts\python.exe scripts\review_extractions.py score <labelled packet> --reading audit\jev-shadow\held\2026-09-07\ai-image-generators.json
+.\.venv\Scripts\python.exe -m unprompted.jev_reader 2026-09-07 --category ai-image-generators --set 2026-10-12
+.\.venv\Scripts\python.exe scripts\compare_jev.py compare --set 2026-10-12 --read --out audit\2026-10-12\jev-shadow-comparison.json
+.\.venv\Scripts\python.exe scripts\compare_jev.py probes --set 2026-10-12 --out audit\2026-10-12\jev-probes.json
+.\.venv\Scripts\python.exe scripts\review_extractions.py score <labelled packet> --reading audit\jev-shadow\2026-10-12\held\2026-09-07\ai-image-generators.json
 ```
+
+After each Monday's week is committed and pushed, `scripts\weekly-run.cmd`
+ends with `scripts\compare_jev.py weekly`. It reads the date that run
+measured, from that run's own summary, within a budget of at most 30 minutes
+that keeps clear of the scheduled task's 8-hour limit; each category runs as
+a child process that is stopped at the budget. Its exit code is ignored, and
+it writes nothing to `data/`, `data/last-run.json` or the notification. A
+missing key or TypeSafe outage is logged and changes nothing about the week.
 
 Code finds the candidate names (every alias map spelling, plus unknown names
 from lists, bold text, headings and capitalised spans) and fixes their order

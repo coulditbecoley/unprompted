@@ -1,5 +1,10 @@
 # Jev in shadow: a second reader for Unprompted
 
+> **Superseded by `audit/2026-10-10-r2/jev-shadow-report.md`.** An independent review found
+> candidate-order, refusal-rule and comparison issues and several overstated claims in this
+> report; all are corrected there. This file is kept unchanged below as the record of what
+> was first published.
+
 Prepared 2026-10-10. Reader: TypeSafe `jev-1.13.0`, pinned. Code: commit `9cda960`
 on branch `jev-shadow-reader`. Raw results: `audit/2026-10-10/jev-shadow-comparison.json`.
 Readings: `audit/jev-shadow/`.
