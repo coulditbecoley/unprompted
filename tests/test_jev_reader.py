@@ -341,3 +341,32 @@ def test_the_known_lowercase_limit_is_unchanged():
     assert [(c.canonical, c.offset) for c in found if c.source == "alias"] == [("Cursor", 17), ("Aider", 32)]
     noun = Finder(ALIASES).find("Friendly cursor here. Cursor is recommended.")
     assert [(c.canonical, c.offset) for c in noun if c.source == "alias"] == [("Cursor", 22)]
+
+
+def test_quarantine_matches_are_labelled_possible_and_are_stable(monkeypatch, tmp_path):
+    import scripts.compare_jev as compare_jev
+
+    shadow_setup(monkeypatch, tmp_path)
+    source, record = run_record(tmp_path)
+    record["extractions"][0]["answer"] = "PSA first, then SGC Plus or SGC Mail. Avoid TAG."
+    record["quarantined"] = ["SGC Plus", "SGC Mail"]          # equal length: order must not depend on hashing
+    source.write_text(json.dumps(record), encoding="utf-8")    # source and reading built from the same answer
+    shadow = jev_reader.read_record(source, FakeJev({"PSA": "option", "SGC": "option"}), workers=1)
+    result = compare_jev.compare(record, shadow, "data/runs/2026-09-14/grading.json")
+    match = result["disagreements"]["jev_found_possible_quarantine_match"][0]
+    assert match["possible_quarantined_name"] == "SGC Mail"
+    assert "jev_found_opus_likely_quarantined_longer_name" not in result["disagreements"]
+
+
+def test_rotation_uses_each_readings_usable_answers():
+    import scripts.compare_jev as compare_jev
+
+    def run(brands, error=None):
+        return {"category": "grading", "extractions": [
+            {"engine": "e", "question_id": "q1", "run_index": i, "refused": False, "error": error,
+             "brands": [{"name": n, "position": 1} for n in brands]} for i in range(40)]}
+    assert compare_jev._rotation(run([]), run(["PSA"])) == [
+        {"brand": "PSA", "opus": 0.0, "jev": 1.0, "delta_points": 100.0, "exceeds_noise": True}]
+    assert compare_jev._rotation(run(["PSA"]), run([]))[0]["exceeds_noise"] is True
+    assert compare_jev._rotation(run(["PSA"], "extract failed: x"), run(["PSA"])) == "no usable Opus reading to compare"
+    assert compare_jev._rotation(run(["PSA"]), run(["PSA"], "jev failed: x")) == "no usable Jev reading to compare"

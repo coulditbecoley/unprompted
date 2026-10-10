@@ -24,7 +24,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from unprompted.aggregate import brand_week, exceeds_noise  # noqa: E402
+from unprompted.aggregate import _answered, brand_week, exceeds_noise  # noqa: E402
 from unprompted.jev_reader import (PRICE_PER_MTOK, Finder, alias_policy, reading_set,  # noqa: E402
                                    shadow_path, write_shadow)
 from unprompted.models import BrandMention, Extraction  # noqa: E402
@@ -94,6 +94,28 @@ def _rate(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 4) if denominator else None
 
 
+def _rotation(record: dict, reading: dict) -> list[dict] | str:
+    """Each brand's Rotation under both readings, over each reading's usable answers.
+
+    A reading with usable answers and no surviving brands is a real 0%, not a
+    missing reading: denominators come from the rows, not from the brands.
+    """
+    opus_n, jev_n = len(_answered(record)), len(_answered(reading))
+    if not opus_n:
+        return "no usable Opus reading to compare"
+    if not jev_n:
+        return "no usable Jev reading to compare"
+    before = {b.brand: b.rotation for b in brand_week(record)}
+    after = {b.brand: b.rotation for b in brand_week(reading)}
+    out = []
+    for name in sorted(set(before) | set(after)):
+        p, q = before.get(name, 0.0), after.get(name, 0.0)
+        if p != q:
+            out.append({"brand": name, "opus": p, "jev": q, "delta_points": round((q - p) * 100, 1),
+                        "exceeds_noise": exceeds_noise(p, opus_n, q, jev_n)})
+    return sorted(out, key=lambda r: (-abs(r["delta_points"]), r["brand"]))
+
+
 def compare(record: dict, reading: dict, source: str, source_sha256: str | None = None) -> dict:
     """Per category and engine agreement, the disagreements, and Rotation effects."""
     if (reading.get("source") != source or reading["category"] != record["category"]
@@ -104,7 +126,7 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
         alias_data.get("canonical", {}) or {}, alias_data.get("exclude", []) or []))}
     jev = {_identity(r): r for r in reading["extractions"]}
 
-    quarantined = sorted({n for n in record.get("quarantined", []) if _key(n)}, key=len, reverse=True)
+    quarantined = sorted({n for n in record.get("quarantined", []) if _key(n)}, key=lambda n: (-len(n), n))
     tallies: dict[str, Counter] = defaultdict(Counter)
     disagreements: dict[str, list] = defaultdict(list)
     for identity, o in opus.items():
@@ -142,17 +164,15 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
             roles.setdefault(canonical, c.get("role"))
             written.setdefault(canonical, c["name"])
         for name in sorted(sb - sa):
-            # Did Opus write a longer phrase around this name, which then failed
-            # alias resolution and went to quarantine? Then the readers agree it
-            # was named and differ only in where the name ends, which is the
-            # candidate step's doing, not a judgment.
-            # Opus restates names ("OpenAI's GPT Image in ChatGPT"), so the test
-            # is that every word of the quarantined name occurs in this answer.
+            # Possible, not proven: the record's quarantine list has no answer
+            # identities, so this only shows that every word of a quarantined
+            # name occurs somewhere in this answer, not that Opus wrote it here.
             spelled = _key(written.get(name, name))
             words = set(_key(o.get("answer", "")).split())
             longer = next((q for q in quarantined if spelled in _key(q) and set(_key(q).split()) <= words), None)
             if longer:
-                disagreements["jev_found_opus_likely_quarantined_longer_name"].append({**link, "brand": name, "opus_wrote": longer})
+                disagreements["jev_found_possible_quarantine_match"].append(
+                    {**link, "brand": name, "possible_quarantined_name": longer})
             else:
                 disagreements["jev_found_opus_missed"].append({**link, "brand": name})
         for name in sorted(sa - sb):
@@ -178,20 +198,7 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
                 "sentiment_flips": t["sentiment_flip"], "counts": dict(t)}
 
     overall = sum(tallies.values(), Counter())
-    # A record whose every extraction failed has no Opus Rotation to change.
-    published = brand_week(record) if overall["compared"] else []
-    shadow = brand_week(reading)
-    before = {b.brand: b for b in published}
-    after = {b.brand: b for b in shadow}
-    rotation = []
-    for name in sorted(set(before) | set(after)) if published else []:
-        p, q = before.get(name), after.get(name)
-        pr, pn = (p.rotation, p.total_runs) if p else (0.0, published[0].total_runs if published else 0)
-        qr, qn = (q.rotation, q.total_runs) if q else (0.0, shadow[0].total_runs if shadow else 0)
-        if pr != qr:
-            rotation.append({"brand": name, "opus": pr, "jev": qr, "delta_points": round((qr - pr) * 100, 1),
-                             "exceeds_noise": exceeds_noise(pr, pn, qr, qn)})
-    rotation.sort(key=lambda r: -abs(r["delta_points"]))
+    rotation = _rotation(record, reading)
     answers = sum(1 for r in reading["extractions"] if r.get("jev", {}).get("requests"))
     return {
         "label": LABEL, "source": source, "published": source.startswith("data/runs/"),
@@ -199,8 +206,8 @@ def compare(record: dict, reading: dict, source: str, source_sha256: str | None 
         "overall": summary(overall), "by_engine": {e: summary(t) for e, t in sorted(tallies.items())},
         "disagreement_counts": {k: len(v) for k, v in sorted(disagreements.items())},
         "disagreements": dict(disagreements),
-        "rotation_changes": rotation if published else "no Opus reading to compare",
-        "rotation_beyond_noise": [r for r in rotation if r["exceeds_noise"]],
+        "rotation_changes": rotation,
+        "rotation_beyond_noise": [r for r in rotation if r["exceeds_noise"]] if isinstance(rotation, list) else [],
         "cost": {"answers_read": answers, "input_tokens": reading["input_tokens"],
                  "dollars": round(reading["input_tokens"] / 1e6 * PRICE_PER_MTOK, 6),
                  "dollars_per_1k_answers": round(reading["input_tokens"] / 1e6 * PRICE_PER_MTOK / answers * 1000, 4)
