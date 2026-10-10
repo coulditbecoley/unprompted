@@ -99,6 +99,7 @@ or the tests.
 | `BUTTONDOWN_API_KEY` | the weekly email signup | signups fall back to the operator's inbox via Web3Forms |
 | `NEXT_PUBLIC_WEB3FORMS_KEY` | the contact form | the form says so rather than failing silently |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | audience counting, rate limiting | nothing is counted and the dashboard says so; rate limiting fails open |
+| `TYPESAFE_API_KEY` | the shadow Jev reader only (`python -m unprompted.jev_reader`), not the web app and not the weekly run | the reader stops before reading anything and says so |
 
 The Web3Forms key is public by design — the provider puts it in client HTML, so
 every visitor can read it, and it is inlined into the JavaScript bundle at build
@@ -201,6 +202,45 @@ filesystem by absolute path. Per-harness flags in the allowlist remove more
 --sandbox read-only` for Codex). Note that `claude --tools ""` is **not** relied
 on: its help says it disables all tools, and it was observed reading a file from
 disk anyway.
+
+### A second reader, in shadow
+
+TypeSafe's Jev model can read the stored answers beside the published Opus
+reader. It never queries an engine and never changes a published number: it
+reads answers already in `data/runs/` or `data/held/` and writes only under
+`audit/jev-shadow/<reading set>/`, which the site, the publication checks and
+the weekly commit never read. That directory is gitignored, so readings stay
+on the machine that made them and can never mark a measurement's commit as
+dirty; keep a backup. It is append-only in the same way `data/runs/` is: a
+second reading into the same set refuses rather than replacing the first. A
+reading set is always named (`YYYY-MM-DD` or `YYYY-MM-DD-rN`), never chosen
+as "the latest", and a comparison refuses a set that lacks any source.
+
+```powershell
+.\.venv\Scripts\python.exe -m unprompted.jev_reader 2026-09-07 --category ai-image-generators --set 2026-10-12
+.\.venv\Scripts\python.exe scripts\compare_jev.py compare --set 2026-10-12 --read --out audit\2026-10-12\jev-shadow-comparison.json
+.\.venv\Scripts\python.exe scripts\compare_jev.py probes --set 2026-10-12 --out audit\2026-10-12\jev-probes.json
+.\.venv\Scripts\python.exe scripts\review_extractions.py score <labelled packet> --reading audit\jev-shadow\2026-10-12\held\2026-09-07\ai-image-generators.json
+```
+
+After each Monday's week is committed and pushed, `scripts\weekly-run.cmd`
+ends with `scripts\compare_jev.py weekly`. It reads the date that run
+measured, from that run's own summary, within a budget of at most 30 minutes
+that keeps clear of the scheduled task's 8-hour limit; each category runs as
+a child process that is stopped at the budget. Its exit code is ignored, and
+it writes nothing to `data/`, `data/last-run.json` or the notification. A
+missing key or TypeSafe outage is logged and changes nothing about the week.
+
+Code finds the candidate names (every alias map spelling, plus unknown names
+from lists, bold text, headings and capitalised spans) and fixes their order
+from character offsets. Jev then judges, for every candidate at once, whether
+the answer presents it as an option, as context, as something to avoid, or as
+no company at all, the same four outcomes the extraction prompt draws. Its
+reading has the shape of an ordinary extraction, so `normalize()` and the
+aggregate code read it unchanged. Comparisons with the published reading are
+agreement with Opus, not accuracy; the blinded review in `READING-REVIEW.md`
+is the accuracy test. Adopting it as the published reader would be a method
+change with its own version bump.
 
 ---
 

@@ -48,6 +48,12 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
         "p.parent.mkdir(exist_ok=True);p.write_text(status)\n")
     for name in ("sync_vault.py", "sync_analytics.py"):
         (repo / "scripts" / name).write_text("# Offline no-op\n")
+    # The shadow Jev step: records that it ran, then fails, to prove a failure changes nothing.
+    (repo / "scripts/compare_jev.py").write_text(
+        "from pathlib import Path\n"
+        "p=Path('.unprompted/jev-hook');p.parent.mkdir(exist_ok=True)\n"
+        "p.write_text(p.read_text()+'jev\\n' if p.exists() else 'jev\\n')\n"
+        "raise SystemExit(1)\n")
     venv.EnvBuilder(with_pip=False).create(repo / ".venv")
     git("add", ".")
     git("commit", "-m", "offline setup")
@@ -62,6 +68,8 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert git("rev-parse", "HEAD") == git("ls-remote", "origin", "refs/heads/main").split()[0]
     invocations = repo / ".unprompted/invocations"
     assert invocations.read_text() == "run\n"
+    assert (repo / ".unprompted/jev-hook").read_text() == "jev\n"      # ran after publishing; its failure changed nothing
+    assert (repo / ".unprompted/weekly-started").exists()               # the start marker the budget uses
     (repo / "staged.txt").write_text("operator work")
     git("add", "staged.txt")
     launch(1)
@@ -91,6 +99,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert invocations.read_text() == "run\nrun\n"
     assert git("status", "--porcelain") == ""
     assert git("rev-parse", "HEAD") == git("ls-remote", "origin", "refs/heads/main").split()[0]
+    assert (repo / ".unprompted/jev-hook").read_text() == "jev\njev\n"
 
 
 def test_watchdog_requires_this_weeks_measurement_not_a_reread(tmp_path, monkeypatch):

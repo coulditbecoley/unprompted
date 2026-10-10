@@ -20,6 +20,9 @@ if not exist "%UNPROMPTED_PYTHON%" (
   exit /b 1
 )
 
+REM Start marker for the shadow step's time budget at the end. Best effort.
+"%UNPROMPTED_PYTHON%" -c "import pathlib,time; p=pathlib.Path('.unprompted'); p.mkdir(exist_ok=True); (p/'weekly-started').write_text(str(time.time()))" 2>nul
+
 echo. >> "%TEMP%\unprompted-weekly.log"
 echo ===== %DATE% %TIME% ===== >> "%TEMP%\unprompted-weekly.log"
 
@@ -182,5 +185,12 @@ REM archive the audience counters with it.
 if errorlevel 1 exit /b 4
 "%UNPROMPTED_PYTHON%" scripts\sync_analytics.py >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 exit /b 4
+
+REM Shadow second reader. Jev re-reads the stored answers of the date this run
+REM measured and writes only to the gitignored audit\jev-shadow. It runs after
+REM the week is pushed, stops within a time budget that keeps clear of the
+REM task's 8-hour limit, and its exit code is ignored. It does not report into
+REM data\last-run.json or the notification.
+"%UNPROMPTED_PYTHON%" scripts\compare_jev.py weekly >> "%TEMP%\unprompted-weekly.log" 2>&1
 
 exit /b %RUN_EXIT%

@@ -72,7 +72,46 @@ def prepare(root: Path, paths: list[str], per_stratum: int, seed: str) -> tuple[
             "sources": sources, "strata": strata, "items": items}, predictions
 
 
-def score(root: Path, packet: dict) -> dict:
+def shadow_predictions(root: Path, packet: dict, readings: list[Path]) -> dict:
+    """A second reader's brand lists for exactly the packet's items.
+
+    Each reading must name a packet source and carry that source's hash, so
+    both readers are scored on identical answers. An item the reader failed
+    on, or never read, refuses rather than shrinking the sample.
+    """
+    hashes = {s["path"]: s["sha256"] for s in packet["sources"]}
+    rows = {}
+    for path in readings:
+        reading = json.loads(path.read_text(encoding="utf-8"))
+        if hashes.get(reading.get("source")) != reading.get("source_sha256"):
+            raise ValueError(f"{path} was not read from a packet source with the same hash")
+        for row in reading["extractions"]:
+            item_id = digest(json.dumps([reading["source"], row["engine"], row["question_id"], row["run_index"]],
+                                        ensure_ascii=False).encode())
+            if item_id in rows:
+                raise ValueError(f"duplicate shadow identity for item {item_id}")
+            rows[item_id] = row
+    out = {}
+    for item in packet["items"]:
+        row = rows.get(item["id"])
+        if row is None or row.get("error"):
+            raise ValueError(f"no usable second reading for item {item['id']}")
+        if row.get("answer") != item["answer"]:
+            raise ValueError(f"shadow answer differs from the packet for item {item['id']}")
+        brands = row.get("brands")
+        if (not isinstance(brands, list) or type(row.get("refused")) is not bool
+                or any(not isinstance(b, dict) or not isinstance(b.get("name"), str) or not b["name"].strip()
+                       or type(b.get("position")) is not int or b["position"] < 1 for b in brands)
+                or len({b["position"] for b in brands}) != len(brands)):
+            raise ValueError(f"invalid shadow brands for item {item['id']}")
+        names = [b["name"] for b in sorted(brands, key=lambda b: b["position"])]
+        if len(set(names)) != len(names) or (row["refused"] and names):
+            raise ValueError(f"invalid shadow brands for item {item['id']}")
+        out[item["id"]] = {"brands": names, "refused": row["refused"]}
+    return out
+
+
+def score(root: Path, packet: dict, readings: list[Path] | None = None) -> dict:
     # Regenerate all evidence and the deterministic sample. A changed answer,
     # source, prediction, sample membership or duplicate row cannot silently score.
     expected, predictions = prepare(root, [s["path"] for s in packet["sources"]], packet["per_stratum"], packet["seed"])
@@ -80,6 +119,8 @@ def score(root: Path, packet: dict) -> dict:
     evidence["items"] = [dict(item, review=None) for item in packet["items"]]
     if evidence != expected:
         raise ValueError("review evidence differs from the source-bound sample")
+    if readings:
+        predictions = shadow_predictions(root, packet, readings)
     counts = Counter()
     disagreements, reviewers = [], set()
     for item in packet["items"]:
@@ -115,6 +156,7 @@ def score(root: Path, packet: dict) -> dict:
                    "first_brand_accuracy": counts["first_match"] / counts["reviewed"],
                    "refusal_accuracy": counts["refusal_match"] / counts["reviewed"]}
     return {"status": "complete" if complete else "awaiting_review",
+            "reader": "shadow readings: " + ", ".join(p.as_posix() for p in readings) if readings else "published reading",
             "scope": "Unweighted sampled answers only; supplied reviewer labels, not independently verified human judgments. Includes normalization effects; not an extractor-only or whole-archive accuracy estimate.",
             "reviewed": counts["reviewed"], "sampled": len(packet["items"]),
             "reviewers": sorted(reviewers), "strata": packet["strata"],
@@ -133,6 +175,8 @@ def main() -> None:
     sampling.add_argument("--out", type=Path, required=True)
     scoring = commands.add_parser("score")
     scoring.add_argument("packet", type=Path)
+    scoring.add_argument("--reading", type=Path, action="append",
+                         help="score a shadow reading (audit/jev-shadow/...) instead of the published one; repeat per source")
     args = parser.parse_args()
     if args.command == "prepare":
         packet, _ = prepare(args.root, args.sources, args.per_stratum, args.seed)
@@ -143,7 +187,7 @@ def main() -> None:
             stream.write(json.dumps(packet, ensure_ascii=False, indent=2) + "\n")
         print(f"Prepared {len(packet['items'])} answers; all labels are pending.")
     else:
-        print(json.dumps(score(args.root, json.loads(args.packet.read_text(encoding="utf-8"))), indent=2))
+        print(json.dumps(score(args.root, json.loads(args.packet.read_text(encoding="utf-8")), args.reading), indent=2))
 
 
 if __name__ == "__main__":
