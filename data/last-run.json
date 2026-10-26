@@ -1,6 +1,6 @@
 {
-  "at": "2026-10-19T18:00:16+00:00",
-  "detail": "ai-coding-assistants: held \u2014 5 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: Lovable, JetBrains AI / Junie, Supermaven, Google Antigravity, Google Gemini; gemini cited sources on only 29 of its 75 answers (39%), under the 60% floor for an engine that is supposed to search. An engine answering from memory measures which brands it was trained on rather than which are findable now, and the two are not interchangeable. Check whether the provider changed the model or its tool behaviour.\nai-image-generators: failed or refused \u2014 APIConnectionError: Connection error.\nai-writing-tools: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nCommit and push follow; deployment is not verified.",
+  "at": "2026-10-26T17:00:44+00:00",
+  "detail": "ai-coding-assistants: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nai-image-generators: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nai-writing-tools: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nCommit and push follow; deployment is not verified.",
   "exit_code": 2,
   "status": "held"
 }
