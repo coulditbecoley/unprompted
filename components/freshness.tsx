@@ -26,7 +26,14 @@ function relative(target: Date, now: Date): string {
   return `in ${Math.round(hours / 24)}d`;
 }
 
-export function Freshness({ runDate }: { runDate: string }) {
+export function Freshness({
+  runDate,
+  latestHref,
+}: {
+  runDate: string;
+  /** Set on an older reading: where the newest board is. Its absence means this is the newest. */
+  latestHref?: string;
+}) {
   // Rendered only after mount: server and client clocks differ, and a
   // countdown baked into static HTML is stale the moment it is built.
   const [when, setWhen] = useState<string | null>(null);
@@ -46,7 +53,15 @@ export function Freshness({ runDate }: { runDate: string }) {
   return (
     <div className="freshness">
       <span>Measured {runDate}</span>
-      {age !== null && age > 8 && <span role="status">{age} days old · no newer measurement published yet</span>}
+      {/* Only the newest reading may say nothing newer exists; an older one
+          says it is older and points to the newest. */}
+      {latestHref ? (
+        <span role="status">
+          An older reading · <a href={latestHref}>see the latest board</a>
+        </span>
+      ) : (
+        age !== null && age > 8 && <span role="status">{age} days old · no newer measurement published yet</span>
+      )}
       <span className="next" suppressHydrationWarning>
         {when ? `Next update ${when}` : "Updates every Monday"}
       </span>

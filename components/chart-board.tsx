@@ -210,7 +210,10 @@ export function ChartBoard({
         methodVersion={run.method_version}
         runsPerQuestion={run.runs_per_question}
       />
-      <Freshness runDate={run.measured_on || run.run_date} />
+      <Freshness
+        runDate={run.measured_on || run.run_date}
+        latestHref={latestRun(category.slug)?.run_date === run.run_date ? undefined : `/chart/${category.slug}`}
+      />
       {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
       <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
       <HowToRead runsPerQuestion={run.runs_per_question} />
