@@ -143,10 +143,7 @@ class GeminiEngine(Engine):
 
         # Kept verbatim so the 2026-10 drop in search coverage (and the next
         # one) can be diagnosed: absent, null and {} grounding stay distinct.
-        # The rendered search widget is HTML for a UI, not evidence; dropped.
+        # Stored as data and never rendered (it includes Google's widget HTML).
         metadata = {k: body[k] for k in ("modelVersion", "promptFeedback") if k in body}
         metadata |= {k: candidate[k] for k in ("finishReason", "groundingMetadata") if k in candidate}
-        if isinstance(metadata.get("groundingMetadata"), dict):
-            metadata["groundingMetadata"] = {k: v for k, v in metadata["groundingMetadata"].items()
-                                             if k != "searchEntryPoint"}
         return text, sources, usage, metadata

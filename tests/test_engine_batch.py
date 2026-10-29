@@ -220,7 +220,9 @@ def test_outstanding_extraction_batches_are_collected_in_normal_and_reextract_di
     reply = {"custom_id": "x0", "result": {"type": "errored", "error": {"type": "error", "error": {"type": "api_error", "message": "x"}}}}
     jobs = [tmp_path / ".unprompted/2026-10-19/alpha/batch.json", tmp_path / ".unprompted/reextract/2026-10-19/beta/batch.json"]
     for job in jobs:
-        write_json(job, {"id": "ext", "identity": "i", "answers": 1})
+        write_json(job, {"id": "ext", "identity": "i", "answers": 1, "result_checkpoint_version": 1})
+    legacy = tmp_path / ".unprompted/2026-09-14/gamma/batch.json"
+    write_json(legacy, {"id": "consumed-and-expired"})
     batches = NS(create=lambda **kw: pytest.fail("submitted"), retrieve=lambda key: NS(id=key, processing_status="ended"),
                  results=lambda key: iter([NS(model_dump=lambda mode: reply)]))
     monkeypatch.setattr(extract, "_client", lambda key: NS(messages=NS(batches=batches)))
@@ -281,11 +283,47 @@ def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures
     monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26", "--summary-file", str(summary)])
     assert run.main() == run.HELD_EXIT_CODE
     detail = json.loads(summary.read_text())["detail"]
+    # Unaccounted spend blocks the week: no category runs.
+    assert seen == [] and "alpha: not run" in detail
     if lock_fails:
-        assert seen == [False] and "recovery: outstanding-batch recovery raised RuntimeError" in detail
+        assert "recovery: outstanding-batch recovery raised RuntimeError" in detail
     else:
-        assert seen == [True] and f"recovery: could not collect {broken}" in detail
+        assert json.loads(stale.read_text())["collected"]
+        assert f"recovery: could not collect {broken}" in detail
     assert len(submitted) == 1
+
+
+def test_weekly_main_runs_categories_after_a_clean_recovery(tmp_path, monkeypatch):
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    api.retrieve = lambda identifier: NS(processing_status="ended")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    seen = []
+    def category(name, date, **kwargs):
+        seen.append(json.loads(stale.read_text()).get("collected"))
+        raise SystemExit("stub category")
+    monkeypatch.setattr(run, "run_category", category)
+    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26"])
+    run.main()
+    assert seen == [True] and len(submitted) == 1
+
+
+def test_a_results_stream_that_drops_midway_is_downloaded_again_whole(tmp_path, monkeypatch):
+    import httpx2
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn", "end_turn"))
+    monkeypatch.setattr(batch, "POLL_SECONDS", 0)
+    complete, drops = api.results, iter([True])
+    def flaky(identifier):
+        entries = complete(identifier)
+        yield next(entries)
+        if next(drops, False):
+            raise httpx2.ReadError("connection reset mid-stream")
+        yield from entries
+    api.results = flaky
+    answers = batch.ask_batch(engine, [(engine, "q1", "Which?", i) for i in range(2)], tmp_path, "sha")
+    assert len(answers) == 2 and len(submitted) == 1
 
 
 def _gemini(monkeypatch, body):
@@ -311,7 +349,7 @@ def test_gemini_keeps_provider_evidence_and_bills_each_search_query(monkeypatch)
     assert answer.ok and answer.sources == ["https://example.com"]
     assert answer.usage["web_searches"] == 3 and "requests" not in answer.usage
     assert answer.metadata == {"modelVersion": "gemini-3.5-flash-002", "finishReason": "STOP",
-                               "groundingMetadata": {k: v for k, v in grounding.items() if k != "searchEntryPoint"}}
+                               "groundingMetadata": grounding}
     assert _base_for(answer)[0].to_dict()["metadata"] == answer.metadata
 
     # Answered from memory: no grounding key at all, which stays distinguishable from {}.

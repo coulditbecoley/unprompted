@@ -122,9 +122,10 @@ def measured_in(base: Path, monday: date, category: str) -> bool:
 # What to do about each kind of blocker the run reports. Matched on the kind,
 # never copied from the exception text, which can quote provider output.
 NEXT_STEPS = {
-    "unaccounted Claude batch": "A paid batch was never downloaded. The next weekly run collects it "
-        "automatically; to do it now, on the measuring machine: "
-        "`python -m unprompted.engines.anthropic_batch <state.json named in the log>`.",
+    "unaccounted": "A paid batch was never downloaded. The next weekly run collects it "
+        "automatically before measuring; if that also fails, the run log names the job.",
+    "outstanding batch recovery failed": "Collecting an earlier paid batch failed, so no category ran. "
+        "The run log names the job and the error.",
     "ambiguous": "A batch submission's outcome is unknown. Check the provider console for the job, "
         "then reconcile it by hand (RECOVERY-PLAN.md, A5). Paid work stays blocked until then.",
     "unrecognised brand": "New brand names need a decision in `aliases/<category>.yml` "
@@ -218,6 +219,7 @@ def main() -> int:
             + (f" at {status['at']}" if status.get("at") else ""),
             "",
             "What to do:" if steps else
+            "Its reason is not one this check recognises; see the detail in `data/last-run.json`." if status else
             "No status for this week reached GitHub, so the reason is not known here; check the run log on the measuring machine.",
             "",
             *[f"- {step}" for step in steps],

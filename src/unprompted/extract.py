@@ -441,7 +441,7 @@ def read_batch_results(checkpoint: Path):
 
 def collect_batch(checkpoint: Path, api_key: str | None = None, deadline: float | None = None):
     """Download an existing extraction job only; never submit or re-extract."""
-    from .engines.anthropic_batch import read_retrying
+    from .engines.anthropic_batch import download, read_retrying
 
     state = json.loads(checkpoint.read_text(encoding="utf-8"))
     if not state.get("id"):
@@ -449,13 +449,12 @@ def collect_batch(checkpoint: Path, api_key: str | None = None, deadline: float 
     destination = checkpoint.parent / "extraction-batch/results.json"
     if not destination.exists():
         client = _client(api_key)
-        deadline = time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
+        recovery, deadline = deadline, time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
         label = f"batch {state['id']}"
         batch = _wait_ended(client, read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label), deadline)
         # A dropped stream restarts the whole download; nothing partial is written.
-        entries = read_retrying(
-            lambda: [entry.model_dump(mode="json") for entry in client.messages.batches.results(batch.id)],
-            deadline, label)
+        entries = read_retrying(lambda: download(client.messages.batches.results(batch.id), recovery, label),
+                                deadline, label)
         # Complete download first: parsing cannot strand the provider's usage.
         write_json(destination, {"id": state["id"], "identity": state["identity"], "entries": entries})
     return read_batch_results(checkpoint)

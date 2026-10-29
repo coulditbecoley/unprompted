@@ -29,16 +29,32 @@ def read_retrying(call, deadline: float, label: str):
     connection while polling stranded a paid batch for two weeks.
     """
     from anthropic import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+    from httpx2 import TransportError  # the results stream raises these raw, unwrapped by the SDK
 
     while True:
         try:
             return call()
-        except (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError) as exc:
+        except (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError, TransportError) as exc:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise
             print(f"  {label}: read failed ({type(exc).__name__}), retrying", file=sys.stderr, flush=True)
             time.sleep(min(POLL_SECONDS, remaining))
+
+
+def download(entries, deadline: float | None, label: str) -> list[dict]:
+    """A complete results download, abandoned if it outlives the recovery `deadline`.
+
+    None (a normal run collecting its own batch) leaves the download unbounded,
+    as before. ponytail: checked between entries, so one in-flight request can
+    overrun by up to its own timeout; pass per-request timeouts if that matters.
+    """
+    out = []
+    for entry in entries:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError(f"{label}: download outlived its deadline; collect it before new paid work")
+        out.append(entry.model_dump(mode="json"))
+    return out
 
 
 def collect(state_path: Path, api_key: str, deadline: float | None = None) -> list[EngineAnswer]:
@@ -60,7 +76,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
     results_path = state_path.with_name("results.json")
     if not results_path.exists():
         client = _client(api_key)
-        deadline = time.monotonic() + MAX_WAIT_SECONDS if deadline is None else deadline
+        recovery, deadline = deadline, time.monotonic() + MAX_WAIT_SECONDS if deadline is None else deadline
         label = f"Claude batch {state['id']}"
         while True:
             batch = read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label)
@@ -73,9 +89,8 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         # Persist the complete download before interpreting it; a parser error
         # must not lose usage or turn a retry into another paid request. A
         # dropped stream restarts the whole download, never a partial write.
-        entries = read_retrying(
-            lambda: [entry.model_dump(mode="json") for entry in client.messages.batches.results(state["id"])],
-            deadline, label)
+        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), recovery, label),
+                                deadline, label)
         write_json(results_path, {"fetched_at": utc_now(), "entries": entries})
     saved_results = json.loads(results_path.read_text(encoding="utf-8"))
     entries = saved_results["entries"]
@@ -130,6 +145,9 @@ def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list
                          *state_dir.glob("reextract/????-??-??/*/batch.json")])
     collected, failed = [], []
     for job in claude + extraction:
+        if time.monotonic() >= deadline:
+            failed.append(f"not attempted, recovery deadline passed: {job}")
+            continue
         try:
             saved = json.loads(job.read_text(encoding="utf-8"))
             if not saved.get("id"):
@@ -138,6 +156,10 @@ def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list
                 if saved.get("collected"):
                     continue
                 collect(job, api_key, deadline)
+            elif saved.get("result_checkpoint_version") != 1:
+                # The guard's own rule: older jobs were consumed as they streamed
+                # (2026-09-14) and their results have since expired upstream.
+                continue
             elif (job.parent / "extraction-batch/results.json").exists():
                 read_batch_results(job)  # local only: a bad saved download is reported, not refetched
                 continue

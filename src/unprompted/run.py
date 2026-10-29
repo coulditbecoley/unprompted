@@ -548,6 +548,13 @@ def main() -> int:
         for job in collected:
             print(f"collected outstanding batch {job}", file=sys.stderr)
         outcomes += [f"recovery: {reason}" for reason in failed]
+        if failed:
+            # Spend that cannot be accounted for blocks new spend, whether or
+            # not the budget reader recognises that checkpoint's format.
+            for category in categories:
+                held[category] = ["not run: an outstanding paid batch could not be collected"]
+                outcomes.append(f"{category}: not run — outstanding batch recovery failed")
+            categories = []
 
     for category in categories:
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)

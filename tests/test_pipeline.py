@@ -2279,3 +2279,11 @@ def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp
     (d / "alpha.json").write_text(json.dumps({"category": "alpha", "run_date": "2026-10-28",
         "measured_on": "2026-10-19", "extractions": [{"engine": "test"}]}), encoding="utf-8")
     assert wd.main() == 0
+    (d / "alpha.json").unlink()
+
+    # A status that arrived but names a blocker this check has no rule for.
+    (tmp_path / "last-run.json").write_text(json.dumps({"status": "held", "at": "2026-10-19T18:00:00+00:00",
+        "detail": "alpha: something new"}), encoding="utf-8")
+    assert wd.main() == 1
+    err = capsys.readouterr().err
+    assert "not one this check recognises" in err and "No status for this week" not in err
