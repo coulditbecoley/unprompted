@@ -1,5 +1,6 @@
-import { CATEGORIES } from "@/lib/categories";
+import { CATEGORIES, getCategory } from "@/lib/categories";
 import { latestRun, standings } from "@/lib/data";
+import { csvCell } from "@/lib/shared";
 
 /**
  * The latest board as a spreadsheet, for anyone who wants to check or chart
@@ -12,14 +13,11 @@ export function generateStaticParams() {
   return CATEGORIES.map((c) => ({ category: c.slug }));
 }
 
-const cell = (v: string | number) => {
-  const s = String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-
 export async function GET(_req: Request, { params }: { params: Promise<{ category: string }> }) {
   const { category } = await params;
-  const run = latestRun(category);
+  // Same contract as the chart: a retired or unknown category is not found,
+  // even if its archive is still on disk.
+  const run = getCategory(category) ? latestRun(category) : null;
   if (!run) return new Response("Not found", { status: 404 });
 
   const rows = [
@@ -38,7 +36,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ categor
       run.method_version,
     ]),
   ];
-  return new Response(rows.map((r) => r.map(cell).join(",")).join("\n") + "\n", {
+  return new Response(rows.map((r) => r.map(csvCell).join(",")).join("\n") + "\n", {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="unprompted-${category}-${run.run_date}.csv"`,

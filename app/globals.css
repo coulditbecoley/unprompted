@@ -1297,6 +1297,13 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   transition: transform var(--fast) var(--ease);
 }
 .spark-dots i:hover { transform: scale(1.5); }
+/* Homepage brand finder. */
+.finder { margin-top: 22px; max-width: 460px; }
+.finder .label { display: block; margin-bottom: 6px; }
+.finder-row { display: flex; gap: 8px; }
+.finder-row .subscribe-input { flex: 1; min-width: 0; }
+@media (max-width: 620px) { .finder-row .subscribe-input { font-size: 16px; } } /* no zoom-on-focus on phones */
+
 /* Homepage common questions. */
 .faq { display: grid; gap: 8px; max-width: 820px; }
 .faq-item { background: var(--surface); border: var(--rule-w) solid var(--rule); border-radius: var(--r); box-shadow: var(--shadow-1); }

@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { deriveSessionToken, validSession, isAuthorised } from "../lib/auth.ts";
 import { nextRun } from "../lib/schedule.ts";
+import { csvCell } from "../lib/shared.ts";
 
 test("Monday countdown stays at 13:00 Eastern across daylight saving changes", () => {
   for (const [now, expected] of [
@@ -79,6 +80,17 @@ import {
   topPickByEngine,
   brandByEngine,
 } from "../lib/metrics.ts";
+
+test("CSV fields stay one field and never run as formulas", () => {
+  assert.equal(csvCell("Cursor"), "Cursor");
+  assert.equal(csvCell(0.34), "0.34");
+  assert.equal(csvCell(-1), "-1", "numbers are not text and keep their sign");
+  assert.equal(csvCell('Say "hi", ok'), '"Say ""hi"", ok"');
+  assert.equal(csvCell("line\nbreak"), '"line\nbreak"');
+  assert.equal(csvCell("Carriage\rTool"), '"Carriage\rTool"');
+  assert.equal(csvCell("=1+1"), "'=1+1");
+  assert.equal(csvCell("@cmd"), "'@cmd");
+});
 
 test("a lead is only called clear when it beats the shared-sample noise", () => {
   // 34% vs 30% of 450 answers: four points, well inside the noise.

@@ -18,6 +18,7 @@ import {
   standings,
   topPickByEngine,
   theSnub,
+  allBrands,
 } from "@/lib/data";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
@@ -60,6 +61,13 @@ export default function Home() {
 
   const board = run ? standings(run) : [];
   const picks = run ? topPickByEngine(run) : [];
+  // Every brand ever charted, for the finder's suggestions, and each board's
+  // current leader as the placeholder's real examples.
+  const finderBrands = [...new Set(CATEGORIES.flatMap((c) => allBrands(c.slug)))].sort((a, b) => a.localeCompare(b));
+  const leaders = CATEGORIES.map((c) => latestRun(c.slug))
+    .filter((r) => r !== null)
+    .map((r) => standings(r!)[0]?.brand)
+    .filter((b): b is string => Boolean(b));
   const older = history.at(-2);
   const comparisonNote = run ? comparisonReason(run, older) : null;
   const baselineDate = older?.measured_on || older?.run_date;
@@ -153,6 +161,26 @@ export default function Home() {
               <a className="btn" href="#how">How it works</a>
               <Link className="btn btn-ghost" href="/categories">All categories</Link>
             </div>
+
+            {/* "Is my tool on here?" is the first question many visitors bring.
+                A plain GET form, so it works before (or without) JavaScript. */}
+            <form action="/find" role="search" className="finder rise" style={{ "--i": 4 } as React.CSSProperties}>
+              <label htmlFor="finder" className="label">Look up a brand</label>
+              <div className="finder-row">
+                <input
+                  id="finder"
+                  name="b"
+                  list="finder-brands"
+                  className="subscribe-input"
+                  autoComplete="off"
+                  placeholder={leaders.length ? `e.g. ${leaders.join(", ")}` : "Brand name"}
+                />
+                <button type="submit" className="btn">Find</button>
+              </div>
+              <datalist id="finder-brands">
+                {finderBrands.map((b) => <option key={b} value={b} />)}
+              </datalist>
+            </form>
           </div>
 
           {/* The query buffer: the actual questions, visible on the page. */}

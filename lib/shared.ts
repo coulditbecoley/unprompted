@@ -32,3 +32,14 @@ export function inSentence(label: string): string {
     .map((w) => (/^[A-Z0-9&]{2,}$/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1)))
     .join(" ");
 }
+
+/**
+ * One CSV field. Quotes anything holding a comma, quote or line break, and
+ * defuses text a spreadsheet would run as a formula (= + - @, tab, CR) with a
+ * leading apostrophe. Numbers pass through untouched.
+ */
+export function csvCell(v: string | number): string {
+  if (typeof v === "number") return String(v);
+  const s = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
