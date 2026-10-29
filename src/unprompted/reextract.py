@@ -33,6 +33,10 @@ from .run import MAX_WORKERS, ROOT, git_sha, load_local_env, persist
 from .storage import run_lock
 
 
+def outside_this_month(day: str) -> bool:
+    return day[:7] != date.today().isoformat()[:7]
+
+
 def main() -> int:
     with run_lock(ROOT / ".unprompted"):
         return _main()
@@ -73,6 +77,11 @@ def _main() -> int:
         raise SystemExit("source and output dates must use YYYY-MM-DD")
     if reading_date <= source_date or reading_date > date.today():
         raise SystemExit("a rereading date must be after its source reading and cannot be in the future")
+    if not args.renormalize and outside_this_month(out_date):
+        # A paid re-read is booked by its reading date and checked against this
+        # month's ceiling; dating it into an earlier month paid outside the check.
+        raise SystemExit(f"--out-date {out_date} is outside this month, so its extraction spend would be booked "
+                         "to another month's budget. Re-read under a date in this month.")
     for bucket in ("runs", "held"):
         target = ROOT / "data" / bucket / out_date / f"{args.category}.json"
         if target.exists():

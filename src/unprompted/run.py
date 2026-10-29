@@ -704,6 +704,14 @@ def _measure(args, categories: list[str]) -> int:
             categories = []
 
     for category in categories:
+        if not args.ignore_budget and date.today().isoformat()[:7] != args.date[:7]:
+            # The month turned during the run (a Monday that is the last of the
+            # month): later categories would spend outside this month's check.
+            # ponytail: per category, so calls already in flight finish under the old date.
+            held[category] = ["not started: the month changed during the run, so its spend would be booked to the previous month"]
+            results[category] = {"outcome": "not_started", "reasons": held[category]}
+            outcomes.append(f"{category}: not started — the month changed during the run")
+            continue
         if run_time_left() < CATEGORY_RESERVE_SECONDS:  # --dry-run pays for calls too
             # Asking takes ~20 minutes and its batch typically an hour; one
             # started later would strand paid work the run cannot collect.

@@ -9,6 +9,22 @@ from unprompted.models import EngineAnswer, RunRecord
 from unprompted.storage import run_lock, write_json
 
 
+
+@pytest.fixture(autouse=True)
+def _rereads_may_use_fixed_past_dates(monkeypatch):
+    """Re-read tests date their readings in 2026-09; the month rule has its own test."""
+    from unprompted import reextract
+    monkeypatch.setattr(reextract, "outside_this_month", lambda day: False)
+
+
+from unprompted import reextract as _reextract  # noqa: E402
+_REAL_MONTH_RULE = _reextract.outside_this_month
+
+
+@pytest.fixture
+def real_month_rule(monkeypatch):
+    monkeypatch.setattr(_reextract, "outside_this_month", _REAL_MONTH_RULE)
+
 def test_report_failure_recovers_offline_without_rewriting_archives(tmp_path, monkeypatch):
     from unprompted import report, storage
 
@@ -981,3 +997,38 @@ def test_a_paid_run_dated_in_another_month_is_refused(monkeypatch):
     with pytest.raises(SystemExit) as stop:
         run.main()
     assert stop.value.code == 2
+
+
+def test_a_paid_reread_dated_in_another_month_is_refused(tmp_path, monkeypatch, real_month_rule):
+    from unprompted import reextract
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2020-01-01", "--category", "alpha", "--out-date", "2020-01-08"])
+    with pytest.raises(SystemExit, match="outside this month"):
+        reextract.main()
+
+
+def test_categories_are_not_started_once_the_month_turns(tmp_path, monkeypatch):
+    started = []
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: started.append(a))
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
+    today = run.date.today().isoformat()
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today, "--summary-file", str(tmp_path / "s.json")])
+    real = run.date
+    class NextMonth(real):
+        @classmethod
+        def today(cls):
+            from datetime import timedelta
+            return real.fromisoformat(today) + timedelta(days=40)
+    monkeypatch.setattr(run, "date", NextMonth)
+    with pytest.raises(SystemExit):  # entry check: the date is now in another month
+        run.main()
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today, "--ignore-budget"])
+    monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    run.main()
+    assert started  # --ignore-budget knowingly accepts it
