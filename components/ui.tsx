@@ -344,21 +344,21 @@ export function HowToRead({ runsPerQuestion }: { runsPerQuestion: number }) {
           </span>
           Squares
         </b>
-        One per question. Darker means more of that question&rsquo;s answers
-        named the brand, pooled across every assistant ({runsPerQuestion} runs each).
+        One per question. Darker means more of its answers named the brand
+        ({runsPerQuestion} per assistant, all assistants together).
       </p>
       <p style={{ margin: 0 }}>
         <b>Named</b>
-        How many answers mentioned the brand at all, out of every answer we got.
+        Answers that mentioned the brand at all, out of every answer.
       </p>
       <p style={{ margin: 0 }}>
         <b>First</b>
-        How often it was the very first brand recommended. The ranking uses this.
+        How often it was recommended first. The ranking uses this.
       </p>
       <p style={{ margin: 0 }}>
         <b>Δ change</b>
-        Points up or down since the last comparable week. Small moves are shown
-        without an arrow because the sample cannot back them.
+        Up or down since the last comparable reading. Small moves get no
+        arrow: the sample cannot back them.
       </p>
       <p className="howto-more" style={{ margin: 0 }}>
         <Link href="/methodology#glossary">Every term explained →</Link>
@@ -501,5 +501,62 @@ export function TopPicks({
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * Two sentences a newcomer would otherwise have to work out from the board:
+ * whether the lead is real at this sample size, and which brand is known but
+ * not chosen. Computed, never written by hand.
+ */
+export function Insights({ board, clearLead }: { board: BrandStanding[]; clearLead: boolean | null }) {
+  const [a, b] = board;
+  if (!a) return null;
+  // From the rounded figures, so the gap always matches the two numbers printed.
+  const pa = Math.round(a.firstShare * 100);
+  const pb = b ? Math.round(b.firstShare * 100) : 0;
+  const pts = pa - pb;
+  // The brand most often mentioned without being the first pick: biggest gap
+  // between "named at all" and "named first" among the top eight.
+  const gap = board
+    .slice(0, 8)
+    .filter((r) => r.brand !== a.brand)
+    .sort((x, y) => y.rotation - y.firstShare - (x.rotation - x.firstShare))[0];
+  const items: React.ReactNode[] = [];
+  if (b && pts === 0) {
+    items.push(
+      <>
+        <b>{a.brand}</b> and <b>{b.brand}</b> are level on first picks, at {pa}% each.
+      </>,
+    );
+  } else if (b) {
+    items.push(
+      <>
+        <b>{a.brand}</b> leads <b>{b.brand}</b> by {pts} point{pts === 1 ? "" : "s"} on first picks
+        ({pa}% to {pb}%).{" "}
+        {clearLead
+          ? "That gap is larger than the noise at this sample size."
+          : "At this sample size that is too close to call: treat them as level."}
+      </>,
+    );
+  }
+  if (gap && gap.rotation - gap.firstShare >= 0.2) {
+    items.push(
+      <>
+        <b>{gap.brand}</b> comes up in {Math.round(gap.rotation * 100)}% of answers but is recommended
+        first in only {Math.round(gap.firstShare * 100)}%: well known, rarely the first choice.
+      </>,
+    );
+  }
+  if (!items.length) return null;
+  return (
+    <div className="insights panel">
+      <p className="label">What stands out</p>
+      <ul>
+        {items.map((it, i) => (
+          <li key={i}>{it}</li>
+        ))}
+      </ul>
+    </div>
   );
 }

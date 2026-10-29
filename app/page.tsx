@@ -17,6 +17,7 @@ import {
   questionOrder,
   standings,
   topPickByEngine,
+  leadIsClear,
   theSnub,
 } from "@/lib/data";
 import { LiveBoard } from "@/components/board-live";
@@ -25,7 +26,7 @@ import { Subscribe } from "@/components/subscribe";
 import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -137,7 +138,7 @@ export default function Home() {
             </div>
             <div className="buffer-body" aria-label="The questions being asked">
               {questions.slice(0, 9).map((q, i) => (
-                <div className="buffer-line" key={q.id} style={{ "--i": i } as React.CSSProperties}>
+                <div className="buffer-line" data-wide={i >= 4 || undefined} key={q.id} style={{ "--i": i } as React.CSSProperties}>
                   <span className="buffer-n">{String(i + 1).padStart(2, "0")}</span>
                   <span className="buffer-q">
                     {run ? (
@@ -150,15 +151,19 @@ export default function Home() {
                   </span>
                 </div>
               ))}
-              <div className="buffer-line" style={{ "--i": 9 } as React.CSSProperties}>
-                <span className="buffer-n">
-                  {String(Math.min(10, questions.length)).padStart(2, "0")}
-                </span>
-                <span className="buffer-q">
-                  <Link href="/questions">…{Math.max(0, questions.length - 9)} more</Link>
-                  <span className="caret" aria-hidden="true" />
-                </span>
-              </div>
+              {/* Phones show four questions, wider screens nine; each gets its own
+                  closing line so the "more" count is true at either width. */}
+              {[4, 9].map((shown) => (
+                <div className="buffer-line" data-more={shown} key={shown} style={{ "--i": shown } as React.CSSProperties}>
+                  <span className="buffer-n">
+                    {String(Math.min(shown + 1, questions.length)).padStart(2, "0")}
+                  </span>
+                  <span className="buffer-q">
+                    <Link href="/questions">…{Math.max(0, questions.length - shown)} more</Link>
+                    <span className="caret" aria-hidden="true" />
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -186,7 +191,7 @@ export default function Home() {
               </Link>
             </div>
             <StatusBar
-              runDate={measured!}
+              runDate={run.run_date}
               engines={engineNames}
               methodVersion={run.method_version}
               runsPerQuestion={run.runs_per_question}
@@ -194,6 +199,10 @@ export default function Home() {
             <Freshness runDate={measured!} />
             {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
             <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
+            <Insights
+              board={board}
+              clearLead={board[1] ? leadIsClear(board[0].firstNamed, board[1].firstNamed, board[0].totalRuns) : null}
+            />
             <HowToRead runsPerQuestion={run.runs_per_question} />
             <LiveBoard
               questions={questionsInBoardOrder}

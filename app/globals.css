@@ -1168,6 +1168,11 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .buffer-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--rule-2); display: block; }
 .buffer-head .label + .label { margin-left: 10px; }
 .buffer-line { animation: rise 520ms var(--ease) both; animation-delay: calc(300ms + var(--i, 0) * 55ms); }
+.buffer-line[data-more="4"] { display: none; }
+@media (max-width: 620px) {
+  .buffer-line[data-wide], .buffer-line[data-more="9"] { display: none; }
+  .buffer-line[data-more="4"] { display: flex; }
+}
 .buffer-q a { color: var(--fg-2); text-decoration: none; }
 .buffer-q a:hover, .buffer-q a:focus-visible { color: var(--fg); text-decoration: underline; text-decoration-color: var(--fg-3); }
 
@@ -1309,12 +1314,19 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   transition: transform var(--fast) var(--ease);
 }
 .spark-dots i:hover { transform: scale(1.5); }
+/* Board page: the computed takeaways. */
+.insights { padding: 14px 18px; margin: 4px 0 16px; }
+.insights ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14.5px; color: var(--fg-2); line-height: 1.5; }
+.insights b { color: var(--fg); font-weight: 600; }
+
 /* Each assistant's favourite. */
 .pick-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .pick-card {
   display: flex; flex-direction: column; gap: 8px; padding: 16px; text-decoration: none; color: inherit;
   background: var(--surface); border: var(--rule-w) solid var(--rule); border-radius: var(--r); box-shadow: var(--shadow-1);
 }
+.pick-card { transition: border-color var(--fast) var(--ease), box-shadow 200ms var(--ease), transform 200ms var(--ease); }
+.pick-card:has(a:hover), .pick-card:focus-within { border-color: var(--rule-2); box-shadow: var(--shadow-2); transform: translateY(-1px); }
 .pick-brand { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
 .pick-brand a { color: inherit; text-decoration: none; }
 .pick-brand a:hover, .pick-brand a:focus-visible { text-decoration: underline; text-decoration-color: var(--fg-3); }
@@ -1660,4 +1672,9 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .q-engine-group > :not(summary), .q-answer > :not(summary) { display: block; }
 
 }
+/* Round 6: short paths from a result to its evidence and counting rules. */
+.evidence-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 20px 0; font-size: 14px; }
+.evidence-links > a { min-height: 32px; display: inline-flex; align-items: center; }
+#question-list { scroll-margin-top: 180px; }
+@media print { .evidence-links { display: none; } }
 /* === codex pages: end === */

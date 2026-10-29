@@ -276,6 +276,25 @@ export function exceedsNoise(
   return Math.abs(p1 - p2) / se > 1.96;
 }
 
+/**
+ * Is the leader's first-pick lead over the runner-up bigger than the noise?
+ *
+ * Not `exceedsNoise`: both shares come from the same answers, and an answer
+ * that names one brand first cannot name the other first, so the two are
+ * negatively correlated. The multinomial variance of the difference is
+ * (p1 + p2 - (p1 - p2)^2) / n, wider than the independent formula, which would
+ * call close leads clear. Same 1.96 floor and the same caveat: repeats within a
+ * week are not independent draws, so this is a floor, not a p-value.
+ */
+export function leadIsClear(first1: number, first2: number, n: number): boolean {
+  if (n < 30) return false;
+  const p1 = first1 / n;
+  const p2 = first2 / n;
+  const se = Math.sqrt((p1 + p2 - (p1 - p2) ** 2) / n);
+  if (se === 0) return p1 !== p2;
+  return (p1 - p2) / se > 1.96;
+}
+
 /** The 95% half-interval on a proportion, in percentage points. */
 export function marginOfError(p: number, n: number): number {
   if (n < 1) return 0;

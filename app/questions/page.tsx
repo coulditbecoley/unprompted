@@ -135,6 +135,11 @@ export default async function QuestionsPage({
         Errors and refusals are shown but excluded
         from mention percentages.
       </p>
+      <nav className="evidence-links" aria-label="Explore this evidence">
+        <a className="btn btn-sm" href={params.question ? `#${params.question}` : "#question-list"}>{params.question ? "Jump to the selected question" : "Jump to questions"}</a>
+        <a href={`/chart/${category}/${run.run_date}`}>View this reading's chart</a>
+        <a href="/methodology#glossary">How the answers are counted</a>
+      </nav>
       <form action="/questions" className="q-reading">
         <input type="hidden" name="c" value={category} />
         <div className="q-filter">
@@ -160,6 +165,12 @@ export default async function QuestionsPage({
         <button type="submit" className="btn btn-go">Show answers</button>
       </form>
       {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
+      {selectedBrand && <p className="cmp-note q-filter-result">
+        {matching.length} {matching.length === 1 ? "answer names" : "answers name"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
+        {" "}<a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedEngine ? { engine: selectedEngine } : {}), ...(params.question ? { question: params.question } : {}) })}${params.question ? `#${params.question}` : ""}`}>Show all brands</a>
+      </p>}
+      {selectedBrand && matching.length === 0 && <p className="panel q-empty">No answers name this brand with these filters. Try another assistant or reading, or show all brands.</p>}
+      {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedBrand ? { brand: selectedBrand } : {}), ...(params.question ? { question: params.question } : {}) })}${params.question ? `#${params.question}` : ""}`}>Show all assistants</a></p>}
       <div className="kpi-row">
         <Kpi label="Questions in reading" value={spec.questions.length} note="The question list for this reading." />
         <Kpi i={1} label="Answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
@@ -180,15 +191,9 @@ export default async function QuestionsPage({
         search results; a link alone does not show which brand it supports.
       </p>
 
-      {selectedBrand && <p className="cmp-note q-filter-result">
-        {matching.length} {matching.length === 1 ? "answer names" : "answers name"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
-        {" "}<a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedEngine ? { engine: selectedEngine } : {}) })}`}>Show all brands</a>
-      </p>}
-      {selectedBrand && matching.length === 0 && <p className="panel q-empty">No answers name this brand with these filters. Try another assistant or reading, or show all brands.</p>}
-      <nav className="q-jump" aria-label="Jump to a question">
+      <nav id="question-list" className="q-jump" aria-label="Jump to a question">
         {visibleQuestions.map((q) => <a className="btn btn-sm" key={q.id} href={`#${q.id}`} title={q.text}>Q{String(spec.questions.indexOf(q) + 1).padStart(2, "0")}</a>)}
       </nav>
-      {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedBrand ? { brand: selectedBrand } : {}) })}`}>Show all assistants</a></p>}
       {visibleQuestions.map((q) => {
         const rows = (byQuestion.get(q.id) ?? []);
         const engines = [...new Set(rows.map((r) => r.engine))].sort();

@@ -49,7 +49,12 @@ export async function GET() {
     "",
     "- Method: https://unprompted.report/methodology",
     "- Every question and answer: https://unprompted.report/questions",
-    "  (add ?c=<category-slug> for a specific one; the slugs are below)",
+    "  (?c=<category-slug> picks a category, ?brand=<exact brand name> keeps only answers",
+    "  naming that brand, ?question=<id> loads one question's full answer text)",
+    "- One page per brand: https://unprompted.report/brand/<category-slug>/<brand-slug>",
+    "  (how often each assistant names it, question by question, and its history)",
+    "- Two brands side by side: https://unprompted.report/compare?c=<category-slug>&a=<brand-slug>&b=<brand-slug>",
+    "- Where the assistants agree: https://unprompted.report/consensus",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",
@@ -68,8 +73,8 @@ export async function GET() {
     const leader = board[0];
     const detail = leader
       ? `${leader.brand} was named first in ${Math.round(leader.firstShare * 100)}% ` +
-        `of ${leader.totalRuns} answered runs, week of ${run.run_date}`
-      : `no brand was named, week of ${run.run_date}`;
+        `of ${leader.totalRuns} answered runs, measured ${run.measured_on || run.run_date}`
+      : `no brand was named, measured ${run.measured_on || run.run_date}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
   }
 

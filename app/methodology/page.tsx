@@ -39,6 +39,10 @@ export default function MethodologyPage() {
         what we can fairly compare. Use this guide to understand what the charts
         can and cannot tell you.
       </p>
+      <nav className="evidence-links" aria-label="Start here">
+        <a href="#glossary">Start with the glossary</a>
+        <a href="/categories">Explore published results</a>
+      </nav>
       {changes && <details className="panel method-changes">
         <summary><h2 id="recent-changes">What changed recently</h2></summary>
         <div className="prose">{renderMarkdown(changes)}</div>

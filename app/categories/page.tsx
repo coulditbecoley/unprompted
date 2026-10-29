@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { CategoryBrowser } from "@/components/category-browser";
 import { categoriesBySector } from "@/lib/categories";
-import { latestRun, standings, consensus, consensusScore } from "@/lib/data";
+import { latestRun, standings, consensus, consensusScore, allBrands } from "@/lib/data";
 
 export function generateMetadata(): Metadata {
   const categories = categoriesBySector().flatMap(group => group.categories);
@@ -13,7 +13,13 @@ export function generateMetadata(): Metadata {
 }
 
 export default function CategoriesPage() {
-  const groups = categoriesBySector();
+  const groups = categoriesBySector().map(group => ({
+    ...group,
+    categories: group.categories.map(category => ({
+      ...category,
+      keywords: [...category.keywords, ...allBrands(category.slug)],
+    })),
+  }));
 
   // Counts come from the data itself, so a category cannot advertise a chart
   // that does not exist.

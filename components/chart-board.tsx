@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TopPicks, TrimTop, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
@@ -22,6 +22,7 @@ import {
   sourceCounts,
   standings,
   topPickByEngine,
+  leadIsClear,
   theSnub,
 } from "@/lib/data";
 
@@ -138,7 +139,7 @@ export function ChartBoard({
       <p className="section-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
         We asked {engineNames.join(", ")} {questionText.length} questions about{" "}
         {inSentence(category.label)}, {run.runs_per_question} times each, on{" "}
-        {run.measured_on || run.run_date}. Below is how often each brand came up, and how
+        <span style={{ whiteSpace: "nowrap" }}>{run.measured_on || run.run_date}</span>. Below is how often each brand came up, and how
         often it was the first one recommended.
       </p>
 
@@ -173,6 +174,11 @@ export function ChartBoard({
         <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant brought up." />
         <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
       </div>
+
+      <Insights
+        board={board}
+        clearLead={board[1] ? leadIsClear(board[0].firstNamed, board[1].firstNamed, board[0].totalRuns) : null}
+      />
 
       <div className="btn-row" style={{ margin: "4px 0 6px" }}>
         <Link className="btn btn-sm" href={`/questions?c=${category.slug}&date=${run.run_date}`}>

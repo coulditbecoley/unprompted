@@ -199,6 +199,20 @@ export default async function BrandPage({
             Its closest neighbours in the latest reading. Pale bar: named at all. Solid bar: named first.
           </p>
           <LeaderBars rows={neighbours} start={from} highlight={brand} hrefFor={(b) => brandHref(category, b)} />
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <span className="label" style={{ alignSelf: "center" }}>Compare with</span>
+            {neighbours
+              .filter((n) => n.brand !== brand)
+              .map((n) => (
+                <Link
+                  key={n.brand}
+                  className="btn btn-sm btn-ghost"
+                  href={`/compare?${new URLSearchParams({ c: category, a: slug, b: slugify(n.brand) })}`}
+                >
+                  {n.brand}
+                </Link>
+              ))}
+          </div>
         </div>
       )}
 
@@ -292,8 +306,9 @@ export default async function BrandPage({
       </div>
 
       <p className="mono" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 20 }}>
-        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. The raw
-        answers behind every figure are in the public repository.
+        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. Nobody can pay
+        to appear. <Link href="/methodology">How we measure</Link> ·{" "}
+        <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">the raw answers behind every figure</a>.
       </p>
     </section>
   );

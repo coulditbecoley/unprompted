@@ -147,6 +147,10 @@ export default async function ComparePage({
         position among answers that mention the brand.
       </p>
 
+      <nav className="evidence-links" aria-label="Check this comparison">
+        <Link href={`/questions?${new URLSearchParams({ c: category, date: run.run_date })}`}>Read the recorded answers</Link>
+        <Link href="/methodology#glossary">How the answers are counted</Link>
+      </nav>
       <div className="cmp-grid cmp-cards">
         {sides.map(({ brand, row, history }, index) => (
           <div className="cmp-pick reveal" key={`${brand}-${index}`}>

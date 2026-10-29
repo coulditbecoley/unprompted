@@ -72,7 +72,35 @@ import {
   comparisonReason,
   movement,
   theSnub,
+  leadIsClear,
+  topPickByEngine,
+  brandByEngine,
 } from "../lib/metrics.ts";
+
+test("a lead is only called clear when it beats the shared-sample noise", () => {
+  // 34% vs 30% of 450 answers: four points, well inside the noise.
+  assert.equal(leadIsClear(153, 135, 450), false);
+  // 39% vs 26% of 225: thirteen points, clear.
+  assert.equal(leadIsClear(88, 59, 225), true);
+  // The independent-samples test would call this one clear; the shared-sample one must not.
+  assert.equal(exceedsNoise(0.30, 300, 0.22, 300), true);
+  assert.equal(leadIsClear(90, 66, 300), false);
+  assert.equal(leadIsClear(10, 5, 20), false, "too few answers to call anything");
+});
+
+test("per-assistant splits add back up to the pooled board", () => {
+  const ex = (engine, names) => ({ engine, question_id: "q1", run_index: 0, refused: false, error: null, sources: [],
+    brands: names.map((name, i) => ({ name, position: i + 1, sentiment: "neutral" })) });
+  const run = { engines: ["a", "b"], extractions: [
+    ex("a", ["X", "Y"]), ex("a", ["Y"]), ex("b", ["X"]), ex("b", ["Y", "X"]),
+    { ...ex("b", ["X"]), error: "timeout" },
+  ] };
+  const split = brandByEngine(run, "X");
+  assert.deepEqual(split.map(s => [s.engine, s.named, s.first, s.of]), [["b", 2, 1, 2], ["a", 1, 1, 2]]);
+  // Engine a puts X and Y first once each: a tie, reported as a tie.
+  const picks = topPickByEngine(run);
+  assert.deepEqual(picks.find(p => p.engine === "a").brands.sort(), ["X", "Y"]);
+});
 
 test("ties, missing engines and pluralities cannot manufacture consensus", () => {
   const row = (engine, brand, index = 0) => ({ engine, question_id: "q1", run_index: index,
