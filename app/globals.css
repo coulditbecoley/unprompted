@@ -1438,7 +1438,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cmp-key { background: var(--fg); }
 .cmp-chart { margin-top: 16px; }
 .cns-agreement, .q-coverage { padding: 20px; margin: 24px 0; }
-.cns-agreement .sub-h, .q-coverage .sub-h { margin-top: 0; }
 .cns-strip { display: flex; flex-wrap: wrap; gap: 6px; }
 .cns-strip > span { width: 28px; height: 28px; border: 1px solid var(--fg-3); border-radius: 4px; background: var(--surface-2); }
 .cns-strip > span[data-agreed="true"] { background: var(--fg); border-color: var(--fg); }
@@ -1527,7 +1526,6 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .q-attempt .q-answer { margin: 6px 0 0; }
 .cat-open { display: inline-block; color: var(--accent); margin-top: 16px; font-size: 13px; font-weight: 600; }
 .method-changes { padding: 20px; margin: 24px 0; }
-.method-changes h2 { margin-top: 0; font-size: 20px; }
 .method-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 32px; align-items: start; }
 .method-toc { position: sticky; top: calc(var(--header-h) + 16px); padding: 16px; max-height: calc(100vh - var(--header-h) - 32px); overflow: auto; }
 .method-toc summary { cursor: pointer; font-weight: 600; }
@@ -1550,7 +1548,6 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 @media (prefers-reduced-motion: reduce) {
   .method-flow .rise { animation: none !important; }
 }
-.method-changes [id], .cns-agreement [id] { scroll-margin-top: 120px; }
 .methodology-copy code { overflow-wrap: anywhere; white-space: normal; }
 @media (min-width: 1100px) {
   .cns .cns-row { grid-template-columns: minmax(240px, 1.8fr) repeat(var(--engines, 3), minmax(0, 1fr)) 60px; min-width: 0; gap: 10px; }

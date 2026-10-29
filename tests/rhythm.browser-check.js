@@ -9,7 +9,6 @@ async page => {
     const gaps = await page.evaluate(() => [...document.querySelectorAll('main h2')].map(h => {
       // distance from the previous visible element's bottom to this heading's top (or its label above)
       const top = (h.previousElementSibling && h.previousElementSibling.classList.contains('label') ? h.previousElementSibling : h).getBoundingClientRect().top;
-      let prev = null, el = h;
       const all = [...document.querySelectorAll('main *')].filter(e => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); const visual = [...e.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim()) || e.children.length === 0 || cs.borderBottomWidth !== '0px' || cs.backgroundColor !== 'rgba(0, 0, 0, 0)'; const closed = [...document.querySelectorAll("details:not([open])")].some(d => d !== e && d.contains(e) && !d.querySelector(":scope > summary")?.contains(e)); return !closed && visual && !['SECTION','MAIN'].includes(e.tagName) && r.height > 0 && r.bottom <= top + 0.5 && !e.contains(h) && !h.contains(e) && !e.classList.contains("sr-only") && cs.opacity !== "0"; });
       const bottom = Math.max(...all.map(e => e.getBoundingClientRect().bottom));
       return {heading: h.textContent.trim(), gap: Math.round(top - bottom), label: h.previousElementSibling?.classList.contains('label'), lead: h.nextElementSibling?.tagName === 'P'};
