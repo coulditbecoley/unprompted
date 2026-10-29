@@ -483,6 +483,29 @@ def unversioned_change(category: str, spec: dict, methodology: dict) -> str | No
 _NEVER_SENT = ("not attempted after provider failure:", "not available:")
 
 
+REFUSAL_WARNING_SHARE = 0.5
+
+
+def refusal_warnings(record: dict) -> list[str]:
+    """Engines that declined most of their questions this week. Not a hold.
+
+    A refusal is a real outcome and leaves the denominator, so an engine that
+    starts refusing everything passes every check and quietly stops counting.
+    Whether that should hold a week is a method decision; until it is made,
+    it is at least said, in the run summary and data/last-run.json.
+    """
+    by_engine: dict[str, list[int]] = {}
+    for e in record.get("extractions", []):
+        if e.get("error"):
+            continue
+        counts = by_engine.setdefault(e.get("engine", "?"), [0, 0])
+        counts[0] += e.get("refused") is True
+        counts[1] += 1
+    return [f"{engine} declined {refused} of {answered} replies"
+            for engine, (refused, answered) in sorted(by_engine.items())
+            if answered and refused / answered > REFUSAL_WARNING_SHARE]
+
+
 def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
     """Ask again on a restart: a synchronous call that was never sent.
 
@@ -714,6 +737,11 @@ def _measure(args, categories: list[str]) -> int:
         # Cost and wall time beside the outcome: the budget and the run clock's
         # 90-minute reserve can be checked against real weeks without the log.
         spent = {"dollars": round(dollars, 2), "minutes": round((time.monotonic() - started) / 60, 1)}
+        warnings = refusal_warnings(record.to_dict())
+        if warnings:
+            spent["warnings"] = warnings
+            for warning in warnings:
+                print(f"  WARNING: {warning}", file=sys.stderr)
 
         if reasons:
             held[category] = reasons

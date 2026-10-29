@@ -967,3 +967,9 @@ def test_a_restart_reasks_only_calls_that_were_never_sent(tmp_path, monkeypatch)
     assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None, 3: "HTTPError: HTTP Error 503: Service Unavailable"}
     saved = json.loads((tmp_path / ".unprompted/2026-09-07/alpha/hosted-q1-0.json").read_text())
     assert saved["metadata"]["resumed_after"].startswith("not attempted after provider failure")
+
+
+def test_an_engine_that_declines_most_questions_is_named_not_hidden():
+    rows = ([{"engine": "claude", "refused": True, "error": None}] * 6 + [{"engine": "claude", "refused": False, "error": None}] * 4
+            + [{"engine": "gemini", "refused": False, "error": None}] * 5 + [{"engine": "gemini", "error": "down"}] * 9)
+    assert run.refusal_warnings({"extractions": rows}) == ["claude declined 6 of 10 replies"]
