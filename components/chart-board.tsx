@@ -130,13 +130,13 @@ export function ChartBoard({
 
       <h1 className="display page-title rise">
         {leader
-          ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
+          ? <>{leader.brand} is named first most often: in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
           : "No brand was named in this reading."}
       </h1>
 
       {/* This sentence has to match what the board actually draws. */}
       <p className="section-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
-        We asked {engineNames.join(", ")} {questionText.length} questions about{" "}
+        We asked {engineNames.length} AI assistants ({engineNames.join(", ")}) the same {questionText.length} questions about{" "}
         {inSentence(category.label)}, {run.runs_per_question} times each, on{" "}
         <span style={{ whiteSpace: "nowrap" }}>{run.measured_on || run.run_date}</span>. Below is how often each brand came up, and how
         often it was the first one recommended.

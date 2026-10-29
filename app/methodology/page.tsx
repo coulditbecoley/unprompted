@@ -43,10 +43,17 @@ export default function MethodologyPage() {
         <a href="#glossary">Start with the glossary</a>
         <a href="/categories">Explore published results</a>
       </nav>
-      {changes && <details className="panel method-changes">
-        <summary><h2 id="recent-changes">What changed recently</h2></summary>
+      {changes && <>
+        <p className="label codex-section-label">Version history</p>
+        <h2 className="sub-h" id="recent-changes">What changed recently</h2>
+        <p className="cmp-note">Read the latest updates to the collection and counting rules.</p>
+        <details className="panel method-changes">
+        <summary>Read version notes</summary>
         <div className="prose">{renderMarkdown(changes)}</div>
-      </details>}
+      </details></>}
+      <p className="label codex-section-label">Process</p>
+      <h2 className="sub-h">From questions to published results</h2>
+      <p className="cmp-note">Four steps connect each question to its public evidence.</p>
       <ol className="method-flow" aria-label="From questions to published results">
         {[
           ["Ask", "Repeat the category’s buying questions across AI assistants."],
@@ -55,10 +62,10 @@ export default function MethodologyPage() {
           ["Publish", "Keep passing results and their evidence in the public archive."],
         ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
           <span className="mono method-step" aria-hidden="true">{i + 1}</span>
-          <h2 id={`process-${title.toLowerCase()}`}>{title}</h2><p>{detail}</p>
+          <h3 id={`process-${title.toLowerCase()}`}>{title}</h3><p>{detail}</p>
         </li>)}
       </ol>
-      <div className="panel reveal" style={{ marginBottom: 26, padding: "16px 20px 16px 28px" }}>
+      <div className="panel reveal method-source">
         <TrimTop />
         <p style={{ fontSize: 14.5, margin: 0, color: "var(--fg-2)" }}>
           The full method below comes from{" "}
@@ -75,7 +82,9 @@ export default function MethodologyPage() {
           <nav aria-label="Methodology sections"><a href="#glossary">Quick glossary</a>{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
         </details>
         <div className="prose methodology-copy">
-          <h2 id="glossary">Quick glossary <SectionLink id="glossary" label="Quick glossary" /></h2>
+          <p className="label codex-section-label">Definitions</p>
+          <h2 className="sub-h" id="glossary">Quick glossary <SectionLink id="glossary" label="Quick glossary" /></h2>
+          <p className="cmp-note">Five terms used throughout the charts and recorded answers.</p>
           <dl className="method-glossary">
             <dt id="glossary-answer">Answer</dt><dd>One recorded response to one question from one assistant. Errors and refusals are excluded from mention percentages.</dd>
             <dt id="glossary-named">Named</dt><dd>A brand appears anywhere in an answer. Naming it repeatedly still counts as one answer naming it.</dd>
@@ -95,6 +104,18 @@ export default function MethodologyPage() {
  * paragraphs, plus inline bold, code and links. Adding a markdown dependency to
  * render one file we control would be more machinery than the job needs.
  */
+const METHOD_HEADERS: Record<string, [string, string]> = {
+  "What we do, every week": ["Collection", "How buying questions become a published measurement."],
+  "Why we ask five times instead of once": ["Sampling", "Repeated answers show how often a brand appears."],
+  "How much of a change is real": ["Uncertainty", "Small samples limit what a change can tell us."],
+  "What we measure, and what we do not": ["Scope", "API answers measure visibility, not product quality."],
+  "Active engines": ["Providers", "The assistants and models used for each measurement."],
+  "Never break the series": ["Comparability", "Method changes determine which readings can be compared."],
+  "Disclosure": ["Operator", "Who runs the chart and how the work is funded."],
+  "A conflict we have to declare": ["Independence", "How we disclose and handle conflicts of interest."],
+  "Corrections": ["Review", "How mistakes are reported and corrected."],
+};
+
 function renderMarkdown(md: string): React.ReactNode[] {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out: React.ReactNode[] = [];
@@ -121,7 +142,12 @@ function renderMarkdown(md: string): React.ReactNode[] {
       const id = headingId(heading[2]);
       const text = <>{inline(heading[2])} <SectionLink id={id} label={heading[2]} /></>;
       if (level === 1) out.push(<h2 className="sub-h" id={id} key={key++}>{text}</h2>);
-      else if (level === 2) out.push(<h2 id={id} key={key++}>{text}</h2>);
+      else if (level === 2 && METHOD_HEADERS[heading[2]]) {
+        const [label, lead] = METHOD_HEADERS[heading[2]];
+        out.push(<p className="label codex-section-label" key={key++}>{label}</p>);
+        out.push(<h2 className="sub-h" id={id} key={key++}>{text}</h2>);
+        out.push(<p className="cmp-note" key={key++}>{lead}</p>);
+      } else if (level === 2) out.push(<h2 id={id} key={key++}>{text}</h2>);
       else out.push(<h3 id={id} key={key++}>{text}</h3>);
       i += 1;
       continue;

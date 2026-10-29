@@ -26,5 +26,9 @@ export const OPERATOR_URL = "https://skaldstudio.io";
 
 /** A category label as it reads mid-sentence: "AI coding assistants" keeps its acronym. */
 export function inSentence(label: string): string {
-  return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  // Word by word: acronyms ("AI", "SEO") stay, every other word drops its capital.
+  return label
+    .split(" ")
+    .map((w) => (/^[A-Z0-9&]{2,}$/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1)))
+    .join(" ");
 }

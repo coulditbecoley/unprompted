@@ -54,7 +54,7 @@ export async function generateMetadata({
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
 
   const description = row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))} measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))}, measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
       : `Tracking how often AI assistants name ${brand}.`;
   const url = `/brand/${category}/${slug}`;
   return {
@@ -131,7 +131,7 @@ export default async function BrandPage({
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {inSentence(label)} measured on{" "}
+            {row.totalRuns} answers about {inSentence(label)}, measured on{" "}
             {run!.measured_on || run!.run_date}, and recommended it first in{" "}
             {Math.round(row.firstShare * 100)}% of them.
           </>
@@ -145,7 +145,7 @@ export default async function BrandPage({
           <Kpi i={0} label="Board position" value={`#${rank + 1}`} unit={` of ${board.length}`} note="Ranked by how often it was the first pick." />
           <Kpi i={1} label="Named in" value={Math.round(row.rotation * 100)} unit="%" note={`${row.named} of ${row.totalRuns} answers mentioned it.`} meter={row.rotation} />
           <Kpi i={2} label="Named first" value={Math.round(row.firstShare * 100)} unit="%" note="Share of answers where it was the first recommendation." meter={row.firstShare} />
-          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Median place in the list when it was named." />
+          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Its usual place in the list when it was named (the median)." />
         </div>
       )}
 

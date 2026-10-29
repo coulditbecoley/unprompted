@@ -75,7 +75,8 @@ export function CategoryBrowser({
       {filtered.map(({ sector, categories }) => (
         <section key={sector.slug} className="cat-sector reveal">
           <div className="cat-sector-head">
-            <h2 id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
+            <p className="label">Category group</p>
+            <h2 className="sub-h" id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
             <p>{sector.blurb.replace(/\bengines\b/g, "assistants")}</p>
           </div>
 
@@ -109,7 +110,7 @@ export function CategoryBrowser({
                       </div>
                     ) : (
                       <p className="cat-stat mono cat-stat-dim">
-                        No data published yet
+                        No published results yet
                       </p>
                     )}
                   </div>

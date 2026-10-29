@@ -126,19 +126,23 @@ export default async function ConsensusPage({
             <Kpi i={1} value={contested.length} label="Without full agreement" note="Different picks, ties, or missing picks." />
             <Kpi i={2} value={engines.length} label="Assistants compared" note="Each assistant contributes one pick per question." />
           </div>
-          <div className="panel cns-agreement reveal">
+          <p className="label codex-section-label">Overview</p>
             <h2 className="sub-h" id="agreement">Agreement at a glance</h2>
             <p className="cmp-note">One square per question. Filled squares mean every assistant picked the same brand.</p>
+            <div className="panel cns-agreement reveal">
             <div className="cns-strip" role="img" aria-label={`${score.settled} of ${score.total} questions have full agreement.`}>
               {rows.map(row => <span key={row.questionId} data-agreed={row.settled} title={`${row.text}: ${row.settled ? 'all agree' : 'no full agreement'}`} />)}
             </div>
           </div>
 
+          <p className="label codex-section-label">Questions</p>
           <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
           {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
-            The percentage shows how often the leading brand was named first
-            among answers to that question. "No unique pick" means tied leaders or no
+            Each assistant’s most frequent first pick for every question.
+          </p>
+          <p className="cmp-note">
+            Percentages show how often the leading brand was named first. "No unique pick" means tied leaders or no
             first pick; follow that link to inspect the assistant’s answers. Bold marks picks outside the majority, or all picks when
             there is no majority. Missing picks also prevent full agreement.
             Open a question to read the recorded answers.
@@ -165,11 +169,14 @@ export default async function ConsensusPage({
             ))}
           </div>
 
+          <p className="label codex-section-label">Assistants</p>
           <h2 className="sub-h" id="differences">How often each assistant differs from the majority <SectionLink id="differences" label="How often each assistant differs from the majority" /></h2>
           <p className="cmp-note">
-            The count is questions where a majority chose a brand and this
-            assistant chose another brand or had no pick, out of all questions
-            shown. Questions without a majority add no differences.
+            Questions where an assistant differs from the majority.
+          </p>
+          <p className="cmp-note">
+            Counts include a different brand or no pick, out of all questions shown.
+            Questions without a majority add no differences.
           </p>
           <div className="panel cns-div reveal">
             {divergence.map((d) => (

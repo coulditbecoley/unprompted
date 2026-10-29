@@ -159,13 +159,16 @@ export default async function ComparePage({
         <Link href={`/questions?${new URLSearchParams({ c: category, date: run.run_date })}`}>Read the recorded answers</Link>
         <Link href="/methodology#glossary">How the answers are counted</Link>
       </nav>
+      <p className="label codex-section-label">Overview</p>
+      <h2 className="sub-h">The two brands</h2>
+      <p className="cmp-note">First picks and mentions in this reading.</p>
       <div className="cmp-grid cmp-cards">
         {sides.map(({ brand, row, history }, index) => (
           <div className="cmp-pick reveal" key={`${brand}-${index}`}>
             <TrimTop />
-            <h2 className="cmp-brand-title">
+            <h3 className="cmp-brand-title">
               <Link href={brandHref(category, brand)}>{brand}</Link>
-            </h2>
+            </h3>
             {row ? (
               <>
                 <p className="cmp-headline">
@@ -211,9 +214,12 @@ export default async function ComparePage({
         ))}
       </div>
 
+      <p className="label codex-section-label">Assistants</p>
       <h2 className="sub-h" id="assistants">Assistant by assistant <SectionLink id="assistants" label="Assistant by assistant" /></h2>
       <p className="cmp-note" id="assistant-counting">
-        Each cell shows how many answers from that assistant named the brand anywhere, and the share of its answers.
+        Each assistant’s count and share of answers mentioning either brand.
+      </p>
+      <p className="cmp-note">
         Both brands use the same answers; errors and refusals are excluded. An assistant with no answers after those exclusions is omitted.
       </p>
       {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in this reading.</p> : (
@@ -238,11 +244,14 @@ export default async function ComparePage({
 
       {L.row && R.row && (
         <>
-          <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
+          <p className="label codex-section-label">Questions</p>
+      <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
           {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
-            Each percentage is the share of answers to that question
-            that mention the brand. Bold marks the larger share, not a proven
+            The share of answers mentioning each brand, question by question.
+          </p>
+          <p className="cmp-note">
+            Bold marks the larger share, not a proven
             difference in quality.
           </p>
           <div className="panel h2h reveal" role="table" aria-label="Brand mentions by question">
@@ -267,17 +276,22 @@ export default async function ComparePage({
 
       {weeks > 1 && (
         <>
-          <h2 className="sub-h" id="history">Mentions over time <SectionLink id="history" label="Mentions over time" /></h2>
+          <p className="label codex-section-label">History</p>
+      <h2 className="sub-h" id="history">Mentions over time <SectionLink id="history" label="Mentions over time" /></h2>
           <p className="cmp-note">
-            Each point shows the share of answers that mention a brand. Zero
-            means none mentioned it. Points are evenly spaced by measurement,
+            Each point shows the share of answers that mention a brand.
+          </p>
+          <p className="cmp-note">
+            Zero means none mentioned it. Points are evenly spaced by measurement,
             not by elapsed time.
           </p>
           <TwoLines a={L} b={R} weeks={weeks} />
         </>
       )}
 
+      <p className="label codex-section-label">Explore</p>
       <h2 className="sub-h" id="other-brands">Compare {L.brand} with <SectionLink id="other-brands" label="Other comparisons" /></h2>
+      <p className="cmp-note">Choose another brand to keep exploring this category.</p>
       <div className="q-chips">
         {brands
           .filter((brand) => brand !== L.brand)

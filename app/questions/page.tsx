@@ -198,17 +198,23 @@ export default async function QuestionsPage({
         <Kpi i={1} label="Answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
         <Kpi i={2} label="Errors or refusals" value={run.extractions.length - usable} note="Excluded from brand mention percentages." />
       </div>
-      <div className="panel q-coverage reveal">
+      <p className="label codex-section-label">Coverage</p>
         <h2 className="sub-h" id="coverage">Answer coverage by assistant</h2>
-        <p className="cmp-note">Coverage is for the full reading. Bar length is the share of recorded attempts that produced an answer, excluding errors and refusals.</p>
+        <p className="cmp-note">The share of recorded attempts that produced an answer, before filters.</p>
+        <div className="panel q-coverage reveal">
         {counts.map(c => <div className="q-coverage-row" key={c.engine}>
           <span>{labels.get(c.engine) ?? c.engine}</span>
           <span className="meter" aria-hidden="true"><i style={{ "--v": c.answered / Math.max(c.attempted, 1) } as React.CSSProperties} /></span>
           <span className="mono">{c.answered}/{c.attempted}</span>
         </div>)}
       </div>
+      <p className="label codex-section-label">Evidence</p>
+      <h2 className="sub-h">Recorded answers</h2>
       <p className="cmp-note">
-        Each line lists the brands found in one answer. Choose a question to load
+        Each line lists the brands found in one answer.
+      </p>
+      <p className="cmp-note">
+        Choose a question to load
         its original answers and recorded source links. Sources may be citations or
         search results; a link alone does not show which brand it supports.
       </p>
@@ -222,8 +228,9 @@ export default async function QuestionsPage({
 
         return (
           <div className="q-block panel" key={q.id} id={q.id}>
-            <p className="label" style={{ marginTop: 6 }}>{q.id}</p>
+            <p className="label">{q.id}</p>
             <h2 className="q-text">{q.text} <SectionLink id={q.id} label={q.text} /></h2>
+            <p className="cmp-note">{rows.length} recorded attempts with these filters.</p>
             {rows.length > 0 && <p className="q-load-answers">
               <a className="btn btn-sm" href={`/questions?${new URLSearchParams({
                 c: category, date: run.run_date,

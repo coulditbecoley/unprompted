@@ -1468,7 +1468,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cat-empty .btn { margin-top: 16px; }
 .method-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 28px 0; }
 .method-flow li { padding: 20px; }
-.method-flow h2 { font-size: 20px; margin: 12px 0 8px; }
+.method-flow h3 { font-size: 20px; margin: 12px 0 8px; }
 .method-flow p { color: var(--fg-2); font-size: 14px; line-height: 1.6; margin: 0; }
 .method-step { color: var(--fg-3); font-size: 13px; }
 .methodology-copy { max-width: 78ch; min-width: 0; overflow-wrap: anywhere; }
@@ -1554,7 +1554,7 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .cns .cns-engine { white-space: normal; overflow-wrap: anywhere; font-size: 10px; }
 }
 /* Polish 2, round 1: readable evidence and keyboard access. */
-.cmp-brand-title { font-size: 19px; margin: 0 0 12px; }
+.cmp-page .cmp-brand-title { font-size: 19px; margin: 0 0 12px; }
 .cmp-brand-title a { text-decoration: none; }
 .cmp-brand-title a:hover { text-decoration: underline; }
 .cat-scale, .cmp-axis, .cmp-history-dates,
@@ -1576,11 +1576,10 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .cmp-form .select, .q-reading .select { font-size: 16px; }
 }
 /* Polish 2, round 2: consistent spacing and readable narrow layouts. */
-.cmp-brand-title { margin-top: 16px; overflow-wrap: anywhere; }
+.cmp-page .cmp-brand-title { margin-top: 16px; overflow-wrap: anywhere; }
 .cmp-title, .cmp-legend, .h2h-name { overflow-wrap: anywhere; }
 .cmp-stat { align-items: baseline; }
 .cmp-stat > span:last-child { flex-shrink: 0; text-align: right; }
-.cmp-page > .sub-h, .cns-page > .sub-h { margin-top: 36px; }
 .cmp-page > .section-lead + .cmp-note, .cns-page > .section-lead + .cmp-note { margin-top: 12px; }
 .q-reading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 16px; margin: 24px 0; }
 .q-filter { display: grid; gap: 6px; min-width: 0; }
@@ -1598,9 +1597,7 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .cat-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 24px 0 32px; }
 .cat-search-input { min-width: 0; }
 .method-changes summary { cursor: pointer; }
-.method-changes summary h2 { display: inline; font-size: 18px; margin: 0; }
 .method-changes[open] summary { margin-bottom: 20px; }
-.methodology-copy > h2:first-child { margin-top: 0; }
 .method-table { overflow-x: auto; margin: 24px 0; }
 .method-table table { width: 100%; min-width: 580px; border-collapse: collapse; }
 .method-table th, .method-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
@@ -1731,4 +1728,29 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 @media (prefers-reduced-motion: reduce) {
   :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) :is(.btn, .card-lift):is(:hover, :focus-visible, :active) { transform: none; }
 }
+/* Round 12: section rhythm matches the chart and brand pages. */
+.codex-section-label { margin: 52px 0 4px; }
+.codex-section-label + h2.sub-h { margin: 0 0 6px; font-size: clamp(20px, 2.4vw, 24px); }
+.codex-section-label + h2 + .cmp-note { margin: 0 0 16px; }
+.cns-agreement, .q-coverage { margin: 0; }
+.q-block.panel { margin: 31px 0 0; }
+.q-block > .label { margin: 0 0 4px; }
+.q-block .q-text { margin-bottom: 6px; }
+.cat-sector { margin: 52px 0 0; }
+.cat-sector-head > .label { margin: 0 0 4px; }
+.cat-sector-head > .sub-h { margin: 0 0 6px; font-size: clamp(20px, 2.4vw, 24px); }
+.cat-sector-head > p:last-child { margin: 0 0 16px; font-size: 13.5px; color: var(--fg-2); }
+.method-changes { margin: 0; }
+.method-flow { margin: 0; }
+.method-source { margin: 52px 0; padding: 16px 20px 16px 28px; }
+.methodology-copy > .codex-section-label { margin: 52px 0 4px; }
+.methodology-copy > .codex-section-label:first-child { margin-top: 0; }
+.methodology-copy > hr { display: none; }
+@media (max-width: 560px) {
+  .q-block.panel { margin-top: 37px; }
+}
+@media (max-width: 768px) {
+  .method-toc { margin-bottom: 52px; }
+}
+
 /* === codex pages: end === */
