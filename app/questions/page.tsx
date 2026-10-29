@@ -1,3 +1,4 @@
+import { BrandHighlight } from "./brand-highlight";
 import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
 import fs from "node:fs";
@@ -262,7 +263,7 @@ export default async function QuestionsPage({
                           <em>No recognized brand was found</em>
                         )}
                         {params.question === q.id && <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
-                          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "The original text was not saved for this answer."}</p>
+                          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer ? <BrandHighlight text={r.answer} brand={selectedBrand} /> : "The original text was not saved for this answer."}</p>
                           <p>Source type: {r.source_kind || "type not recorded"}</p>
                           <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
                         </details>}
