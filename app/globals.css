@@ -1408,6 +1408,10 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 /* The header wraps to two rows below 620px, so anything sticky clears more. */
 @media (max-width: 620px) { :root { --header-h: 110px; } }
 
+/* Board re-sort: rows glide to their new rank (see LiveBoard.onSort). */
+::view-transition-group(.board-row) { animation-duration: 340ms; animation-timing-function: var(--ease); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 160ms; }
+
 /* High-contrast (forced colours) mode strips every background, which erased
    each bar, meter and square: the data itself. Charts opt out so their marks
    survive; text and controls still follow the user's system colours. */
@@ -1689,4 +1693,31 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .cns-q a { text-underline-offset: 3px; }
 @media (max-width: 560px) { .cmp-assistants th, .cmp-assistants td { padding: 12px 8px; } }
 @media print { .cmp-assistants tr { break-inside: avoid; } }
+/* Round 8: explain focus, selection and disclosure without moving the data rows. */
+.q-filter:focus-within label { color: var(--accent); }
+:is(.q-reading, .cmp-form) .select:focus-visible,
+.categories-page .cat-search-input:focus-visible { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.cmp-page .cmp-chip[aria-current="page"] { border-color: var(--accent); background: var(--surface-2); color: var(--fg); font-weight: 600; }
+.q-block:target { border-color: var(--fg-2); }
+.q-engine-group[open] > summary { background: var(--surface-2); }
+.q-answer[open] { box-shadow: var(--shadow-1); }
+:is(.q-engine-group, .q-answer, .method-changes) > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.categories-page .card-lift:focus-visible { border-color: var(--accent); }
+.cns-row:focus-within, .cns-row:focus-within .cns-q { background: var(--surface-2); }
+@media (prefers-reduced-motion: no-preference) {
+  .q-filter label, :is(.q-reading, .cmp-form) .select, .categories-page .cat-search-input,
+  .cmp-page .cmp-chip, .q-block, .q-engine-group > summary, .q-answer,
+  .cns-row, .cns-row .cns-q {
+    transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease),
+      border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  }
+  .categories-page .card-lift:is(:hover, :focus-visible) { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+  .q-engine-group[open] > .q-names, .q-answer[open] > p:first-of-type, .method-changes[open] > .prose {
+    animation: codex-disclose var(--fast) var(--ease) 1;
+  }
+  @keyframes codex-disclose { from { transform: translateY(-2px); } to { transform: translateY(0); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) :is(.btn, .card-lift):is(:hover, :focus-visible, :active) { transform: none; }
+}
 /* === codex pages: end === */

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { flushSync } from "react-dom";
 
 import { SequencerRow, TrimTop } from "@/components/ui";
 import type { BrandStanding, Movement } from "@/lib/data";
+import { slugify } from "@/lib/shared";
 
 /**
  * The board, with its steps made answerable.
@@ -111,6 +113,19 @@ export function LiveBoard({
 
   const steps = rows[0]?.standing.steps.length ?? 0;
 
+  // A re-sort moves every row at once, and a jump leaves the reader hunting for
+  // the brand they were looking at. Where the browser supports it, each row
+  // slides to its new place. No library: the View Transitions API, skipped for
+  // reduced motion and absent everywhere it is unsupported.
+  function onSort(k: SortKey) {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    if (!doc.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setSort(k);
+      return;
+    }
+    doc.startViewTransition(() => flushSync(() => setSort(k)));
+  }
+
   // The rank column keeps the first-named ordering whatever the sort, because
   // the gap between the two orderings is the finding. Cursor is named in more
   // runs than anything else and is third on first mentions; the mark at the top
@@ -195,7 +210,7 @@ export function LiveBoard({
             hint="Sort by how many runs named this brand at all"
             k="named"
             sort={sort}
-            onSort={setSort}
+            onSort={onSort}
           />
           <SortHead
             className="seq-first"
@@ -203,7 +218,7 @@ export function LiveBoard({
             hint="Sort by how often this brand was named first"
             k="first"
             sort={sort}
-            onSort={setSort}
+            onSort={onSort}
           />
           <SortHead
             className="seq-delta"
@@ -211,7 +226,7 @@ export function LiveBoard({
             hint="Sort by change from the comparison measurement"
             k="move"
             sort={sort}
-            onSort={setSort}
+            onSort={onSort}
           />
         </div>
         {sorted.map((row) => (
@@ -223,6 +238,7 @@ export function LiveBoard({
             href={row.href}
             activeStep={active}
             onStep={setHover}
+            transitionName={`row-${slugify(row.standing.brand)}`}
           />
         ))}
       </div>

@@ -29,6 +29,7 @@ export function SequencerRow({
   href,
   activeStep = null,
   onStep,
+  transitionName,
 }: {
   standing: BrandStanding;
   rank: number;
@@ -37,6 +38,8 @@ export function SequencerRow({
   /** Which question column is being read, if any. See LiveBoard. */
   activeStep?: number | null;
   onStep?: (step: number | null) => void;
+  /** Lets a re-sort animate each row to its new place. See LiveBoard. */
+  transitionName?: string;
 }) {
   const name = href ? (
     <Link href={href} style={{ textDecoration: "none" }}>
@@ -47,7 +50,10 @@ export function SequencerRow({
   );
 
   return (
-    <div className="seq-row">
+    <div
+      className="seq-row"
+      style={transitionName ? ({ viewTransitionName: transitionName, viewTransitionClass: "board-row" } as React.CSSProperties) : undefined}
+    >
       <span className="mono seq-rank" data-lead={rank === 1}>
         {String(rank).padStart(2, "0")}
       </span>
