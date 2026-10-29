@@ -27,6 +27,11 @@ questions. Python pipeline in `src/unprompted/` and `scripts/`; Next.js site in
 `unprompted.jev_reader`, `scripts/compare_jev.py --read`. Never start a paid
 command to fill a gap; report the gap.
 
+**Before a Monday.** `python -m unprompted.run --preflight --qualify` runs what
+the weekly run checks first: each local engine's isolation canary, the model
+every engine reports, and whether that would trip the method-change guard (a
+few subscription calls and one tiny Gemini call; nothing is measured).
+
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in
 there). Outcome per category: `data/last-run.json` → `categories`. Exit codes:

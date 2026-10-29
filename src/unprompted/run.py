@@ -451,6 +451,35 @@ def all_categories() -> list[str]:
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
 
 
+def qualify(categories: list[str]) -> tuple[dict, list[str]]:
+    """What the weekly run's own first steps would say, without measuring anything.
+
+    The CLI canaries, the model each engine reports, and whether that model
+    would trip the unversioned-change guard against the last published week.
+    """
+    identified, issues = {}, []
+    for name, engine in sorted(all_engines().items()):
+        if not (hasattr(engine, "identify") and engine.is_configured):
+            continue
+        try:
+            identified[name] = engine.identify()
+        except (ProviderError, TimeoutError) as exc:
+            issues.append(f"{name}: {exc}")
+    for category in categories:
+        try:
+            spec = load_questions(category)
+        except (OSError, ValueError, KeyError, yaml.YAMLError):
+            continue  # already reported by preflight
+        prior = load_history(ROOT / "data" / "runs", category)
+        before = (prior[-1].get("methodology") or {}).get("engines", {}) if prior else {}
+        if not prior or prior[-1].get("method_version") != spec["method_version"]:
+            continue  # a version bump: a different model is allowed
+        issues += [f"{category}: {name} now reports {i['model']}, last published {before[name].get('model')}; "
+                   "the run would refuse without a method version bump"
+                   for name, i in identified.items() if name in before and before[name].get("model") != i["model"]]
+    return identified, issues
+
+
 def preflight(categories: list[str], run_date: str) -> dict:
     """Read-only configuration and aggregate budget inspection, not a paid dry run."""
     if date.fromisoformat(run_date).isoformat() != run_date:
@@ -517,12 +546,15 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="still makes PAID provider calls and keeps their checkpoints in .unprompted/; only the final run record is not written")
     parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
+    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers (a few subscription calls and one tiny Gemini call, no measurement)")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
         help="run even if the month's ceiling in data/rates.json would be passed",
     )
     args = parser.parse_args()
+    if args.qualify and not args.preflight:
+        parser.error("--qualify is an addition to --preflight")
     if args.preflight and (args.dry_run or args.ignore_budget):
         parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
@@ -546,6 +578,10 @@ def main() -> int:
         return 1
     if args.preflight:
         result = preflight(categories, args.date)
+        if args.qualify:
+            result["engines_identified"], found = qualify(categories)
+            result["issues"] += found
+            result["status"] = "issues_found" if result["issues"] else "checks_passed"
         print(json.dumps(result, indent=2))
         return 2 if result["issues"] else 0
 
