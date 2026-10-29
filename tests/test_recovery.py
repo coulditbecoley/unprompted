@@ -917,6 +917,10 @@ def test_qualify_uses_the_runs_full_comparison_and_reports_failures_as_issues(tm
     assert run.qualify(["alpha"])[1] == []
     monkeypatch.setattr(run, "all_engines", lambda: (_ for _ in ()).throw(run.ProviderError("bad registry")))
     assert run.qualify(["alpha"]) == ({}, ["cannot qualify: bad registry"])  # an issue, not a traceback
+    monkeypatch.setattr(run, "all_engines", lambda: engines)
+    write_json(tmp_path / "data/runs/2026-10-27/alpha.json", {"category": "alpha", "run_date": "2026-10-27",
+               "method_version": 4, "methodology": {"questions": spec}})  # no engines: the guard raises
+    assert any("could not compare" in i for i in run.qualify(["alpha"])[1])
 
 
 def test_collect_only_refuses_to_be_combined(monkeypatch):
@@ -926,21 +930,24 @@ def test_collect_only_refuses_to_be_combined(monkeypatch):
     assert stop.value.code == 2
 
 
-def test_a_restart_reasks_only_unbilled_failures(tmp_path, monkeypatch):
+def test_a_restart_reasks_only_requests_the_provider_turned_away(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "git_sha", lambda: "sha")
     (tmp_path / "aliases").mkdir()
     (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
-    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 3, "questions": [{"id": "q1", "text": "Which brand?"}]}
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 4, "questions": [{"id": "q1", "text": "Which brand?"}]}
     monkeypatch.setattr(run, "load_questions", lambda category: spec)
     calls = []
-    first = {0: dict(error="URLError: outage"), 1: dict(error="engine failed: incomplete response", usage={"input_tokens": 9}), 2: {}}
+    first = {0: dict(error="HTTPError: HTTP Error 503: Service Unavailable"),            # turned away: ask again
+             1: dict(error="engine failed: incomplete response", usage={"input_tokens": 9}),  # billed: keep
+             2: {},
+             3: dict(error="TimeoutError: read timed out")}                                  # may be billed: keep
 
     class Engine:
         name, grounds, is_configured = "hosted", False, True
         def ask_one(self, qid, text, index):
             calls.append(index)
-            outcome = first[index] if len(calls) <= 3 else {}
+            outcome = first[index] if len(calls) <= 4 else {}
             return EngineAnswer(self.name, qid, text, index, text="Alpha", **outcome)
     monkeypatch.setattr(run, "all_engines", lambda: {"hosted": Engine()})
     monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
@@ -953,5 +960,7 @@ def test_a_restart_reasks_only_unbilled_failures(tmp_path, monkeypatch):
     for _ in range(2):
         with pytest.raises(RuntimeError, match="stop"):
             run.run_category("alpha", "2026-09-07")
-    assert sorted(calls) == [0, 0, 1, 2]  # only the unbilled failure was asked again
-    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None}
+    assert sorted(calls) == [0, 0, 1, 2, 3]  # only the rejected request was asked again
+    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None, 3: "TimeoutError: read timed out"}
+    saved = json.loads((tmp_path / ".unprompted/2026-09-07/alpha/hosted-q1-0.json").read_text())
+    assert saved["metadata"]["resumed_after"].startswith("HTTPError: HTTP Error 503")

@@ -233,7 +233,7 @@ def _run_category(
 
     answers = []
     pending = []
-    retried: set[str] = set()
+    retried: dict[str, str] = {}  # checkpoint name -> the error it replaces
     for engine, qid, text, run_index in tasks:
         saved = checkpoint / f"{engine.name}-{qid}-{run_index}.json"
         if saved.exists():
@@ -241,7 +241,7 @@ def _run_category(
             if (answer.engine, answer.question_id, answer.question, answer.run_index) != (engine.name, qid, text, run_index):
                 raise ValueError(f"checkpoint answer identity differs: {saved.name}")
             if retryable_on_resume(answer, engine, extraction_state):
-                retried.add(saved.name)
+                retried[saved.name] = answer.error
                 pending.append((engine, qid, text, run_index))
                 continue
             answers.append(answer)
@@ -280,6 +280,8 @@ def _run_category(
         answer = engine.ask_one(qid, text, run_index)
         answer.measurement_git_sha = measurement_commit
         name = f"{answer.engine}-{answer.question_id}-{answer.run_index}.json"
+        if name in retried:  # the earlier rejection stays on the record
+            answer.metadata = {**(answer.metadata or {}), "resumed_after": retried[name]}
         write_json(checkpoint / name, answer.to_dict(), replace=name in retried)
         return answer
 
@@ -473,16 +475,24 @@ def unversioned_change(category: str, spec: dict, methodology: dict) -> str | No
             + ". If a local harness switched model, bump method_version in the question bank.")
 
 
+# Failures the provider refused before doing any work, or that were never sent.
+# A timeout or a dropped connection is not here: the provider may have finished
+# and billed the call, and asking again would spend twice with one record.
+_REJECTED_UNBILLED = re.compile(r"not attempted|\b(429|503|529)\b|ratelimit|rate_limit|overloaded|unavailable", re.I)
+
+
 def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
-    """Ask again on a restart: a synchronous call that failed without being billed.
+    """Ask again on a restart: a synchronous call the provider turned away unbilled.
 
     An answer with usage cost money and stays as recorded (its spend is in the
-    ledger); a batch answer belongs to its batch; once extraction has been
-    submitted the answers are fixed. Anything else is a free second chance at
-    coverage that the first attempt lost to an outage.
+    ledger); an ambiguous failure (timeout, reset) may have been billed and
+    stays too; a batch answer belongs to its batch; once extraction has been
+    submitted the answers are fixed. What remains is a rejected or never-sent
+    request, a free second chance at coverage lost to an outage.
     """
     return (bool(answer.error) and not answer.usage and not extraction_state.exists()
-            and getattr(engine, "transport", None) != "messages-batch")
+            and getattr(engine, "transport", None) != "messages-batch"
+            and bool(_REJECTED_UNBILLED.search(answer.error)))
 
 
 def qualify(categories: list[str]) -> tuple[dict, list[str]]:
@@ -509,8 +519,10 @@ def qualify(categories: list[str]) -> tuple[dict, list[str]]:
         try:
             spec = load_questions(category)
             refusal = unversioned_change(category, spec, build_methodology(spec, engines, identified, category, extractor))
-        except (OSError, ValueError, KeyError, yaml.YAMLError):
-            continue  # already reported by preflight
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+            # The run's own guard would raise here too, so this is a refusal to report.
+            issues.append(f"{category}: could not compare with the last published week: {type(exc).__name__}: {exc}")
+            continue
         if refusal:
             issues.append(f"{category}: {refusal}")
     return identified, issues
