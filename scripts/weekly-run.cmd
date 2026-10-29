@@ -17,6 +17,8 @@ if errorlevel 1 exit /b 1
 set "UNPROMPTED_PYTHON=%CD%\.venv\Scripts\python.exe"
 if not exist "%UNPROMPTED_PYTHON%" (
   echo ABORT: create .venv and install requirements.lock before scheduling.
+  REM No Python yet, so this one goes to the old log location by hand.
+  echo %DATE% %TIME% ABORT: .venv missing, nothing measured >> "%TEMP%\unprompted-weekly.log"
   exit /b 1
 )
 
@@ -52,7 +54,7 @@ if errorlevel 1 (
 REM Never include someone else's staged work in the measurement commit.
 git diff --cached --quiet
 if errorlevel 1 (
-  echo ABORT: staged changes exist; finish that commit before scheduling.
+  echo ABORT: staged changes exist; finish that commit before scheduling. >> "%LOG%"
   exit /b 1
 )
 

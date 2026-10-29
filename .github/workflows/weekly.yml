@@ -19,7 +19,7 @@ on:
         required: false
         default: "all"
       dry_run:
-        description: "Run without writing any files"
+        description: "Write no run record (still makes PAID provider calls)"
         type: boolean
         required: false
         default: false
