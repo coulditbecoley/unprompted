@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import os
 import re
 import subprocess
@@ -638,9 +639,12 @@ def main() -> int:
         out = os.environ.get("GITHUB_OUTPUT")
         if out:
             lines = [f"{c}: {r}" for c, rs in held.items() for r in rs]
+            # A random delimiter: reasons quote brand names from AI answers, and
+            # a line reading exactly EOF would end the block and set outputs.
+            marker = f"EOF_{secrets.token_hex(16)}"
             with open(out, "a", encoding="utf-8") as handle:
                 handle.write("held=true\n")
-                handle.write("reasons<<EOF\n" + "\n".join(lines) + "\nEOF\n")
+                handle.write(f"reasons<<{marker}\n" + "\n".join(lines) + f"\n{marker}\n")
         return HELD_EXIT_CODE
 
     return 0

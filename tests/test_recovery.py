@@ -838,3 +838,21 @@ def test_harness_model_is_read_from_real_cli_output():
     codex_banner = "OpenAI Codex v0.157.1\n--------\nworkdir: /tmp/x\nmodel: gpt-6-astra\nprovider: openai\n"
     assert _reported_model("codex", "OK", codex_banner) == "gpt-6-astra"
     assert _reported_model("codex", "OK", "") == ""
+
+
+def test_hold_reasons_cannot_end_the_github_output_block(tmp_path, monkeypatch):
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
+    record = SimpleNamespace(to_dict=lambda: {"extractions": []})
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: (record, ["brand\nEOF\ninjected=true"]))
+    monkeypatch.setattr(run, "format_report", lambda d: "")
+    monkeypatch.setattr(run, "cost_of_run", lambda d: (None, 0.0))
+    monkeypatch.setattr(run.sys, "argv", ["run"])
+    assert run.main() == run.HELD_EXIT_CODE
+    text = output.read_text()
+    marker = text.split("reasons<<", 1)[1].split("\n", 1)[0]
+    assert marker.startswith("EOF_") and text.rstrip().endswith(marker)

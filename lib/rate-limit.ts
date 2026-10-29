@@ -41,7 +41,7 @@ import { redis } from "./analytics";
  * downstream fails silently -- a rejected write costs a number in a dashboard,
  * never a page.
  */
-const LIMITS: Record<string, number> = { subscribe: 5, track: 30 };
+const LIMITS: Record<string, number> = { subscribe: 5, track: 30, login: 10 };
 const WINDOW = "1 m";
 
 const limiters = new Map<string, Ratelimit>();
@@ -97,16 +97,24 @@ const BUDGET_MS = 800;
 
 /** True when the request may proceed. */
 export async function rateLimit(request: Request, bucket: string): Promise<boolean> {
+  return (await sharedLimit(request, bucket)) ?? true; // fail open, per the note above
+}
+
+/**
+ * The deployment-wide verdict, or null when the shared store did not answer in
+ * time. For a caller that has its own fallback rather than failing open.
+ */
+export async function sharedLimit(request: Request, bucket: string): Promise<boolean | null> {
   const rl = get(bucket);
-  if (!rl) return true;
+  if (!rl) return null;
   try {
     return await Promise.race([
       callerFor(request)
         .then((caller) => rl.limit(caller))
         .then(({ success }) => success),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(true), BUDGET_MS)),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), BUDGET_MS)),
     ]);
   } catch {
-    return true; // fail open, per the note above
+    return null;
   }
 }

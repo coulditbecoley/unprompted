@@ -364,3 +364,13 @@ test("route integration: analytics and stale editor protection", async (t) => {
     assert.equal(calls.length, 0);
   });
 });
+
+test("login throttle falls back locally and a flood of addresses cannot lock the operator out", async () => {
+  // The fixture's limiter is unavailable, so this is the local fallback path.
+  const { allowLogin } = await import("../lib/auth.ts");
+  const from = (ip) => new Request("http://localhost/admin", { headers: { "x-forwarded-for": ip } });
+  for (let i = 0; i < 10; i += 1) assert.equal(await allowLogin(from("198.51.100.7")), true);
+  assert.equal(await allowLogin(from("198.51.100.7")), false);
+  for (let i = 0; i < 1000; i += 1) await allowLogin(from(`10.0.${i >> 8}.${i & 255}`));
+  assert.equal(await allowLogin(from("203.0.113.9")), true);
+});
