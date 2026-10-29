@@ -35,6 +35,9 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: pip install -r requirements.lock -e .
+      - name: Dependency advisories
+        # The Python half of what npm audit does for the web job.
+        run: pip install pip-audit==2.10.1 && pip-audit -r requirements.lock --no-deps --progress-spinner off
       - name: Test
         run: python -m pytest -q
 
