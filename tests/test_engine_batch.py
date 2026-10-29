@@ -626,3 +626,13 @@ def test_the_week_lock_spans_every_category(tmp_path, monkeypatch):
     monkeypatch.setattr(run.sys, "argv", ["run"])
     run.main()
     assert held_during == [True, True]
+
+
+def test_a_gemini_probe_that_searches_is_reported(monkeypatch, capsys):
+    from unprompted import budget
+    from unprompted.engines import gemini_engine
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    monkeypatch.setattr(budget, "spent_in_month", lambda when: 0)
+    monkeypatch.setattr(gemini_engine.GeminiEngine, "_probe", lambda self: {"modelVersion": "gemini-3.6-flash", "web_searches": 2})
+    assert gemini_engine.GeminiEngine().identify()["model"] == "gemini-3.6-flash"
+    assert "probe searched 2 time(s)" in capsys.readouterr().err

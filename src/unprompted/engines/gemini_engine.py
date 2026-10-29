@@ -23,6 +23,7 @@ call, 879 answer tokens came with 853 thinking tokens, so counting only
 from __future__ import annotations
 
 import json
+import sys
 import time
 import urllib.request
 from urllib.parse import urlparse
@@ -108,9 +109,10 @@ class GeminiEngine(Engine):
         then checked against it (`_one_call`). Once per process, failures
         included, so a bad probe is not repeated for every category.
         ponytail: the probe carries the search tool (same request shape as the
-        measured calls) but asks for one word, so it does not search; at most 16
-        output tokens with minimal thinking, under $0.001. It is refused once the
-        month's budget is spent but not itself added to it.
+        measured calls) and asks for one word, which in tests never searched; at
+        most 16 output tokens with minimal thinking, under $0.001 when it does
+        not search. A search it does make is warned about, not budgeted. It is
+        refused once the month's budget is spent.
         """
         if MODEL not in _SERVED:
             from datetime import date
@@ -124,6 +126,10 @@ class GeminiEngine(Engine):
                     if not metadata.get("modelVersion"):
                         raise ProviderError("gemini: the response did not say which model answered")
                     _SERVED[MODEL] = metadata["modelVersion"]
+                    if metadata.get("web_searches"):
+                        # Billed per search and not in the budget ledger: said, not hidden.
+                        print(f"  WARNING: the Gemini model probe searched {metadata['web_searches']} time(s); "
+                              "that search fee is not counted in the month's budget", file=sys.stderr)
                     break
                 except Exception as exc:  # noqa: BLE001 - reported by the caller as a refusal
                     failure = exc if isinstance(exc, ProviderError) else ProviderError(

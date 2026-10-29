@@ -16,8 +16,10 @@ const traces = [];
 
 const held = (file) => JSON.parse(fs.readFileSync(file, "utf8")).files.filter((f) => f.includes("data/held")).length;
 const isAdmin = (file) => path.relative(root, file).split(path.sep).includes("admin");
-// The home page is prerendered (static), so its trace is never deployed as a function.
-const isStatic = (file) => path.relative(root, file) === "page.js.nft.json";
+// A prerendered page is served as a file, so its trace is never deployed as a
+// function; the build's own manifest says which pages those are.
+const prerendered = new Set(Object.keys(JSON.parse(fs.readFileSync(path.join(".next", "prerender-manifest.json"), "utf8")).routes));
+const isStatic = (file) => path.relative(root, file) === "page.js.nft.json" && prerendered.has("/");
 
 const problems = [];
 for (const file of traces) {
