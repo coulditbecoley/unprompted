@@ -532,3 +532,19 @@ def test_timed_ends_the_whole_process_tree(tmp_path):
     assert code == 124 and time.monotonic() - started < 15
     time.sleep(4)
     assert not marker.exists()
+
+
+def test_checkpoints_with_less_metadata_still_collect_but_conflicts_do_not(tmp_path, monkeypatch):
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    batch.ask_batch(engine, [(engine, "q1", "Which?", 0)], tmp_path, "sha")
+    saved = tmp_path / "claude-q1-0.json"
+    state = tmp_path / "claude-batch/state.json"
+    record = json.loads(saved.read_text())
+    for older in ({"model": "claude-opus-5", "stop_reason": "end_turn"}, None):  # before `cited`, before metadata
+        write_json(saved, {**record, "metadata": older} if older else {k: v for k, v in record.items() if k != "metadata"}, replace=True)
+        write_json(state, {**json.loads(state.read_text()), "collected": False}, replace=True)
+        assert len(batch.collect(state, "offline")) == 1
+    write_json(saved, {**record, "metadata": {"model": "another-model"}}, replace=True)
+    write_json(state, {**json.loads(state.read_text()), "collected": False}, replace=True)
+    with pytest.raises(ValueError, match="differs"):
+        batch.collect(state, "offline")

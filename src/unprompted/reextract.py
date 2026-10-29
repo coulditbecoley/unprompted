@@ -166,8 +166,11 @@ def _renormalized(record: dict) -> list[Extraction]:
         raise SystemExit("This reading predates stored raw brand names (2026-11), so its aliases can only be "
                          "re-applied by a paid re-read: run without --renormalize.")
     fields = set(Extraction.__dataclass_fields__)
+    # Extraction usage stays on the source reading: copying it here would charge
+    # the budget again for a reading that cost nothing.
     return [Extraction(**{**{k: v for k, v in e.items() if k in fields},
-                          "brands": [BrandMention(**b) for b in e["extracted"]]})
+                          "brands": [BrandMention(**b) for b in e["extracted"]],
+                          "usage": {k: v for k, v in (e.get("usage") or {}).items() if not k.startswith("extract_")}})
             for e in record["extractions"]]
 
 

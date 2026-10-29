@@ -120,8 +120,13 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         destination = state_path.parent.parent / f"claude-{answer.question_id}-{answer.run_index}.json"
         if destination.exists():
             saved = json.loads(destination.read_text(encoding="utf-8"))
-            # Checkpoints written before answers carried metadata (2026-10-29) match without it.
-            if saved != answer.to_dict() and saved != {k: v for k, v in answer.to_dict().items() if k != "metadata"}:
+            fresh = answer.to_dict()
+            # Older checkpoints carry less metadata (none before 2026-10-29, no
+            # `cited` before that evening). Added fields are fine; any field
+            # they both have, and everything else, must agree.
+            old_meta, new_meta = saved.get("metadata") or {}, fresh.get("metadata") or {}
+            if ({k: v for k, v in saved.items() if k != "metadata"} != {k: v for k, v in fresh.items() if k != "metadata"}
+                    or any(new_meta.get(k) != v for k, v in old_meta.items())):
                 raise ValueError(f"Claude checkpoint differs from batch result: {destination}")
         else:
             write_json(destination, answer.to_dict())

@@ -871,7 +871,8 @@ def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_p
     (tmp_path / "questions/alpha.yml").write_text("category: alpha")
     (tmp_path / "aliases").mkdir()
     (tmp_path / "aliases/alpha.yml").write_text("canonical:\n  Acme: [Acme Inc]\n")
-    held = Extraction("offline", "q1", 0, answer="Acme Inc", extracted=[{"name": "Acme Inc", "position": 1, "sentiment": "neutral"}])
+    held = Extraction("offline", "q1", 0, answer="Acme Inc", extracted=[{"name": "Acme Inc", "position": 1, "sentiment": "neutral"}],
+                      usage={"input_tokens": 900, "extract_input_tokens": 5000, "extract_output_tokens": 80})
     write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, ["offline"],
                extractor="claude-api-extract", extractions=[held], quarantined=["Acme Inc"]).to_dict())
     monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14", "--renormalize"])
@@ -881,6 +882,8 @@ def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_p
     fresh = json.loads(written[0].read_text())
     assert fresh["extractions"][0]["brands"][0]["name"] == "Acme" and fresh["quarantined"] == []
     assert fresh["extractions"][0]["extracted"][0]["name"] == "Acme Inc" and fresh["extractor"] == "claude-api-extract"
+    # Free means free: the source's extraction spend is not charged a second time.
+    assert fresh["extractions"][0]["usage"] == {"input_tokens": 900}
     old = RunRecord("alpha", "2026-09-02", 1, 1, ["offline"], extractions=[Extraction("offline", "q1", 0, answer="x")])
     write_json(tmp_path / "data/held/2026-09-02/alpha.json", old.to_dict())
     monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-02", "--category", "alpha", "--out-date", "2026-09-15", "--renormalize"])
