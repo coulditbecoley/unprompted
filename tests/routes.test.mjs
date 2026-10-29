@@ -362,6 +362,17 @@ questions:
     assert.ok(!calls.some(c => c[0] === "PUT"));
     edit.content = bank(6, "Best AI tool?");
     assert.equal((await commit(request("/api/admin/commit", edit, { cookie }))).status, 200);
+    // Key order is not a change (Python compares mappings by content)...
+    const reordered = "method_version: 6\ncategory: ai-coding-assistants\nruns_per_question: 5\nquestions:\n  - text: Best AI tool?\n    id: q1\n";
+    edit.baseline = remote; edit.content = reordered;
+    assert.equal((await commit(request("/api/admin/commit", edit, { cookie }))).status, 200);
+    // ...but values Python and JSON disagree on, and cycles, are refused cleanly.
+    for (const extra of ["note: .nan\n", "note: &x [*x]\n"]) {
+      edit.baseline = remote; edit.content = remote + extra;
+      const response = await commit(request("/api/admin/commit", edit, { cookie }));
+      assert.equal(response.status, 400);
+      assert.match((await response.json()).error, /plain values/);
+    }
   });
   await t.test("prototype targets and invalid question identities refuse before GitHub", async () => {
     calls.length = 0;

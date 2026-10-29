@@ -87,9 +87,10 @@ export async function POST(request: Request) {
   const current = (await head.json()) as { sha: string; content: string };
   if (Buffer.from(current.content, "base64").toString("utf-8").replace(/\r\n/g, "\n") !== baseline.replace(/\r\n/g, "\n")) return NextResponse.json({ error: "This file changed since you opened it. Reload and merge your edits." }, { status: 409 });
   // The runner refuses a changed question bank without a version bump, but
-  // only on Monday, after the week's calls are paid for. Refuse it here.
-  if (target === "questions" && unversionedChange(baseline, content)) {
-    return NextResponse.json({ error: "This changes the question bank without raising method_version. Bump it (and add a dated note to METHODOLOGY.md), or the next weekly run will refuse to start." }, { status: 400 });
+  // only when Monday's run starts, which then measures nothing that week.
+  if (target === "questions") {
+    const refusal = unversionedChange(baseline, content);
+    if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
   }
 
   const put = await fetch(api, {
@@ -115,18 +116,42 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
 }
 
-/** True when the parsed bank changed but method_version did not go up. */
-function unversionedChange(baseline: string, content: string): boolean {
-  let before: Record<string, unknown>, after: Record<string, unknown>;
+/**
+ * Why this question-bank edit must not commit, or null. Compared the way the
+ * Python guard compares the spec: mappings by content whatever their key
+ * order, lists in order, and only plain JSON values (no NaN, no cycles).
+ */
+function unversionedChange(baseline: string, content: string): string | null {
+  let before: unknown, after: unknown;
   try {
-    before = loadYaml(baseline) as Record<string, unknown>;
-    after = loadYaml(content) as Record<string, unknown>;
-  } catch {
-    return false; // validate() has already reported the edit; a bad baseline is not the editor's change
+    before = canonical(loadYaml(baseline));
+    after = canonical(loadYaml(content));
+  } catch (err) {
+    return `The question bank must hold plain values only: ${err instanceof Error ? err.message : "unsupported value"}`;
   }
-  if (!before || typeof before !== "object") return false;
-  const strip = ({ method_version: _version, ...rest }: Record<string, unknown>) => JSON.stringify(rest);
-  return strip(before) !== strip(after) && !(Number(after.method_version) > Number(before.method_version));
+  if (!before || typeof before !== "object" || !after || typeof after !== "object") return null;
+  const { method_version: was, ...rest } = before as Record<string, unknown>;
+  const { method_version: now, ...next } = after as Record<string, unknown>;
+  if (JSON.stringify(rest) === JSON.stringify(next) || Number(now) > Number(was)) return null;
+  return "This changes the question bank without raising method_version. Bump it (and add a dated note to METHODOLOGY.md), or the next weekly run will refuse to start.";
+}
+
+/** A JSON-safe copy with sorted keys; throws on cycles and non-finite numbers. */
+function canonical(value: unknown, seen = new Set<object>()): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("non-finite number");
+    return value;
+  }
+  if (typeof value !== "object") throw new Error(`unsupported ${typeof value}`);
+  if (seen.has(value)) throw new Error("recursive alias");
+  seen.add(value);
+  const out = Array.isArray(value)
+    ? value.map(v => canonical(v, seen))
+    : value instanceof Date ? (() => { throw new Error("date value"); })()
+    : Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical((value as Record<string, unknown>)[k], seen)]));
+  seen.delete(value);
+  return out;
 }
 
 function validate(target: Target, content: string): string | null {
