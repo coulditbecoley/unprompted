@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,6 +67,18 @@ def wait_deadline(max_wait: float) -> float:
 # The month this run's spend is booked to (its --date), set by run.py; None
 # when the operator accepted spend outside the check with --ignore-budget.
 BOOKED_MONTH: str | None = None
+
+
+@contextmanager
+def booked_to(month: str | None):
+    """Book this block's paid work to `month` (YYYY-MM), restoring the previous
+    booking afterwards; None books nothing, as --ignore-budget does."""
+    global BOOKED_MONTH
+    previous, BOOKED_MONTH = BOOKED_MONTH, month
+    try:
+        yield
+    finally:
+        BOOKED_MONTH = previous
 
 
 def paid_work_refusal() -> str | None:

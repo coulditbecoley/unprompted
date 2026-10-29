@@ -1041,3 +1041,24 @@ def test_categories_are_not_started_once_the_month_turns(tmp_path, monkeypatch):
     run.main()
     assert started == ["alpha"]
     assert json.loads((tmp_path / "s.json").read_text())["categories"]["beta"]["outcome"] == "not_started"
+
+
+def test_the_booking_is_scoped_to_its_run(monkeypatch):
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)
+    with pytest.raises(RuntimeError):
+        with base.booked_to("2026-11"):
+            assert base.BOOKED_MONTH == "2026-11"
+            raise RuntimeError("the run failed")
+    assert base.BOOKED_MONTH is None  # restored even on failure
+
+
+def test_a_standalone_reread_is_booked_to_this_month(tmp_path, monkeypatch):
+    from unprompted import reextract
+    from unprompted.engines import base
+    seen = []
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "_main", lambda: seen.append(base.BOOKED_MONTH) or 0)
+    reextract.main()
+    assert seen == [run.date.today().isoformat()[:7]] and base.BOOKED_MONTH is None

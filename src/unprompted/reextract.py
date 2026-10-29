@@ -38,7 +38,10 @@ def outside_this_month(day: str) -> bool:
 
 
 def main() -> int:
-    with run_lock(ROOT / ".unprompted"):
+    # A paid re-read is booked to the month it runs in (outside_this_month
+    # refuses any other --out-date), so it stops if midnight turns the month.
+    from .engines.base import booked_to
+    with booked_to(date.today().isoformat()[:7]), run_lock(ROOT / ".unprompted"):
         return _main()
 
 
