@@ -2520,3 +2520,13 @@ def test_readiness_holds_the_week_for_the_whole_check(monkeypatch, tmp_path):
         return {"issues": []}, ""
     monkeypatch.setattr(rd, "qualify", qualify)
     assert rd.main() == 0 and inside == ["held"]
+
+
+def test_readiness_keeps_the_runs_warnings(monkeypatch, capsys):
+    reply = SimpleNamespace(returncode=2, stdout=json.dumps({"issues": ["codex: broken"]}),
+                            stderr="noise" + chr(10) + "  WARNING: the Gemini model probe searched 1 time(s)" + chr(10))
+    rd, calls = _readiness(monkeypatch, lambda a: reply if "--qualify" in a else SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    assert rd.main() == 2
+    assert "probe searched 1 time" in capsys.readouterr().out
+    body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
+    assert "Also noted" in body and "probe searched 1 time" in body

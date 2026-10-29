@@ -61,18 +61,23 @@ def qualify(monday: str) -> tuple[dict | None, str]:
     except (OSError, subprocess.SubprocessError) as exc:
         return None, f"could not start: {type(exc).__name__}: {exc}"
     try:
-        return json.loads(done.stdout), ""
+        result = json.loads(done.stdout)
+        # The run's own WARNING lines (for example a probe that searched) are
+        # kept: they go to stderr, which a successful check would otherwise drop.
+        result["warnings"] = [line.strip() for line in done.stderr.splitlines() if "WARNING" in line]
+        return result, ""
     except ValueError:
         why = "timed out" if done.returncode == 124 else f"exit {done.returncode}"
         return None, f"{why}: {done.stderr.strip()[-300:]}"
 
 
-def open_issue(monday: str, issues: list[str]) -> bool:
+def open_issue(monday: str, issues: list[str], warnings: list[str] = ()) -> bool:
     """One issue per Monday, found again by its exact title. False if GitHub failed."""
     title = f"Monday readiness: problems before {monday}"
     body = "\n".join([
         f"The checks the weekly run makes first were run ahead of **{monday}** and found:", "",
         *[f"- {span(i)}" for i in issues], "",
+        *(["Also noted:", "", *[f"- {span(w)}" for w in warnings], ""] if warnings else []),
         "Fix these before 13:00 Monday, or the run will refuse or hold. Re-check with",
         "`python -m unprompted.run --preflight --qualify`.", "",
         "_Opened by `scripts/readiness.py`._",
@@ -116,11 +121,12 @@ def main() -> int:
         print("a weekly run is in progress; not checking now.")
         return 0
     issues = (result or {}).get("issues") or ([f"the readiness check itself failed ({failure})"] if result is None else [])
-    print(json.dumps({"monday": monday.isoformat(), "issues": issues,
+    warnings = (result or {}).get("warnings") or []
+    print(json.dumps({"monday": monday.isoformat(), "issues": issues, "warnings": warnings,
                       "engines": (result or {}).get("engines_identified", {})}, indent=2))
     if not issues:
         return 0
-    if not args.no_issue and not open_issue(monday.isoformat(), issues):
+    if not args.no_issue and not open_issue(monday.isoformat(), issues, warnings):
         return 1
     return 2 if result is not None else 1
 
