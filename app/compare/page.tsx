@@ -250,7 +250,7 @@ export default async function ComparePage({
           </p>
           <p className="cmp-note">
             Bold marks the larger share, not a proven
-            difference in quality.
+            difference in quality. Select a question to read its answers.
           </p>
           <div className="panel h2h reveal" role="table" aria-label="Brand mentions by question">
             <div className="h2h-row h2h-head" role="row">
@@ -262,6 +262,7 @@ export default async function ComparePage({
               <QuestionRow
                 key={qid}
                 text={questions[qid] ?? qid}
+                href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, question: qid })}#${qid}`}
                 a={L.row!.steps[i] ?? 0}
                 b={R.row!.steps[i] ?? 0}
                 aName={L.brand}
@@ -399,12 +400,14 @@ function Verdict({ left, right, leftName, rightName, total }: {
 
 function QuestionRow({
   text,
+  href,
   a,
   b,
   aName,
   bName,
 }: {
   text: string;
+  href: string;
   a: number;
   b: number;
   aName: string;
@@ -412,7 +415,7 @@ function QuestionRow({
 }) {
   return (
     <div className="h2h-row" role="row">
-      <span className="h2h-q" role="rowheader">{text}</span>
+      <span className="h2h-q" role="rowheader"><a href={href}>{text}</a></span>
       <Side value={a} lead={a > b} label={aName} />
       <Side value={b} lead={b > a} label={bName} />
     </div>

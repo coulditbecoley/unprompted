@@ -202,7 +202,6 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
    separates a panel's head from its body, which is all that mark was ever
    doing structurally. */
 .trim-top { display: block; height: var(--rule-w); background: var(--rule); }
-.trim-left { display: none; }
 
 .panel { background: var(--surface); border: var(--rule-w) solid var(--rule); border-radius: var(--r); }
 
@@ -349,9 +348,8 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
 .disclosure a { color: var(--fg-2); }
 
 .logo-lockup { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
-.logo-word, .wordmark-text { font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em; }
+.logo-word { font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em; }
 .wordmark { display: flex; align-items: center; gap: 8px; }
-.wordmark-chip { display: inline-flex; }
 
 .site-foot {
   border-top: var(--rule-w) solid var(--rule);
@@ -639,7 +637,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .q-block:last-child { border-bottom: none; }
 .q-text { font-size: 15px; margin: 0 0 4px; }
 .q-eng { font-family: var(--font-mono); font-size: 12px; color: var(--fg-3); }
-.q-names { color: var(--fg-2); font-size: 13.5px; }
 
 /* --- provider manager ---------------------------------------------------- */
 
@@ -721,8 +718,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cmp-big-label { font-size: 12.5px; color: var(--fg-3); }
 .cmp-bar { display: block; margin-bottom: 12px; }
 .cmp-absent { color: var(--fg-3); font-size: 13.5px; margin: 4px 0 0; }
-
-.cmp-h2 { font-size: 20px; margin: 40px 0 6px; }
 .cmp-note { color: var(--fg-2); font-size: 13.5px; max-width: 68ch; margin: 0 0 12px; }
 
 .h2h { padding: 0 16px; }
@@ -736,24 +731,17 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .h2h-name { text-align: right; color: var(--fg-2); }
 .h2h-q { font-size: 13.5px; color: var(--fg-2); min-width: 0; }
 .h2h-side { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
-.h2h-cell { flex: 0 0 34px; height: 16px; animation: none; }
 .h2h-pct { font-size: 12.5px; color: var(--fg-3); min-width: 34px; text-align: right; }
 /* Weight, not hue: the board marks its leader the same way. */
 .h2h-pct[data-lead="true"] { color: var(--fg); font-weight: 600; }
 
 .cmp-chart { padding: 16px 16px 12px; }
-.cmp-svg { width: 100%; height: 132px; display: block; }
-.cmp-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
-/* Dashed as well as dimmer, so the two series separate without relying on
-   colour, which is the accessibility rule this whole system holds to. */
-.cmp-line.is-b { stroke: var(--fg-3); stroke-dasharray: 5 4; }
 .cmp-legend {
   display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
   font-size: 12px; color: var(--fg-3); margin-top: 10px;
 }
 .cmp-key { display: inline-block; width: 14px; height: 2px; background: var(--accent); vertical-align: middle; }
 .cmp-key.is-b { background: var(--fg-3); }
-.cmp-weeks { margin-left: auto; }
 
 .cmp-chip[aria-current="page"] { border-color: var(--fg-3); color: var(--fg); }
 
@@ -779,18 +767,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 
 .cns-title { margin: 2px 0 6px; }
 .cns-lead { margin-top: 0; }
-
-.cns-summary {
-  display: grid; gap: 12px; margin: 22px 0 6px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-}
-.cns-stat {
-  background: var(--surface); border: var(--rule-w) solid var(--rule);
-  border-radius: var(--r); padding: 0 15px 14px; overflow: hidden;
-}
-.cns-stat .trim-top { margin: 0 -15px 13px; }
-.cns-stat-v { display: block; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; }
-.cns-stat-l { display: block; font-size: 12.5px; color: var(--fg-3); margin-top: 3px; }
 
 .cns { padding: 0 16px; }
 .cns-row {
@@ -825,8 +801,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 }
 .cns-div-row:last-child { border-bottom: none; }
 .cns-div-name { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em; }
-.cns-div-track { height: 6px; background: var(--surface-2); border-radius: 1px; overflow: hidden; }
-.cns-div-track i { display: block; height: 100%; background: var(--fg-3); }
 .cns-div-fig { font-size: 12px; color: var(--fg-2); text-align: right; }
 
 /* The question is the widest thing in the row, so on a phone it takes its own
@@ -1441,8 +1415,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    each bar, meter and square: the data itself. Charts opt out so their marks
    survive; text and controls still follow the user's system colours. */
 @media (forced-colors: active) {
-  .meter, .seq-cells, .seq-bar, .answer-grid, .lb-bar, .tone, .tone-key i,
-  .spark-dots, .live-dot, .cmp-bar, .seq-key-swatch, .howto i {
+  .meter, .seq-cells, .seq-bar, .answer-grid, .lb-bar, .tone, .tone-key i, .spark-dots, .live-dot, .cmp-bar, .howto i {
     forced-color-adjust: none;
   }
 }
