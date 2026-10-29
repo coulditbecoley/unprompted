@@ -89,28 +89,51 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
     it was written down, and the run said so on its way out. This watches for
     silence, not for failure -- failure already has a voice.
     """
-    day = monday.isoformat()
     produced, missing, unstarted = [], [], []
     for category in live_categories():
-        measured = False
-        for base in (RUNS, HELD):
-            for i in range(7):
-                path = base / (monday + timedelta(days=i)).isoformat() / f"{category}.json"
-                if not path.exists():
-                    continue
-                try:
-                    record = json.loads(path.read_text(encoding="utf-8"))
-                    measured_on = date.fromisoformat(record.get("measured_on") or record["run_date"])
-                    if (record.get("category") == category and record.get("extractions")
-                        and monday <= measured_on < monday + timedelta(days=7)):
-                        measured = True
-                except (OSError, ValueError, KeyError, AttributeError, TypeError) as exc:
-                    print(f"  invalid archive record {path}: {exc}", file=sys.stderr)
+        measured = measured_in(RUNS, monday, category) or measured_in(HELD, monday, category)
         if measured:
             produced.append(category)
         else:
             missing.append(category)
     return produced, missing, unstarted
+
+
+def measured_in(base: Path, monday: date, category: str) -> bool:
+    """Is there a record for this category measured in this week under `base`?
+
+    By measured date, so a re-reading published later for this week counts.
+    """
+    # Any folder from that Monday on: a re-reading is filed under the day it ran.
+    for path in sorted(base.glob(f"*/{category}.json")) if base.exists() else []:
+        if path.parent.name < monday.isoformat():
+            continue
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            measured_on = date.fromisoformat(record.get("measured_on") or record["run_date"])
+            if (record.get("category") == category and record.get("extractions")
+                and monday <= measured_on < monday + timedelta(days=7)):
+                return True
+        except (OSError, ValueError, KeyError, AttributeError, TypeError) as exc:
+            print(f"  invalid archive record {path}: {exc}", file=sys.stderr)
+    return False
+
+
+# What to do about each kind of blocker the run reports. Matched on the kind,
+# never copied from the exception text, which can quote provider output.
+NEXT_STEPS = {
+    "unaccounted Claude batch": "A paid batch was never downloaded. The next weekly run collects it "
+        "automatically; to do it now, on the measuring machine: "
+        "`python -m unprompted.engines.anthropic_batch <state.json named in the log>`.",
+    "ambiguous": "A batch submission's outcome is unknown. Check the provider console for the job, "
+        "then reconcile it by hand (RECOVERY-PLAN.md, A5). Paid work stays blocked until then.",
+    "unrecognised brand": "New brand names need a decision in `aliases/<category>.yml` "
+        "(canonical, alias or exclude), then `python -m unprompted.reextract`.",
+    "cited sources on only": "Gemini answered from memory too often. See RECOVERY-PLAN.md step 4 "
+        "(Gemini method decision).",
+    "engine calls errored": "Too many provider calls failed. Check provider keys and spend limits.",
+    "usage limit": "A provider account hit its spend limit. Raise it or wait for the reset.",
+}
 
 
 def last_reported() -> dict:
@@ -177,8 +200,34 @@ def main() -> int:
         )
 
     if not missing:
-        print("the week is in the archive.", file=sys.stderr)
-        return 0
+        # Measured is not published. Every week from 09-21 to 10-26 was
+        # measured or refused and none published, and this check stayed green.
+        unpublished = [c for c in produced if not measured_in(RUNS, monday, c)]
+        if not unpublished:
+            print("the week is in the archive.", file=sys.stderr)
+            return 0
+        this_week = monday.isoformat() <= status.get("at", "")[:10] < (monday + timedelta(days=7)).isoformat()
+        status = status if this_week else {}
+        detail = status.get("detail", "")
+        steps = [step for kind, step in NEXT_STEPS.items() if kind in detail]
+        title = f"Weekly run held, not published: {monday}"
+        body = "\n".join([
+            f"Measured but **not published** for **{monday}**: " + ", ".join(f"`{c}`" for c in unpublished),
+            "",
+            f"`data/last-run.json` says: **{status.get('status', 'nothing at all')}**"
+            + (f" at {status['at']}" if status.get("at") else ""),
+            "",
+            "What to do:" if steps else
+            "No status for this week reached GitHub, so the reason is not known here; check the run log on the measuring machine.",
+            "",
+            *[f"- {step}" for step in steps],
+        ])
+        print(f"\n{title}", file=sys.stderr)
+        if args.issue:
+            open_issue(title, body)
+        else:
+            print(body, file=sys.stderr)
+        return 1
 
     # Everything missing and nothing produced reads differently from a partial
     # week, and leads somewhere different: one is "the machine never ran", the

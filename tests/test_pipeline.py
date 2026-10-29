@@ -2260,3 +2260,22 @@ def test_watchdog_does_not_exempt_unstarted_categories_forever(
 
     assert missing == ["alpha", "brand-new"]
     assert unstarted == [], "never measured is not the same as missed"
+
+
+def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp_path, capsys):
+    """09-21 to 10-26: every week was measured or refused, none published, and
+    this check stayed green because a held run counted as having happened."""
+    wd = _watchdog(monkeypatch, tmp_path, ["alpha"], held=[("2026-10-19", "alpha")])
+    (tmp_path / "last-run.json").write_text(json.dumps({"status": "held", "at": "2026-10-19T18:00:00+00:00",
+        "detail": "alpha: held - 2 unrecognised brand name(s) appeared"}), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["watchdog", "--date", "2026-10-20"])
+    assert wd.main() == 1
+    err = capsys.readouterr().err
+    assert "Weekly run held, not published: 2026-10-19" in err and "aliases/<category>.yml" in err
+
+    # A re-reading of that week, published later under the day it ran, settles it.
+    d = tmp_path / "data/runs/2026-10-28"
+    d.mkdir(parents=True)
+    (d / "alpha.json").write_text(json.dumps({"category": "alpha", "run_date": "2026-10-28",
+        "measured_on": "2026-10-19", "extractions": [{"engine": "test"}]}), encoding="utf-8")
+    assert wd.main() == 0
