@@ -475,24 +475,23 @@ def unversioned_change(category: str, spec: dict, methodology: dict) -> str | No
             + ". If a local harness switched model, bump method_version in the question bank.")
 
 
-# Failures the provider refused before doing any work, or that were never sent.
-# A timeout or a dropped connection is not here: the provider may have finished
-# and billed the call, and asking again would spend twice with one record.
-_REJECTED_UNBILLED = re.compile(r"not attempted|\b(429|503|529)\b|ratelimit|rate_limit|overloaded|unavailable", re.I)
+# Only calls that were never sent: the engine refused locally after a provider
+# failure, or was not configured. Anything that reached a provider, even one
+# that ended in a rejection, may have had an earlier attempt that was billed,
+# and error text cannot prove otherwise.
+_NEVER_SENT = ("not attempted after provider failure:", "not available:")
 
 
 def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
-    """Ask again on a restart: a synchronous call the provider turned away unbilled.
+    """Ask again on a restart: a synchronous call that was never sent.
 
-    An answer with usage cost money and stays as recorded (its spend is in the
-    ledger); an ambiguous failure (timeout, reset) may have been billed and
-    stays too; a batch answer belongs to its batch; once extraction has been
-    submitted the answers are fixed. What remains is a rejected or never-sent
-    request, a free second chance at coverage lost to an outage.
+    Typically every call queued behind a spend cap or a revoked key, once the
+    operator has fixed it. Anything a provider saw stays as recorded; a batch
+    answer belongs to its batch; once extraction is submitted the answers are
+    fixed.
     """
-    return (bool(answer.error) and not answer.usage and not extraction_state.exists()
-            and getattr(engine, "transport", None) != "messages-batch"
-            and bool(_REJECTED_UNBILLED.search(answer.error)))
+    return (bool(answer.error) and answer.error.startswith(_NEVER_SENT) and not answer.usage
+            and not extraction_state.exists() and getattr(engine, "transport", None) != "messages-batch")
 
 
 def qualify(categories: list[str]) -> tuple[dict, list[str]]:

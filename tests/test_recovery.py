@@ -930,7 +930,7 @@ def test_collect_only_refuses_to_be_combined(monkeypatch):
     assert stop.value.code == 2
 
 
-def test_a_restart_reasks_only_requests_the_provider_turned_away(tmp_path, monkeypatch):
+def test_a_restart_reasks_only_calls_that_were_never_sent(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "ROOT", tmp_path)
     monkeypatch.setattr(run, "git_sha", lambda: "sha")
     (tmp_path / "aliases").mkdir()
@@ -938,10 +938,10 @@ def test_a_restart_reasks_only_requests_the_provider_turned_away(tmp_path, monke
     spec = {"category": "alpha", "method_version": 1, "runs_per_question": 4, "questions": [{"id": "q1", "text": "Which brand?"}]}
     monkeypatch.setattr(run, "load_questions", lambda category: spec)
     calls = []
-    first = {0: dict(error="HTTPError: HTTP Error 503: Service Unavailable"),            # turned away: ask again
+    first = {0: dict(error="not attempted after provider failure: credit balance too low"),  # never sent: ask again
              1: dict(error="engine failed: incomplete response", usage={"input_tokens": 9}),  # billed: keep
              2: {},
-             3: dict(error="TimeoutError: read timed out")}                                  # may be billed: keep
+             3: dict(error="HTTPError: HTTP Error 503: Service Unavailable")}  # reached a provider: keep
 
     class Engine:
         name, grounds, is_configured = "hosted", False, True
@@ -961,6 +961,6 @@ def test_a_restart_reasks_only_requests_the_provider_turned_away(tmp_path, monke
         with pytest.raises(RuntimeError, match="stop"):
             run.run_category("alpha", "2026-09-07")
     assert sorted(calls) == [0, 0, 1, 2, 3]  # only the rejected request was asked again
-    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None, 3: "TimeoutError: read timed out"}
+    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None, 3: "HTTPError: HTTP Error 503: Service Unavailable"}
     saved = json.loads((tmp_path / ".unprompted/2026-09-07/alpha/hosted-q1-0.json").read_text())
-    assert saved["metadata"]["resumed_after"].startswith("HTTPError: HTTP Error 503")
+    assert saved["metadata"]["resumed_after"].startswith("not attempted after provider failure")

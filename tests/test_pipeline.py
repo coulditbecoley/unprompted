@@ -2370,3 +2370,24 @@ def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
     engine.api_key = "x"
     engine.ask_one("q1", "Which?", 0)
     assert slept == [base.RATE_LIMIT_BACKOFF_SECONDS, 2 * base.RATE_LIMIT_BACKOFF_SECONDS]
+
+
+def _load_watchdog():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.watchdog as wd  # noqa: PLC0415
+    return wd
+
+
+@pytest.mark.parametrize("categories", [["alpha"], {"alpha": {"outcome": "held", "reasons": None}},
+                                        {"alpha": {"outcome": "held", "reasons": {"x": 1}}}, {"alpha": "held"}])
+def test_malformed_category_outcomes_never_stop_the_alarm(categories):
+    wd = _load_watchdog()
+    lines = wd.category_lines({"categories": categories})
+    assert lines and all("malformed" in l for l in lines if l)
+
+
+def test_alarm_reasons_cannot_break_out_into_markdown():
+    wd = _load_watchdog()
+    reason = "ok" + chr(10) * 2 + "@someone" + chr(10) * 2 + "# injected"
+    line = wd.category_lines({"categories": {"alpha": {"outcome": "held", "reasons": [reason]}}})[0]
+    assert chr(10) not in line and line.count("`") == 4 and "`ok @someone # injected`" in line
