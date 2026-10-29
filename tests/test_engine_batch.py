@@ -23,7 +23,9 @@ def install_provider(monkeypatch, outcomes=("end_turn", "refusal", "pause_turn",
                 "type": "succeeded", "message": {
                     "id": f"m{i}", "type": "message", "role": "assistant", "model": "claude-opus-5",
                     "stop_reason": stop, "stop_sequence": None,
-                    "content": [{"type": "text", "text": "Alpha is an option."},
+                    "content": [{"type": "text", "text": "Alpha is an option.", "citations": [
+                                     {"type": "web_search_result_location", "url": "https://example.com", "title": "Alpha",
+                                      "encrypted_index": "x", "cited_text": "Alpha"}]},
                                 {"type": "web_search_tool_result", "tool_use_id": "search",
                                  "content": [{"type": "web_search_result", "url": "https://example.com",
                                               "title": "Alpha", "encrypted_content": "test"}]}],
@@ -51,7 +53,7 @@ def test_batch_reuses_identity_preserves_evidence_and_never_retries_paid_results
     assert by_index[0].text == "Alpha is an option."
     assert by_index[0].usage["batch_billed"] == 1
     assert by_index[0].usage["cache_creation_1h_input_tokens"] == 100
-    assert by_index[0].metadata == {"model": "claude-opus-5", "stop_reason": "end_turn"}
+    assert by_index[0].metadata == {"model": "claude-opus-5", "stop_reason": "end_turn", "cited": ["https://example.com"]}
     assert by_index[1].text == "" and by_index[1].error is None
     assert by_index[2].error and by_index[2].usage["output_tokens"] == 100
     assert by_index[3].error.endswith("expired") and not by_index[3].usage
