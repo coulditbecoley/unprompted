@@ -292,7 +292,7 @@ def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures
             return real(root, name, wait)
         monkeypatch.setattr(run, "run_lock", locked)
     summary = tmp_path / "summary.json"
-    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26", "--summary-file", str(summary)])
+    monkeypatch.setattr("sys.argv", ["run", "--date", run.date.today().isoformat(), "--summary-file", str(summary)])
     assert run.main() == run.HELD_EXIT_CODE
     detail = json.loads(summary.read_text())["detail"]
     # Unaccounted spend blocks the week: no category runs.
@@ -317,7 +317,7 @@ def test_weekly_main_runs_categories_after_a_clean_recovery(tmp_path, monkeypatc
         seen.append(json.loads(stale.read_text()).get("collected"))
         raise SystemExit("stub category")
     monkeypatch.setattr(run, "run_category", category)
-    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26"])
+    monkeypatch.setattr("sys.argv", ["run", "--date", run.date.today().isoformat()])  # a paid run must be dated this month
     run.main()
     assert seen == [True] and len(submitted) == 1
 
@@ -426,7 +426,7 @@ def test_gemini_is_told_to_search_and_reports_the_model_google_serves(monkeypatc
     sent.clear()
     assert engine.identify() == {"model": "gemini-3.6-flash", "version": "requested gemini-3.5-flash"}
     probe = sent[0]  # bounded and search-free
-    assert "tools" not in probe and probe["generationConfig"]["maxOutputTokens"] == 16
+    assert probe["tools"] == [{"google_search": {}}] and probe["generationConfig"]["maxOutputTokens"] == 16
     engine.identify()
     assert len(sent) == 1  # once per process
     engine.ask_one("q1", "Which?", 0)

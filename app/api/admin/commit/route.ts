@@ -133,7 +133,9 @@ function unversionedChange(baseline: string, content: string): string | null {
   const { method_version: was, ...rest } = before as Record<string, unknown>;
   const { method_version: now, ...next } = after as Record<string, unknown>;
   if (JSON.stringify(rest) === JSON.stringify(next) || Number(now) > Number(was)) return null;
-  return "This changes the question bank without raising method_version. Bump it (and add a dated note to METHODOLOGY.md), or the next weekly run will refuse to start.";
+  // Conservative: compared with the file as opened, not the last published
+  // week, so a bank already bumped but not yet measured asks for another bump.
+  return "This changes the question bank without raising method_version. Raise it with every change (and add a dated note to METHODOLOGY.md): a bank that differs from the last published week without a bump stops the next weekly run.";
 }
 
 /** A JSON-safe copy with sorted keys; throws on cycles and non-finite numbers. */

@@ -107,9 +107,10 @@ class GeminiEngine(Engine):
         calls like any other unversioned model change. Every measured answer is
         then checked against it (`_one_call`). Once per process, failures
         included, so a bad probe is not repeated for every category.
-        ponytail: the probe has no search tool and at most 16 output tokens with
-        minimal thinking, under $0.001; it is refused once the month's budget is
-        spent but not itself added to it.
+        ponytail: the probe carries the search tool (same request shape as the
+        measured calls) but asks for one word, so it does not search; at most 16
+        output tokens with minimal thinking, under $0.001. It is refused once the
+        month's budget is spent but not itself added to it.
         """
         if MODEL not in _SERVED:
             from datetime import date
@@ -143,13 +144,19 @@ class GeminiEngine(Engine):
         """The response's model fields for a tiny, search-free request."""
         payload = json.dumps({
             "contents": [{"role": "user", "parts": [{"text": "Reply with just the word OK."}]}],
+            # The measured calls' tool, so the probe is the same request shape
+            # Google routes: a model chosen per shape would otherwise fail every
+            # measured answer. A one-word reply does not search (billed per search).
+            "tools": [{"google_search": {}}],
             "generationConfig": {"maxOutputTokens": 16, "thinkingConfig": {"thinkingLevel": "minimal"}},
         }).encode("utf-8")
         request = urllib.request.Request(ENDPOINT.format(model=MODEL), data=payload, method="POST",
                                          headers={"x-goog-api-key": self.api_key or "", "Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             body = json.loads(response.read().decode("utf-8"))
-        return {k: body[k] for k in ("modelVersion",) if k in body}
+        grounding = ((body.get("candidates") or [{}])[0]).get("groundingMetadata") or {}
+        return {**{k: body[k] for k in ("modelVersion",) if k in body},
+                "web_searches": len(grounding.get("webSearchQueries") or [])}
 
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         payload = json.dumps(

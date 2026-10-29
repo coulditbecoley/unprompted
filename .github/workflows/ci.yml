@@ -64,3 +64,5 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Held weeks ship with admin only
+        run: node scripts/check-traces.mjs
