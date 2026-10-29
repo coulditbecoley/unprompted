@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 // weeks. Listed rather than negated: Next applies excludes after includes, so
 // "/**" plus an /admin include strips /admin too, and this build ignores a
 // negated key. A new public route that loads data belongs here.
-const PUBLIC_ROUTES = ["/brand/**", "/categories", "/chart", "/chart/**", "/compare", "/consensus", "/questions", "/methodology", "/feed.xml", "/llms.txt", "/opengraph-image", "/sitemap.xml", "/standings/**", "/_not-found"];
+const PUBLIC_ROUTES = ["/brand/**", "/categories", "/chart", "/chart/**", "/compare", "/consensus", "/questions", "/methodology", "/feed.xml", "/find", "/llms.txt", "/opengraph-image", "/sitemap.xml", "/standings/**", "/_not-found"];
 const HELD = ["./data/held/**/*"];
 
 const nextConfig: NextConfig = {
