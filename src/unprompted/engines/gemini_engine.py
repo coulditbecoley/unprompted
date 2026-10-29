@@ -120,7 +120,8 @@ class GeminiEngine(Engine):
             p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought")
         ).strip()
 
-        sources = _sources(candidate.get("groundingMetadata") or {})
+        grounding = candidate.get("groundingMetadata") or {}
+        sources = _sources(grounding)
 
         u = body.get("usageMetadata") or {}
         thoughts = int(u.get("thoughtsTokenCount", 0) or 0)
@@ -130,8 +131,19 @@ class GeminiEngine(Engine):
             # answer. Reuniting them here is the difference between a true cost
             # and one that is roughly half of it.
             "output_tokens": int(u.get("candidatesTokenCount", 0) or 0) + thoughts,
-            # Search grounding is billed per grounded prompt, not per query, so
-            # a call that searched five times is still one billable request.
-            "requests": 1 if sources or (candidate.get("groundingMetadata") or {}) else 0,
+            # Gemini 3 grounding is billed per search query, so an answer that
+            # searched five times is five. Older records hold `requests`, one
+            # per grounded prompt, and are not repriced.
+            "web_searches": len(grounding.get("webSearchQueries") or []),
         }
-        return text, sources, usage
+        # A blocked prompt has no candidate; a truncated or filtered answer ends
+        # on something other than STOP. Either is a failed answer, usage kept.
+        if not candidates or candidate.get("finishReason", "STOP") != "STOP":
+            usage["incomplete_response"] = 1
+
+        # Kept verbatim so the 2026-10 drop in search coverage (and the next
+        # one) can be diagnosed: absent, null and {} grounding stay distinct.
+        # Stored as data and never rendered (it includes Google's widget HTML).
+        metadata = {k: body[k] for k in ("modelVersion", "promptFeedback") if k in body}
+        metadata |= {k: candidate[k] for k in ("finishReason", "groundingMetadata") if k in candidate}
+        return text, sources, usage, metadata

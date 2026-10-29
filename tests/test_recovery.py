@@ -227,6 +227,8 @@ def test_category_refusal_preserves_other_categories(monkeypatch, tmp_path):
     monkeypatch.setattr(run, "load_local_env", lambda: None)
     monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta", "gamma"])
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    # Never recover this checkout's real batches from a test.
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
     visited = []
 
     def category(name, day, **kwargs):

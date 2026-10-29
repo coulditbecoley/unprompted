@@ -168,3 +168,209 @@ def test_runs_are_priced_at_the_rates_of_their_own_date():
     assert rates_for("2026-09-28") is RATES
     assert cost_of_run(old)[1] == 1.25 and cost_of_run(new)[1] == 2.0
     assert cost_of_run(old, current_rates=True)[1] == 2.0
+
+
+
+def _stale_week(tmp_path, monkeypatch, engine, api):
+    """A paid Claude batch from an earlier week, submitted but never collected."""
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "data/runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
+    monkeypatch.setattr(batch, "POLL_SECONDS", 0)
+    stale = tmp_path / ".unprompted/2026-10-19/alpha"
+    write_json(stale / "methodology.json", {})
+    api.retrieve = lambda identifier: NS(processing_status="in_progress")
+    monkeypatch.setattr(batch, "MAX_WAIT_SECONDS", 0)
+    with pytest.raises(TimeoutError):
+        batch.ask_batch(engine, [(engine, "q1", "Which?", 0)], stale, "sha")
+    monkeypatch.setattr(batch, "MAX_WAIT_SECONDS", 3600)
+    return stale / "claude-batch/state.json"
+
+
+def _week_spend():
+    return sum(cost_of_run(r)[1] for r in budget._archived_runs())
+
+
+def test_dropped_poll_connection_is_retried_and_old_weeks_are_collected_before_spending(tmp_path, monkeypatch):
+    # 2026-10-19: one reset connection while polling killed the category and
+    # left a paid batch uncollected, which then refused every later week.
+    from anthropic import APIConnectionError
+    import httpx
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    with pytest.raises(ValueError, match="unaccounted"):
+        budget._archived_runs()
+    drops = iter([True])
+    def flaky(identifier):
+        if next(drops, False):
+            raise APIConnectionError(request=httpx.Request("GET", "https://api.anthropic.com"))
+        return NS(processing_status="ended")
+    api.retrieve = flaky
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([stale], [])
+    spend = _week_spend()
+    assert spend > 0
+    api.retrieve = lambda identifier: pytest.fail("collected batch contacted provider")
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([], [])
+    assert _week_spend() == spend
+    assert len(submitted) == 1
+
+
+def test_outstanding_extraction_batches_are_collected_in_normal_and_reextract_dirs(tmp_path, monkeypatch):
+    from anthropic.types.messages import MessageBatchIndividualResponse
+    from unprompted import extract
+    reply = {"custom_id": "x0", "result": {"type": "errored", "error": {"type": "error", "error": {"type": "api_error", "message": "x"}}}}
+    jobs = [tmp_path / ".unprompted/2026-10-19/alpha/batch.json", tmp_path / ".unprompted/reextract/2026-10-19/beta/batch.json"]
+    for job in jobs:
+        write_json(job, {"id": "ext", "identity": "i", "answers": 1, "result_checkpoint_version": 1})
+    legacy = tmp_path / ".unprompted/2026-09-14/gamma/batch.json"
+    write_json(legacy, {"id": "consumed-and-expired"})
+    batches = NS(create=lambda **kw: pytest.fail("submitted"), retrieve=lambda key: NS(id=key, processing_status="ended"),
+                 results=lambda key: iter([NS(model_dump=lambda mode: reply)]))
+    monkeypatch.setattr(extract, "_client", lambda key: NS(messages=NS(batches=batches)))
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == (sorted(jobs), [])
+    assert all((job.parent / "extraction-batch/results.json").exists() for job in jobs)
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([], [])
+
+
+@pytest.mark.parametrize("failure", ["malformed", "download", "deadline", "idless"])
+def test_recovery_failures_are_reported_and_keep_spending_blocked(tmp_path, monkeypatch, failure):
+    from anthropic import APIConnectionError
+    import httpx
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    state = json.loads(stale.read_text())
+    if failure == "malformed":
+        stale.write_text("{not json")
+    elif failure == "idless":
+        write_json(stale, {**state, "id": None}, replace=True)
+    else:
+        monkeypatch.setattr(batch, "RECOVERY_SECONDS", 0)
+        if failure == "download":
+            api.retrieve = lambda identifier: NS(processing_status="ended")
+            def dropped(identifier):
+                raise APIConnectionError(request=httpx.Request("GET", "https://api.anthropic.com"))
+            api.results = dropped
+    collected, failed = batch.collect_outstanding(tmp_path / ".unprompted", "offline")
+    assert collected == []
+    assert (failed == []) if failure == "idless" else (len(failed) == 1 and str(stale) in failed[0])
+    assert not stale.with_name("results.json").exists()
+    with pytest.raises(ValueError):
+        budget._archived_runs()
+    assert len(submitted) == 1
+
+
+@pytest.mark.parametrize("lock_fails", [False, True])
+def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures(tmp_path, monkeypatch, lock_fails):
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    api.retrieve = lambda identifier: NS(processing_status="ended")
+    api.create = lambda **kwargs: pytest.fail("weekly start submitted paid work")
+    broken = tmp_path / ".unprompted/2026-10-12/beta/claude-batch/state.json"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("{not json")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    seen = []
+    def category(name, date, **kwargs):
+        seen.append(json.loads(stale.read_text()).get("collected"))
+        raise SystemExit("stub category")
+    monkeypatch.setattr(run, "run_category", category)
+    if lock_fails:
+        def locked(root):
+            raise RuntimeError("another run holds the lock")
+        monkeypatch.setattr(run, "run_lock", locked)
+    summary = tmp_path / "summary.json"
+    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26", "--summary-file", str(summary)])
+    assert run.main() == run.HELD_EXIT_CODE
+    detail = json.loads(summary.read_text())["detail"]
+    # Unaccounted spend blocks the week: no category runs.
+    assert seen == [] and "alpha: not run" in detail
+    if lock_fails:
+        assert "recovery: outstanding-batch recovery raised RuntimeError" in detail
+    else:
+        assert json.loads(stale.read_text())["collected"]
+        assert f"recovery: could not collect {broken}" in detail
+    assert len(submitted) == 1
+
+
+def test_weekly_main_runs_categories_after_a_clean_recovery(tmp_path, monkeypatch):
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    api.retrieve = lambda identifier: NS(processing_status="ended")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    seen = []
+    def category(name, date, **kwargs):
+        seen.append(json.loads(stale.read_text()).get("collected"))
+        raise SystemExit("stub category")
+    monkeypatch.setattr(run, "run_category", category)
+    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26"])
+    run.main()
+    assert seen == [True] and len(submitted) == 1
+
+
+def test_a_results_stream_that_drops_midway_is_downloaded_again_whole(tmp_path, monkeypatch):
+    import httpx2
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn", "end_turn"))
+    monkeypatch.setattr(batch, "POLL_SECONDS", 0)
+    complete, drops = api.results, iter([True])
+    def flaky(identifier):
+        entries = complete(identifier)
+        yield next(entries)
+        if next(drops, False):
+            raise httpx2.ReadError("connection reset mid-stream")
+        yield from entries
+    api.results = flaky
+    answers = batch.ask_batch(engine, [(engine, "q1", "Which?", i) for i in range(2)], tmp_path, "sha")
+    assert len(answers) == 2 and len(submitted) == 1
+
+
+def _gemini(monkeypatch, body):
+    import io
+    from unprompted.engines import gemini_engine
+    monkeypatch.setattr(gemini_engine.urllib.request, "urlopen",
+                        lambda request, timeout: io.BytesIO(json.dumps(body).encode()))
+    monkeypatch.setattr("unprompted.engines.base.time.sleep", lambda s: None)
+    engine = gemini_engine.GeminiEngine()
+    engine.api_key = "offline"
+    return engine.ask_one("q1", "Which?", 0)
+
+
+def test_gemini_keeps_provider_evidence_and_bills_each_search_query(monkeypatch):
+    from unprompted.extract import _base_for
+    grounding = {"webSearchQueries": ["a", "b", "c"], "searchEntryPoint": {"renderedContent": "<html>"},
+                 "groundingChunks": [{"web": {"uri": "https://vertexaisearch/x", "title": "example.com"}}]}
+    body = {"modelVersion": "gemini-3.5-flash-002",
+            "candidates": [{"finishReason": "STOP", "groundingMetadata": grounding,
+                            "content": {"parts": [{"text": "Alpha."}]}}],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5}}
+    answer = _gemini(monkeypatch, body)
+    assert answer.ok and answer.sources == ["https://example.com"]
+    assert answer.usage["web_searches"] == 3 and "requests" not in answer.usage
+    assert answer.metadata == {"modelVersion": "gemini-3.5-flash-002", "finishReason": "STOP",
+                               "groundingMetadata": grounding}
+    assert _base_for(answer)[0].to_dict()["metadata"] == answer.metadata
+
+    # Answered from memory: no grounding key at all, which stays distinguishable from {}.
+    del body["candidates"][0]["groundingMetadata"]
+    ungrounded = _gemini(monkeypatch, body)
+    assert ungrounded.ok and ungrounded.usage["web_searches"] == 0
+    assert "groundingMetadata" not in ungrounded.metadata
+
+    for failed in ({"promptFeedback": {"blockReason": "SAFETY"}, "usageMetadata": {"promptTokenCount": 10}},
+                   {**body, "candidates": [{**body["candidates"][0], "finishReason": "MAX_TOKENS"}]}):
+        answer = _gemini(monkeypatch, failed)
+        assert answer.error == "engine failed: incomplete response"
+        assert answer.usage["input_tokens"] == 10
+
+
+def test_records_without_metadata_round_trip_unchanged_and_searches_price_by_presence():
+    from unprompted.cost import _price, _searches
+    from unprompted.models import EngineAnswer, Extraction
+    legacy = EngineAnswer("claude", "q1", "Which?", 0).to_dict()
+    assert "metadata" not in legacy and EngineAnswer(**legacy).to_dict() == legacy
+    assert "metadata" not in Extraction("claude", "q1", 0).to_dict()
+    assert _searches({"requests": 1}) == 1
+    assert _searches({"web_searches": 0, "requests": 1}) == 0
+    assert _price("gemini", {"web_searches": 2}) == 2 * _price("gemini", {"web_searches": 1}) > 0

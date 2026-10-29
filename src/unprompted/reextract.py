@@ -115,6 +115,7 @@ def _main() -> int:
             source_kind=e.get("source_kind", "unspecified"),
             fetched_at=e.get("fetched_at", ""),
             measurement_git_sha=e.get("measurement_git_sha"),
+            metadata=e.get("metadata"),
             # A stored extraction failure is ours, not the engine's, so clear it
             # and retry. A genuine engine failure stays a failure: there is no
             # answer text to re-parse. Note that .get("error", "") is not enough,

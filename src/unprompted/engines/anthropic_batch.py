@@ -22,7 +22,42 @@ def _client(api_key):
     return Anthropic(api_key=api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
 
 
-def collect(state_path: Path, api_key: str) -> list[EngineAnswer]:
+def read_retrying(call, deadline: float, label: str):
+    """Run a provider *read* (GET), retrying transient failures until `deadline`.
+
+    Only for reads: retrying one cannot create paid work. On 2026-10-19 one reset
+    connection while polling stranded a paid batch for two weeks.
+    """
+    from anthropic import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+    from httpx2 import TransportError  # the results stream raises these raw, unwrapped by the SDK
+
+    while True:
+        try:
+            return call()
+        except (APIConnectionError, APITimeoutError, InternalServerError, RateLimitError, TransportError) as exc:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            print(f"  {label}: read failed ({type(exc).__name__}), retrying", file=sys.stderr, flush=True)
+            time.sleep(min(POLL_SECONDS, remaining))
+
+
+def download(entries, deadline: float | None, label: str) -> list[dict]:
+    """A complete results download, abandoned if it outlives the recovery `deadline`.
+
+    None (a normal run collecting its own batch) leaves the download unbounded,
+    as before. ponytail: checked between entries, so one in-flight request can
+    overrun by up to its own timeout; pass per-request timeouts if that matters.
+    """
+    out = []
+    for entry in entries:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError(f"{label}: download outlived its deadline; collect it before new paid work")
+        out.append(entry.model_dump(mode="json"))
+    return out
+
+
+def collect(state_path: Path, api_key: str, deadline: float | None = None) -> list[EngineAnswer]:
     """Retrieve an existing job only. Safe to repeat after an interrupted download."""
     from anthropic.types import Message
 
@@ -41,18 +76,21 @@ def collect(state_path: Path, api_key: str) -> list[EngineAnswer]:
     results_path = state_path.with_name("results.json")
     if not results_path.exists():
         client = _client(api_key)
-        deadline = time.monotonic() + MAX_WAIT_SECONDS
+        recovery, deadline = deadline, time.monotonic() + MAX_WAIT_SECONDS if deadline is None else deadline
+        label = f"Claude batch {state['id']}"
         while True:
-            batch = client.messages.batches.retrieve(state["id"])
+            batch = read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label)
             if batch.processing_status == "ended":
                 break
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"Claude batch {state['id']} remains pending; collect it before any new paid work")
-            print(f"  Claude batch {state['id']}: {batch.processing_status}", file=sys.stderr, flush=True)
-            time.sleep(POLL_SECONDS)
+            print(f"  {label}: {batch.processing_status}", file=sys.stderr, flush=True)
+            time.sleep(min(POLL_SECONDS, max(0, deadline - time.monotonic())))
         # Persist the complete download before interpreting it; a parser error
-        # must not lose usage or turn a retry into another paid request.
-        entries = [entry.model_dump(mode="json") for entry in client.messages.batches.results(state["id"])]
+        # must not lose usage or turn a retry into another paid request. A
+        # dropped stream restarts the whole download, never a partial write.
+        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), recovery, label),
+                                deadline, label)
         write_json(results_path, {"fetched_at": utc_now(), "entries": entries})
     saved_results = json.loads(results_path.read_text(encoding="utf-8"))
     entries = saved_results["entries"]
@@ -84,6 +122,54 @@ def collect(state_path: Path, api_key: str) -> list[EngineAnswer]:
         answers.append(answer)
     write_json(state_path, {**state, "collected": True}, replace=True)
     return answers
+
+
+RECOVERY_SECONDS = 45 * 60
+
+
+def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list[str]]:
+    """Download every submitted, uncollected batch from any week. No paid work.
+
+    Covers Claude engine batches and extraction batches (normal and reextract).
+    Same-date restarts already collect their own; this covers a batch stranded
+    by an earlier week, which otherwise refuses every later week. Jobs without
+    an id stay for the operator, and anything that fails here stays on disk, so
+    the budget guard keeps refusing new spend and names it. One deadline covers
+    the whole recovery phase, so a backlog cannot eat the scheduler's window.
+    """
+    from ..extract import collect_batch, read_batch_results
+
+    deadline = time.monotonic() + RECOVERY_SECONDS
+    claude = sorted(state_dir.glob("????-??-??/*/claude-batch/state.json"))
+    extraction = sorted([*state_dir.glob("????-??-??/*/batch.json"),
+                         *state_dir.glob("reextract/????-??-??/*/batch.json")])
+    collected, failed = [], []
+    for job in claude + extraction:
+        if time.monotonic() >= deadline:
+            failed.append(f"not attempted, recovery deadline passed: {job}")
+            continue
+        try:
+            saved = json.loads(job.read_text(encoding="utf-8"))
+            if not saved.get("id"):
+                continue
+            if job in claude:
+                if saved.get("collected"):
+                    continue
+                collect(job, api_key, deadline)
+            elif saved.get("result_checkpoint_version") != 1:
+                # The guard's own rule: older jobs were consumed as they streamed
+                # (2026-09-14) and their results have since expired upstream.
+                continue
+            elif (job.parent / "extraction-batch/results.json").exists():
+                read_batch_results(job)  # local only: a bad saved download is reported, not refetched
+                continue
+            else:
+                collect_batch(job, api_key, deadline)
+            collected.append(job)
+        except Exception as exc:
+            failed.append(f"could not collect {job}: {type(exc).__name__}: {exc}")
+            print(f"  {failed[-1]}", file=sys.stderr, flush=True)
+    return collected, failed
 
 
 def ask_batch(engine, tasks: list[tuple], checkpoint: Path, measurement_commit: str) -> list[EngineAnswer]:

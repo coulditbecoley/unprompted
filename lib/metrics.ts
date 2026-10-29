@@ -49,6 +49,8 @@ export type Usage = {
 
 export type Extraction = {
   measurement_git_sha?: string | null;
+  /** Provider evidence kept verbatim (e.g. Gemini grounding); never rendered. */
+  metadata?: Record<string, unknown> | null;
   answer?: string;
   fetched_at?: string;
   source_kind?: string;
@@ -603,7 +605,7 @@ function price(
 ): number {
   const rate = engines[engine];
   if (!rate) return 0;
-  const searches = usage.web_searches || usage.requests || 0;
+  const searches = usage.web_searches ?? usage.requests ?? 0;
   const cached = usage.cached_input_tokens ?? 0;
   const created = usage.cache_creation_input_tokens ?? 0;
   const hour = usage.cache_creation_1h_input_tokens ?? 0;
@@ -653,7 +655,7 @@ export function costOfRun(run: RunRecord, rates: Rates): { items: LineItem[]; to
       item.inputTokens += (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0)
         + (usage.cache_creation_input_tokens ?? 0);
       item.outputTokens += usage.output_tokens ?? 0;
-      item.searches += usage.web_searches || usage.requests || 0;
+      item.searches += usage.web_searches ?? usage.requests ?? 0;
       item.dollars += price(rates, engines, engine, usage);
     }
 

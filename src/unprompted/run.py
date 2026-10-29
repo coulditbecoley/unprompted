@@ -534,6 +534,28 @@ def main() -> int:
     outcomes: list[str] = []
     total = 0.0
 
+    if not args.dry_run:
+        # A batch stranded by an earlier week otherwise refuses every category
+        # (2026-10-26). Download only; whatever fails stays on disk, the budget
+        # guard keeps refusing paid work, and the summary says why.
+        from .engines.anthropic_batch import collect_outstanding
+        from .engines.anthropic_engine import AnthropicEngine
+        try:
+            with run_lock(ROOT / ".unprompted"):
+                collected, failed = collect_outstanding(ROOT / ".unprompted", AnthropicEngine().api_key)
+        except Exception as exc:
+            collected, failed = [], [f"outstanding-batch recovery raised {type(exc).__name__}: {exc}"]
+        for job in collected:
+            print(f"collected outstanding batch {job}", file=sys.stderr)
+        outcomes += [f"recovery: {reason}" for reason in failed]
+        if failed:
+            # Spend that cannot be accounted for blocks new spend, whether or
+            # not the budget reader recognises that checkpoint's format.
+            for category in categories:
+                held[category] = ["not run: an outstanding paid batch could not be collected"]
+                outcomes.append(f"{category}: not run — outstanding batch recovery failed")
+            categories = []
+
     for category in categories:
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
         try:

@@ -125,10 +125,12 @@ class Engine:
                 fetched_at=utc_now(),
             )
 
-        text, sources, usage, error = "", [], {}, None
+        text, sources, usage, error, metadata = "", [], {}, None, None
         for attempt in range(MAX_ATTEMPTS):
             try:
-                text, sources, usage = self._one_call(question)
+                # An adapter may add a fourth item: provider metadata for this call.
+                text, sources, usage, *rest = self._one_call(question)
+                metadata = rest[0] if rest else None
                 error = "engine failed: incomplete response" if usage.get("incomplete_response") else None
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
@@ -152,6 +154,7 @@ class Engine:
             fetched_at=utc_now(),
             usage=usage,
             source_kind=getattr(self, "source_kind", "unspecified"),
+            metadata=metadata,
         )
 
     def ask(self, question_id: str, question: str, runs: int) -> list[EngineAnswer]:
