@@ -142,10 +142,17 @@ def snapshot(counters: dict[str, int], meta: dict[str, dict[str, str]]) -> dict:
 
 
 def well_formed(record) -> bool:
-    """An archived day: a mapping of numeric counters plus an optional `_agents` mapping."""
-    return (isinstance(record, dict)
-            and all(isinstance(v, (int, float)) for k, v in record.items() if not k.startswith("_"))
-            and isinstance(record.get("_agents", {}), dict))
+    """An archived day: whole, non-negative counters, plus an optional `_agents`
+    mapping of name -> {vendor, purpose} strings. Anything else (NaN, Infinity,
+    booleans, nested junk) is damage the readers would trip over."""
+    if not isinstance(record, dict):
+        return False
+    counters_ok = all(type(v) is int and v >= 0 for k, v in record.items() if not k.startswith("_"))
+    agents = record.get("_agents", {})
+    agents_ok = isinstance(agents, dict) and all(
+        isinstance(info, dict) and all(isinstance(info.get(f, ""), str) for f in ("vendor", "purpose"))
+        for info in agents.values())
+    return counters_ok and agents_ok
 
 
 def write_raw(
@@ -175,15 +182,18 @@ def write_raw(
         damaged = not well_formed(existing)
         if not isinstance(existing, dict):
             existing = {}  # a damaged file is replaced, not allowed to stop every later sync
-        previous = {k: v for k, v in existing.items() if not k.startswith("_") and isinstance(v, (int, float))}
+        previous = {k: v for k, v in existing.items() if not k.startswith("_") and type(v) is int and v >= 0}
         # The archive only grows: a smaller day never replaces a larger one, and
         # an identical one is skipped unless the file needs repairing.
         if any(counted.get(k, 0) < v for k, v in previous.items()) or (previous == counted and not damaged):
             return False
 
     payload = dict(counted)
-    kept = existing.get("_agents")
-    payload["_agents"] = {**snapshot(counted, meta), **(kept if isinstance(kept, dict) else {})}
+    # Earlier snapshots win (a later agents.json edit must not relabel a day),
+    # but only well-formed ones: a damaged entry is replaced by today's.
+    kept = existing.get("_agents") if isinstance(existing.get("_agents"), dict) else {}
+    kept = {name: info for name, info in kept.items() if well_formed({"_agents": {name: info}})}
+    payload["_agents"] = {**snapshot(counted, meta), **kept}
 
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -346,6 +356,8 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
         "",
         f"All time, across {len(files)} archived day(s).",
         "",
+        *([f"_Every total on this page excludes {damaged} damaged archive file(s) in `data/`, so all of them are incomplete._", ""]
+          if damaged else []),
         # One line, deliberately. The ownership check below is a substring test,
         # and wrapping this sentence across two lines meant the stamp never
         # appeared contiguously: the script refused to update its own index.
@@ -377,8 +389,6 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     else:
         lines += ["_Nothing archived yet._", ""]
 
-    if damaged:
-        lines += [f"_All-time figures below exclude {damaged} damaged archive file(s) in `data/`; they are incomplete._", ""]
     lines += ["## Brands looked up, all time", ""] + table(of("b"), ("Brand", "Views"))
     by_agents = of("ba")
     if by_agents:

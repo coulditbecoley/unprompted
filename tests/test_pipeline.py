@@ -2440,4 +2440,13 @@ def test_damaged_analytics_metadata_is_repaired_and_old_damage_is_skipped(tmp_pa
     (tmp_path / "data/2026-07-01.json").write_text("[1, 2]", encoding="utf-8")  # aged out of Redis, damaged
     sa.write_index(tmp_path, {})
     index = next(tmp_path.glob("*.md")).read_text(encoding="utf-8")
-    assert "exclude 1 damaged archive file" in index
+    assert "excludes 1 damaged archive file" in index
+    assert index.index("excludes 1 damaged") < index.index("agent hits")  # before every total
+
+
+@pytest.mark.parametrize("record", ['{"views": NaN}', '{"views": Infinity}', '{"views": true}', '{"views": -1}',
+                                    '{"g:Bot": 3, "_agents": {"Bot": []}}'])
+def test_analytics_validation_rejects_values_the_readers_trip_over(record):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    assert not sa.well_formed(json.loads(record))
