@@ -52,7 +52,19 @@
       "command": "claude",
       "args": [
         "-p",
-        "--strict-mcp-config"
+        "--strict-mcp-config",
+        "--setting-sources",
+        "project",
+        "--model",
+        "claude-opus-5-5",
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "WebSearch,WebFetch",
+        "--allowedTools",
+        "WebSearch,WebFetch",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate"
       ],
       "note": "CLI extraction is disabled by the resolver until filesystem and network isolation are qualified. This entry does not provide a fallback when the hosted API is unavailable."
     },
@@ -85,7 +97,19 @@
       "command": "claude",
       "args": [
         "-p",
-        "--strict-mcp-config"
+        "--strict-mcp-config",
+        "--setting-sources",
+        "project",
+        "--model",
+        "claude-opus-5-5",
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "WebSearch,WebFetch",
+        "--allowedTools",
+        "WebSearch,WebFetch",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate"
       ],
       "note": "Own chart row, not a substitute for the hosted claude engine: this is a coding agent with a different system prompt, and it volunteers that it is made by Anthropic. Enabled, which means the weekly run must happen on this machine: see scripts/weekly-run.cmd."
     },

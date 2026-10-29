@@ -45,9 +45,36 @@ TIMEOUT_SECONDS = 180
 # was observed reading a file from disk, so it is deliberately not relied on
 # here. The empty working directory in ask() is what actually holds.
 ALLOWED_CLIS: dict[str, tuple[str, ...]] = {
-    # --strict-mcp-config: no MCP servers from the operator's own config, so the
-    # extraction pass cannot reach whatever tools they have connected.
-    "claude": ("-p", "--strict-mcp-config"),
+    # The claude-code engine reads the open web, and before 2026-10-29 it ran
+    # with the operator's own settings: bypassPermissions plus allow rules for
+    # git push and ssh, so a planted page could run Bash as the operator (it
+    # did, in a probe). Now: --strict-mcp-config drops their MCP servers;
+    # --setting-sources project loads no user settings, hooks or plugins (the
+    # working directory is empty, so there is no project either); --tools is
+    # the only tool set the model sees; dontAsk refuses anything not allowed;
+    # --disallowedTools is a second lock on the dangerous ones. --model pins
+    # what the user settings used to choose, so this is not a method change.
+    # Each flag was probed against claude 2.1.310: Bash, Read and Write were
+    # refused and web search still answered. Still loaded, because no flag
+    # short of --bare (which needs an API key) drops them: the operator's
+    # global CLAUDE.md and auto-memory. A dedicated CLAUDE_CONFIG_DIR with its
+    # own login is the fix for that.
+    "claude": (
+        "-p",
+        "--strict-mcp-config",
+        "--setting-sources",
+        "project",
+        "--model",
+        "claude-opus-5-5",
+        "--permission-mode",
+        "dontAsk",
+        "--tools",
+        "WebSearch,WebFetch",
+        "--allowedTools",
+        "WebSearch,WebFetch",
+        "--disallowedTools",
+        "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate",
+    ),
     # --ignore-user-config drops hooks and MCP servers; --ignore-rules drops
     # execpolicy; --sandbox read-only blocks writes from model-generated shell
     # commands. -m pins the model: with the user config ignored, the CLI's own

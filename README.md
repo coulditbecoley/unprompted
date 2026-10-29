@@ -198,7 +198,7 @@ files and run commands. Two containments apply to every harness:
 
 Neither is a sandbox — a harness can still reach the network and the wider
 filesystem by absolute path. Per-harness flags in the allowlist remove more
-(`--strict-mcp-config` for Claude; `--ignore-user-config --ignore-rules
+(for Claude: no user settings, web search and fetch as the only tools, everything else refused, model pinned; `--ignore-user-config --ignore-rules
 --sandbox read-only` for Codex). Note that `claude --tools ""` is **not** relied
 on: its help says it disables all tools, and it was observed reading a file from
 disk anyway.

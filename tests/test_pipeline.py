@@ -19,6 +19,7 @@ from unprompted.aggregate import BrandWeek, brand_week, movement, source_counts,
 from unprompted.checks import MAX_ERROR_RATE, MIN_ROTATION_TO_COUNT, run_checks
 from unprompted.engines.base import Engine
 from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
+from unprompted.cli_provider import ALLOWED_CLIS
 from unprompted.normalize import AliasMap, normalize
 
 
@@ -836,7 +837,7 @@ def test_an_available_cli_extractor_is_not_an_implicit_sandbox(monkeypatch):
                 "role": "extractor",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             }
         ],
     )
@@ -992,7 +993,7 @@ def test_a_declared_cli_engine_joins_the_registry(monkeypatch):
                 "role": "engine",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             },
             # An extractor must not be mistaken for an engine.
             {
@@ -1769,7 +1770,7 @@ def test_a_hosted_extractor_with_no_key_refuses_unisolated_fallback(monkeypatch)
                 "role": "extractor",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             },
         ],
     )
@@ -2287,3 +2288,16 @@ def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp
     assert wd.main() == 1
     err = capsys.readouterr().err
     assert "not one this check recognises" in err and "No status for this week" not in err
+
+
+def test_the_claude_engine_never_inherits_the_operators_permissions():
+    # 2026-10-29: with only -p, the web-reading engine ran under the operator's
+    # bypassPermissions settings and executed Bash from a prompt.
+    args = ALLOWED_CLIS["claude"]
+    pairs = {a: args[i + 1] for i, a in enumerate(args[:-1]) if a.startswith("--")}
+    assert pairs["--setting-sources"] == "project" and pairs["--permission-mode"] == "dontAsk"
+    assert pairs["--tools"] == pairs["--allowedTools"] == "WebSearch,WebFetch"
+    assert {"Bash", "PowerShell", "Write", "Edit"} <= set(pairs["--disallowedTools"].split(","))
+    assert pairs["--model"].startswith("claude-")
+    providers = json.loads((Path(__file__).resolve().parents[1] / "providers.json").read_text(encoding="utf-8"))["providers"]
+    assert all(p["args"] == list(args) for p in providers if p.get("command") == "claude")
