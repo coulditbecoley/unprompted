@@ -35,10 +35,10 @@ export default function MethodologyPage() {
         what we can fairly compare. Use this guide to understand what the charts
         can and cannot tell you.
       </p>
-      {changes && <aside className="panel method-changes" aria-labelledby="recent-changes">
-        <h2 id="recent-changes">What changed recently</h2>
+      {changes && <details className="panel method-changes">
+        <summary><h2 id="recent-changes">What changed recently</h2></summary>
         <div className="prose">{renderMarkdown(changes)}</div>
-      </aside>}
+      </details>}
       <ol className="method-flow" aria-label="From questions to published results">
         {[
           ["Ask", "Repeat the category’s buying questions across AI assistants."],
@@ -119,7 +119,8 @@ function renderMarkdown(md: string): React.ReactNode[] {
         i += 1;
       }
       out.push(
-        <div key={key++} style={{ overflowX: "auto" }} role="region" aria-label={`Table: ${head.join(", ")}`} tabIndex={0}>
+        <div key={key++} className="method-table" role="region" aria-label={`Table: ${head.join(", ")}`} tabIndex={0}>
+          <p className="table-scroll-note">Scroll horizontally to read all columns.</p>
           <table>
             <thead>
               <tr>{head.map((c, n) => <th scope="col" key={n}>{inline(c)}</th>)}</tr>

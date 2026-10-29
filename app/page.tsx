@@ -90,7 +90,7 @@ export default function Home() {
                 <>
                   AI names{" "}
                   <span className="verdict-brand">{leader.brand}</span> first in{" "}
-                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.
+                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.
                 </>
               ) : (
                 <>What AI recommends when nobody&rsquo;s paying.</>
@@ -188,7 +188,7 @@ export default function Home() {
               url={`https://unprompted.report/chart/${CATEGORY}/${run.run_date}`}
               headline={
                 leader
-                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(categoryLabel(CATEGORY))}.`
+                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}.`
                   : "What AI recommends when nobody's paying."
               }
             />
@@ -287,7 +287,7 @@ export default function Home() {
                 <span className="label">{c.label}</span>
                 <span className="ob-lead">{top.brand}</span>
                 <span className="ob-note">
-                  named first in {Math.round(top.firstShare * 100)}% of runs
+                  named first in {Math.round(top.firstShare * 100)}% of answers
                 </span>
                 <span className="meter" aria-hidden="true">
                   <i style={{ "--v": top.firstShare } as React.CSSProperties} />

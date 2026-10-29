@@ -9,10 +9,13 @@ import {
   categoryLabel,
   allBrands,
   brandHistory,
+  answeredPerQuestion,
   brandByEngine,
   brandTone,
   latestRun,
+  loadQuestionText,
   loadHistory,
+  questionOrder,
   slugify,
   standings,
 } from "@/lib/data";
@@ -78,6 +81,17 @@ export default async function BrandPage({
   const row = rank >= 0 ? board[rank] : null;
   const tone = run ? brandTone(run, brand) : null;
   const perEngine = run && row ? brandByEngine(run, brand) : [];
+  // Question by question, strongest first: which buying questions bring this
+  // brand up, and which never do.
+  const qText = run ? loadQuestionText(category, run) : {};
+  const denominators = run ? answeredPerQuestion(run) : [];
+  const perQuestion =
+    run && row
+      ? questionOrder(run)
+          .map((id, i) => ({ id, text: qText[id] ?? id, named: row.stepNamed[i] ?? 0, of: denominators[i] ?? 0 }))
+          .filter((q) => q.of > 0)
+          .sort((a, b) => b.named / b.of - a.named / a.of || a.id.localeCompare(b.id))
+      : [];
   const runs = loadHistory(category);
   const label = categoryLabel(category);
   const engineLabels = new Map(loadProviders().map((p) => [p.id, p.label]));
@@ -130,7 +144,7 @@ export default async function BrandPage({
 
       {row && (
         <div className="cmp-grid" style={{ marginTop: 14 }}>
-          <div className="cmp-pick reveal">
+          <div className="cmp-pick">
             <TrimTop />
             <h2 className="pick-h" style={{ marginTop: 6 }}>Every answer, one square each</h2>
             <div className="answer-grid" role="img" aria-label={`${row.named} of ${row.cells.length} answers named ${brand}.`}>
@@ -144,7 +158,7 @@ export default async function BrandPage({
           </div>
 
           {tone ? (
-            <div className="cmp-pick reveal">
+            <div className="cmp-pick">
               <TrimTop />
               <h2 className="pick-h" style={{ marginTop: 6 }}>How it was described</h2>
               <ToneBar tone={tone} />
@@ -193,6 +207,27 @@ export default async function BrandPage({
                   {Math.round((e.named / e.of) * 100)}%
                   <small>{e.named}/{e.of} · {e.first} first</small>
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {perQuestion.length > 1 && (
+        <div className="reveal">
+          <h2 className="sub-h">Question by question</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            How many answers to each question named {brand}, strongest first. Open a question to read those answers.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {perQuestion.map((q) => (
+              <div className="seq-row bq-row" key={q.id}>
+                <Link className="bq-text" href={`/questions?${new URLSearchParams({ c: category, date: run!.run_date, question: q.id })}#${q.id}`}>
+                  {q.text}
+                </Link>
+                <span className="meter" aria-hidden="true"><i style={{ "--v": q.named / q.of } as React.CSSProperties} /></span>
+                <span className="mono bq-num">{q.named}/{q.of}</span>
               </div>
             ))}
           </div>

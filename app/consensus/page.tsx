@@ -57,7 +57,7 @@ export default async function ConsensusPage({
 
   if (!run) {
     return (
-      <section className="shell section">
+      <section className="shell section cns-page">
         <CategoryTabs category={category} />
         <h1 className="display page-title rise">Do the assistants agree?</h1>
         <AwaitingFirstRun />
@@ -74,7 +74,7 @@ export default async function ConsensusPage({
   const labels = new Map(loadProviders().map(p => [p.id, p.label]));
 
   return (
-    <section className="shell section">
+    <section className="shell section cns-page">
       <CategoryTabs category={category} />
 
       <h1 className="display page-title rise cns-title">
@@ -141,6 +141,7 @@ export default async function ConsensusPage({
             there is no majority. Missing picks also prevent full agreement.
           </p>
 
+          <p className="table-scroll-note">Scroll horizontally to compare all assistants. The question stays in view.</p>
           <div className="panel cns reveal" role="table" aria-label="Assistant picks by question" tabIndex={0}>
             <div
               className="cns-row cns-head"
@@ -228,7 +229,7 @@ function Row({ row, engines, labels }: { row: QuestionConsensus; engines: number
         );
       })}
       <span className="mono cns-verdict" role="cell" data-settled={row.settled}>
-        {row.settled ? "Agree ?" : "Split"}
+        {row.settled ? "Agree" : "Split"}
       </span>
     </div>
   );

@@ -85,7 +85,7 @@ export default async function QuestionsPage({
 
   if (!run) {
     return (
-      <section className="shell section">
+      <section className="shell section q-page">
         <CategoryTabs category={category} />
         <h1 className="display page-title rise">Check the recorded answers.</h1>
         <AwaitingFirstRun />
@@ -106,7 +106,7 @@ export default async function QuestionsPage({
   }
 
   return (
-    <section className="shell section">
+    <section className="shell section q-page">
       <CategoryTabs category={category} />
       <p className="label">{categoryLabel(category)} · measured {run.measured_on || run.run_date} · reading {run.run_date}</p>
       <h1 className="display page-title rise">
@@ -119,7 +119,23 @@ export default async function QuestionsPage({
         Each attempt is one run; errors and refusals are shown but excluded
         from mention percentages.
       </p>
-      <form action="/questions" className="btn-row q-reading"><input type="hidden" name="c" value={category} /><label htmlFor="evidence-date">Published reading </label><select className="select" id="evidence-date" name="date" defaultValue={run.run_date}>{history.map(r => <option key={r.run_date}>{r.run_date}</option>)}</select> <label htmlFor="evidence-engine">Assistant</label><select className="select" id="evidence-engine" name="engine" defaultValue={selectedEngine ?? ""}><option value="">All assistants</option>{counts.map(c => <option key={c.engine} value={c.engine}>{labels.get(c.engine) ?? c.engine}</option>)}</select><button type="submit" className="btn btn-go">Show answers</button></form>
+      <form action="/questions" className="q-reading">
+        <input type="hidden" name="c" value={category} />
+        <div className="q-filter">
+          <label htmlFor="evidence-date">Published reading</label>
+          <select className="select" id="evidence-date" name="date" defaultValue={run.run_date}>
+            {history.map(r => <option key={r.run_date}>{r.run_date}</option>)}
+          </select>
+        </div>
+        <div className="q-filter">
+          <label htmlFor="evidence-engine">Assistant</label>
+          <select className="select" id="evidence-engine" name="engine" defaultValue={selectedEngine ?? ""}>
+            <option value="">All assistants</option>
+            {counts.map(c => <option key={c.engine} value={c.engine}>{labels.get(c.engine) ?? c.engine}</option>)}
+          </select>
+        </div>
+        <button type="submit" className="btn btn-go">Show answers</button>
+      </form>
       {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
       <div className="kpi-row">
         <Kpi label="Questions listed" value={spec.questions.length} note="The question list for this reading." />

@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { CategoryBrowser } from "@/components/category-browser";
 import { categoriesBySector } from "@/lib/categories";
 import { latestRun, standings } from "@/lib/data";
-import { Kpi } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Categories",
@@ -39,10 +38,6 @@ export default function CategoriesPage() {
         to buying questions. We attempt a measurement each week and publish only
         results that pass our checks.
       </p>
-      <div className="kpi-row">
-        <Kpi label="Categories" value={Object.keys(counts).length} note="Browse the subjects we track below." />
-      </div>
-
       <CategoryBrowser groups={groups} counts={counts} />
     </section>
   );

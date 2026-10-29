@@ -182,7 +182,7 @@ export function Contact() {
           className="btn btn-go subscribe-submit contact-submit"
           disabled={state === "sending"}
         >
-          {state === "sending" ? "SENDING…" : "SEND MESSAGE"}
+          {state === "sending" ? "Sending…" : "Send message"}
         </button>
       </form>
 

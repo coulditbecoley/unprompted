@@ -154,7 +154,7 @@ export function LiveBoard({
       <div className="board-read" data-on={active !== null}>
         {active === null ? (
           <span className="board-read-idle">
-            {steps} questions · hover any square to see that question and who leads it
+            {steps} questions · hover or tap a square to see that question and who leads it
           </span>
         ) : (
           <>

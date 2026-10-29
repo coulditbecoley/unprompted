@@ -76,7 +76,7 @@ export function SequencerRow({
       <span
         className="seq-cells"
         role="img"
-        aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs, across ${standing.steps.length} questions`}
+        aria-label={`Named in ${standing.named} of ${standing.totalRuns} answers, across ${standing.steps.length} questions`}
         data-focus={activeStep !== null}
         onMouseMove={
           onStep &&

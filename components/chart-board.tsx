@@ -117,7 +117,7 @@ export function ChartBoard({
               "@type": "PropertyValue",
               name: b.brand,
               value: Math.round(b.firstShare * 100),
-              unitText: "percent of runs named first",
+              unitText: "percent of answers naming it first",
             })),
           }).replace(/</g, "\\u003c"),
         }}
@@ -130,7 +130,7 @@ export function ChartBoard({
 
       <h1 className="display page-title rise">
         {leader
-          ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.</>
+          ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
           : "No brand was named this week."}
       </h1>
 
@@ -168,8 +168,8 @@ export function ChartBoard({
       )}
 
       <div className="kpi-row">
-        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of runs`} meter={leader.firstShare} />}
-        <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions × ${run.runs_per_question} runs × ${run.engines.length} assistants`} />
+        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of answers`} meter={leader.firstShare} />}
+        <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions, each asked ${run.runs_per_question} times, by ${run.engines.length} assistants`} />
         <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant brought up." />
         <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
       </div>
@@ -222,7 +222,7 @@ export function ChartBoard({
         url={`https://unprompted.report/chart/${category.slug}/${run.run_date}`}
         headline={
           leader
-            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(category.label)}.`
+            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers about ${inSentence(category.label)}.`
             : "What AI recommends when nobody's paying."
         }
       />

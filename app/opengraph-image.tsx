@@ -30,7 +30,7 @@ export function boardCard(category: string, date?: string, brand?: string) {
   const headline = focus
     ? `AI assistants name ${focus.brand} in ${Math.round(focus.rotation * 100)}% of answers.`
     : leader
-      ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs.`
+      ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers.`
       : "What AI recommends when nobody's paying.";
   const stats: Array<[string, string]> = focus
     ? [
