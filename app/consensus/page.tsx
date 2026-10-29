@@ -141,6 +141,7 @@ export default async function ConsensusPage({
             among answers to that question. A dash means a tie or no
             pick. Bold marks picks outside the majority, or all picks when
             there is no majority. Missing picks also prevent full agreement.
+            Open a question to read the recorded answers.
           </p>
 
           <p className="table-scroll-note">Scroll horizontally to compare all assistants. The question stays in view.</p>
@@ -160,7 +161,7 @@ export default async function ConsensusPage({
             </div>
 
             {rows.map((row) => (
-              <Row key={row.questionId} row={row} engines={engines.length} labels={labels} />
+              <Row key={row.questionId} row={row} engines={engines.length} labels={labels} category={category} date={run.run_date} />
             ))}
           </div>
 
@@ -208,14 +209,14 @@ function CategoryTabs({ category }: { category: string }) {
   );
 }
 
-function Row({ row, engines, labels }: { row: QuestionConsensus; engines: number; labels: Map<string, string> }) {
+function Row({ row, engines, labels, category, date }: { row: QuestionConsensus; engines: number; labels: Map<string, string>; category: string; date: string }) {
   // Three engines naming three different brands has no majority worth marking,
   // so every pick is flagged as divergent, which is the honest reading.
   const threeWay = row.agree <= 1 && row.picks.length > 1;
 
   return (
     <div className="cns-row" role="row" style={{ "--engines": engines } as React.CSSProperties}>
-      <span className="cns-q" role="rowheader">{row.text}</span>
+      <span className="cns-q" role="rowheader"><a href={`/questions?${new URLSearchParams({ c: category, date, question: row.questionId })}#${row.questionId}`}>{row.text}</a></span>
       {row.picks.map((pick) => {
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (

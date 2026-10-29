@@ -5,6 +5,9 @@ import Link from "next/link";
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
 import {
   allBrands,
+  answered,
+  brandByEngine,
+  leadIsClear,
   brandHistory,
   brandTone,
   categoryLabel,
@@ -16,6 +19,7 @@ import {
   type BrandStanding,
 } from "@/lib/data";
 import { AwaitingFirstRun, Kpi, ToneBar, TrimTop, brandHref } from "@/components/ui";
+import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
 
 type Params = { a?: string; b?: string; c?: string };
@@ -106,8 +110,11 @@ export default async function ComparePage({
     brand,
     row: rowFor(brand),
     history: brandHistory(category, brand),
+    assistants: brandByEngine(run, brand),
   }));
   const [L, R] = sides;
+  const total = answered(run).length;
+  const labels = new Map(loadProviders().map(p => [p.id, p.label]));
 
   const questions = loadQuestionText(category, run);
   const order = questionOrder(run);
@@ -124,8 +131,8 @@ export default async function ComparePage({
         Compare how often AI assistants mention these two brands, so you can see
         which gets more visibility in their answers.
       </p>
-      <p className="cmp-note">
-        <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} />{" "}
+      <p className="cmp-note cmp-verdict">
+        <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} total={total} />{" "}
         {categoryLabel(category)}, measured on {run.measured_on || run.run_date}.
       </p>
 
@@ -136,7 +143,7 @@ export default async function ComparePage({
         <p className="cmp-note">The gap is the number of answers naming a brand anywhere minus those naming it first, on this board.</p>
       </nav>
       <div className="kpi-row">
-        <Kpi label="Answers" value={board[0]?.totalRuns ?? 0} note="The same answers are used for both brands." />
+        <Kpi label="Answers" value={total} note="The same answers are used for both brands." />
         <Kpi i={1} label="Questions answered" value={order.length} note="Compare mentions for each question below." />
         <Kpi i={2} label="Measurements" value={weeks} note="History retains breaks where methods differ." />
       </div>
@@ -144,7 +151,8 @@ export default async function ComparePage({
         Named means mentioned anywhere in an answer; named first means the first
         brand mentioned. Percentages exclude failed calls and refusals. They
         measure visibility, not product quality. Typical place in the list is the middle
-        position among answers that mention the brand.
+        position among answers that mention the brand. The first-pick lead check
+        is a minimum sampling check, not proof of a lasting preference.
       </p>
 
       <nav className="evidence-links" aria-label="Check this comparison">
@@ -202,6 +210,31 @@ export default async function ComparePage({
           </div>
         ))}
       </div>
+
+      <h2 className="sub-h" id="assistants">Assistant by assistant <SectionLink id="assistants" label="Assistant by assistant" /></h2>
+      <p className="cmp-note" id="assistant-counting">
+        Each cell shows how many answers from that assistant named the brand anywhere, and the share of its answers.
+        Both brands use the same answers; errors and refusals are excluded. An assistant with no answers after those exclusions is omitted.
+      </p>
+      {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in this reading.</p> : (
+        <div className="panel cmp-assistants">
+          <table aria-describedby="assistant-counting">
+            <caption className="sr-only">Brand mentions by assistant</caption>
+            <thead><tr><th scope="col">Assistant</th><th scope="col">{L.brand}</th><th scope="col">{R.brand}</th></tr></thead>
+            <tbody>{L.assistants.map(l => {
+              const r = R.assistants.find(row => row.engine === l.engine)!;
+              return <tr key={l.engine} data-engine={l.engine}>
+                <th scope="row">{labels.get(l.engine) ?? l.engine}</th>
+                {[l, r].map((entry, i) => <td key={i}>
+                  <span className="mono cmp-assistant-count">{entry.named}/{entry.of} <span className="sr-only">answers named {sides[i].brand}; </span></span>
+                  <span className="mono cmp-assistant-share">{Math.round(entry.named / entry.of * 100)}%</span>
+                  <span className="meter" aria-hidden="true"><i style={{ "--v": entry.named / entry.of } as React.CSSProperties} /></span>
+                </td>)}
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      )}
 
       {L.row && R.row && (
         <>
@@ -331,41 +364,25 @@ function Picker({
   );
 }
 
-/**
- * States both figures and which is larger.
- *
- * It never declares a winner or says one brand is better: this publication
- * reports what machines said and does not rank.
- */
-function Verdict({
-  left,
-  right,
-  leftName,
-  rightName,
-}: {
+/** First picks share a denominator; test their lead before describing one. */
+function Verdict({ left, right, leftName, rightName, total }: {
   left: BrandStanding | null;
   right: BrandStanding | null;
   leftName: string;
   rightName: string;
+  total: number;
 }) {
-  if (!left || !right) return <>Not enough data to compare these two yet.</>;
-  const a = Math.round(left.firstShare * 100);
-  const b = Math.round(right.firstShare * 100);
-  if (a === b) {
-    return (
-      <>
-        {leftName} and {rightName} are each named first in {a}% of answers, rounded to whole percentages.
-      </>
-    );
+  if (leftName === rightName) return <>Both selections show {leftName}. Choose two different brands to compare.</>;
+  if (!total) return <>No answers are available to compare these brands in this reading.</>;
+  const a = left?.firstNamed ?? 0;
+  const b = right?.firstNamed ?? 0;
+  const aShare = Math.round(a / total * 100);
+  const bShare = Math.round(b / total * 100);
+  if (a === b) return <>{leftName} and {rightName} were each named first in {a} of {total} answers ({aShare}%). Neither has a first-pick lead.</>;
+  if (!leadIsClear(Math.max(a, b), Math.min(a, b), total)) {
+    return <>{leftName} was named first in {aShare}% of answers; {rightName} in {bShare}%. This sample does not establish a clear first-pick lead.</>;
   }
-  const lead = a > b ? leftName : rightName;
-  const trail = a > b ? rightName : leftName;
-  return (
-    <>
-      {lead} is named first more often: {Math.max(a, b)}% of answers against{" "}
-      {Math.min(a, b)}% for {trail}.
-    </>
-  );
+  return <>{a > b ? leftName : rightName} has a clear first-pick lead in this sample: {Math.max(aShare, bShare)}% versus {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
 }
 
 function QuestionRow({

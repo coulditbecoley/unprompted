@@ -1677,4 +1677,16 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .evidence-links > a { min-height: 32px; display: inline-flex; align-items: center; }
 #question-list { scroll-margin-top: 180px; }
 @media print { .evidence-links { display: none; } }
+/* Round 7: paired assistant counts remain readable without horizontal scrolling. */
+.cmp-assistants table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+.cmp-assistants th, .cmp-assistants td { padding: 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+.cmp-assistants thead th { font-weight: 600; }
+.cmp-assistants tbody th { font-weight: 400; color: var(--fg-2); }
+.cmp-assistants tr:last-child > * { border-bottom: 0; }
+.cmp-assistants thead th { border-bottom: 1px solid var(--rule); }
+.cmp-assistant-count, .cmp-assistant-share { display: block; }
+.cmp-assistant-share { color: var(--fg-2); font-size: 12px; margin: 4px 0 8px; }
+.cns-q a { text-underline-offset: 3px; }
+@media (max-width: 560px) { .cmp-assistants th, .cmp-assistants td { padding: 12px 8px; } }
+@media print { .cmp-assistants tr { break-inside: avoid; } }
 /* === codex pages: end === */
