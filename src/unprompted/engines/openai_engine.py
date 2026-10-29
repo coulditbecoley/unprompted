@@ -61,8 +61,12 @@ class OpenAIEngine(Engine):
         metadata = {k: v for k, v in (("model", getattr(response, "model", None)),
                                       ("status", getattr(response, "status", None))) if isinstance(v, str)}
         # What it searched for: evidence of how an engine frames a buying question.
-        queries = [q for item in getattr(response, "output", None) or [] if getattr(item, "type", None) == "web_search_call"
-                   if isinstance(q := getattr(getattr(item, "action", None), "query", None), str)]
+        queries = []
+        for item in getattr(response, "output", None) or []:
+            action = getattr(item, "action", None) if getattr(item, "type", None) == "web_search_call" else None
+            # The SDK carries `queries` (a list) and an older singular `query`.
+            found = getattr(action, "queries", None) or [getattr(action, "query", None)]
+            queries += [q for q in found if isinstance(q, str) and q not in queries]
         if queries:
             metadata["queries"] = queries
         return text, sources, usage, metadata or None

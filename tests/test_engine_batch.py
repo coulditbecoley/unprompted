@@ -589,3 +589,16 @@ def test_a_gemini_probe_retry_is_not_started_after_the_run_clock(monkeypatch):
     with pytest.raises(TimeoutError, match="budget is spent"):
         gemini_engine.GeminiEngine().identify()
     assert len(probes) == 1
+
+
+def test_openai_queries_are_read_from_both_sdk_shapes(monkeypatch):
+    import openai
+    from openai.types.responses.response_function_web_search import ActionSearch
+    from unprompted.engines.openai_engine import OpenAIEngine
+    calls = [NS(type="web_search_call", action=ActionSearch(type="search", queries=["one", "two"], query="one")),
+             NS(type="web_search_call", action=ActionSearch(type="search", query="three")), NS(type="message")]
+    response = NS(output_text="Alpha", status="completed", model="m", output=calls, usage=None)
+    monkeypatch.setattr(openai, "OpenAI", lambda **kwargs: NS(responses=NS(create=lambda **kwargs: response)))
+    engine = OpenAIEngine()
+    engine.api_key = "offline"
+    assert engine.ask_one("q1", "Which?", 0).metadata["queries"] == ["one", "two", "three"]

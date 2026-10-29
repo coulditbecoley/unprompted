@@ -2379,7 +2379,8 @@ def _load_watchdog():
 
 
 @pytest.mark.parametrize("categories", [["alpha"], {"alpha": {"outcome": "held", "reasons": None}},
-                                        {"alpha": {"outcome": "held", "reasons": {"x": 1}}}, {"alpha": "held"}])
+                                        {"alpha": {"outcome": "held", "reasons": {"x": 1}}}, {"alpha": "held"},
+                                        {"alpha": {"outcome": []}}, {"alpha": {"outcome": {}}}])
 def test_malformed_category_outcomes_never_stop_the_alarm(categories):
     wd = _load_watchdog()
     lines = wd.category_lines({"categories": categories})

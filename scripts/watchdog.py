@@ -117,7 +117,7 @@ def category_lines(status: dict) -> list[str]:
         return ["Per-category outcomes in `data/last-run.json` are malformed and were skipped.", ""]
     lines = []
     for name, item in sorted(categories.items(), key=lambda kv: str(kv[0])):
-        if not (isinstance(item, dict) and item.get("outcome") in OUTCOMES and isinstance(item.get("reasons", []), list)):
+        if not (isinstance(item, dict) and isinstance(item.get("outcome"), str) and item["outcome"] in OUTCOMES and isinstance(item.get("reasons", []), list)):
             lines.append(f"- {_span(name)}: malformed outcome, skipped")
             continue
         lines.append(f"- {_span(name)}: {item['outcome']}" + "".join(f" · {_span(r)}" for r in item.get("reasons", [])[:3]))
