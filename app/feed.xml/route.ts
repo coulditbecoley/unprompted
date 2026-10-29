@@ -1,4 +1,5 @@
 import { CATEGORIES } from "@/lib/categories";
+import { loadProviders } from "@/lib/providers";
 import { runInstant } from "@/lib/schedule";
 import {
   categoryLabel,
@@ -27,6 +28,7 @@ const SITE = "https://unprompted.report";
  * code here.
  */
 export function GET() {
+  const names = new Map(loadProviders().map((p) => [p.id, p.label]));
   // Every live category, not just the flagship. The feed is the publication's
   // "get it without coming back" mechanism, and a subscriber who follows it
   // should receive every chart that publishes, not one of three.
@@ -55,20 +57,20 @@ export function GET() {
       const measured = run.measured_on || run.run_date;
 
       const title = leader
-        ? `${label}, measured ${measured}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of runs`
+        ? `${label}, measured ${measured}: ${leader.brand} named first in ${Math.round(leader.firstShare * 100)}% of answers`
         : `${label}, measured ${measured}: no brand was named`;
 
       const rows = board
         .slice(0, 8)
         .map(
           (b, n) =>
-            `<li>${n + 1}. <strong>${esc(b.brand)}</strong> — named in ${b.named} of ${b.totalRuns} runs, first in ${Math.round(b.firstShare * 100)}%</li>`,
+            `<li>${n + 1}. <strong>${esc(b.brand)}</strong> — named in ${b.named} of ${b.totalRuns} answers, first in ${Math.round(b.firstShare * 100)}%</li>`,
         )
         .join("");
 
       const body = [
         run.source_run ? `<p>Re-read on ${esc(run.run_date)}; originally measured ${esc(measured)}.</p>` : "",
-        `<p>${esc(label)}. ${run.runs_per_question} runs per question across ${run.engines.length} engine${run.engines.length === 1 ? "" : "s"} (${esc(run.engines.join(", "))}), method v${run.method_version}.</p>`,
+        `<p>${esc(label)}. Each question asked ${run.runs_per_question} times of ${run.engines.length} AI assistant${run.engines.length === 1 ? "" : "s"} (${esc(run.engines.map((e) => names.get(e) ?? e).join(", "))}), method v${run.method_version}.</p>`,
         `<ol>${rows}</ol>`,
         `<p>${esc(comparisonNote ?? `Compared with the measurement from ${baselineDate}.`)}</p>`,
         snub

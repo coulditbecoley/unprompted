@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { SectionLink } from "@/components/contact";
 
 import {
@@ -13,7 +13,7 @@ import {
 /**
  * Browse and search the categories.
  *
- * Search is a plain client-side substring filter. With a handful of categories
+ * Search uses the same substring filter during server rendering and live edits. With a handful of categories
  * anything cleverer is machinery in search of a problem, and this stays useful
  * up to a few dozen. The moment it stops being enough, that is a real signal
  * the publication has grown, not a reason to build a search index today.
@@ -21,11 +21,14 @@ import {
 export function CategoryBrowser({
   groups,
   counts,
+  initialQuery = "",
 }: {
+  initialQuery?: string;
   groups: Array<{ sector: Sector; categories: Category[] }>;
-  counts: Record<string, { leader: string | null; share: number; measured: string } | undefined>;
+  counts: Record<string, { leader: string | null; share: number; measured: string; agreement: { settled: number; total: number } | null } | undefined>;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
+  const searchInput = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
     () =>
@@ -42,12 +45,15 @@ export function CategoryBrowser({
 
   return (
     <>
-      <div className="cat-search">
+      <noscript><style>{".categories-page .cat-empty button { display: none; }"}</style></noscript>
+      <form action="/categories" method="get" className="cat-search" role="search">
         <label htmlFor="cat-q" className="sr-only">
-          Search categories
+          Search categories or brands
         </label>
         <input
           id="cat-q"
+          name="q"
+          ref={searchInput}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -55,26 +61,35 @@ export function CategoryBrowser({
           className="cat-search-input mono"
           autoComplete="off"
         />
+        <button type="submit" className="btn">Search categories</button>
         <span className="cat-search-count mono" aria-live="polite">
           {total} {total === 1 ? "category" : "categories"}
         </span>
-      </div>
+      </form>
+      {query.trim() && <p className="cmp-note">Categories matching &ldquo;{query}&rdquo;. <a href="/categories">Show all categories</a></p>}
 
       {filtered.length === 0 && (
         <div className="panel cat-empty">
           <p style={{ margin: 0, color: "var(--fg-2)" }}>
-            No categories match &ldquo;{query}&rdquo;. Try a broader term or clear
+            No brands or categories match &ldquo;{query}&rdquo;. Try a broader term or clear
             the search to see all categories.
           </p>
-          <button type="button" className="btn" onClick={() => setQuery("")}>Clear search</button>
+          <button type="button" className="btn" onClick={() => {
+            setQuery("");
+            const url = new URL(window.location.href);
+            url.searchParams.delete("q");
+            window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+            searchInput.current?.focus();
+          }}>Clear search</button>
         </div>
       )}
 
       {filtered.map(({ sector, categories }) => (
         <section key={sector.slug} className="cat-sector reveal">
           <div className="cat-sector-head">
-            <h2 id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
-            <p>{sector.blurb}</p>
+            <p className="label">Category group</p>
+            <h2 className="sub-h" id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
+            <p>{sector.blurb.replace(/\bengines\b/g, "assistants")}</p>
           </div>
 
           <div className="cat-grid">
@@ -89,7 +104,7 @@ export function CategoryBrowser({
                   <span className="trim-top" aria-hidden="true" />
                   <div className="cat-card-body">
                     <p className="cat-status" data-live={live}>
-                      {live ? "RESULTS AVAILABLE" : "NO PUBLISHED RESULTS"}
+                      {live ? "Results available" : "No published results"}
                     </p>
                     <h3>{category.label}</h3>
                     <p className="cat-question">{category.question}</p>
@@ -99,12 +114,15 @@ export function CategoryBrowser({
                         {stat.leader ? <><strong>{stat.leader}</strong> · {Math.round(stat.share * 100)}% named first</> : "No brand named in this reading"}
                       </p>
                       <span className="meter cat-count-meter" aria-hidden="true"><i style={{ "--v": stat.share } as React.CSSProperties} /></span>
+                      <p className="cat-agreement">{stat.agreement
+                        ? `Assistants agree on the first pick for ${stat.agreement.settled} of ${stat.agreement.total} questions.`
+                        : "Not enough assistants to compare agreement."}</p>
                       <p className="cat-scale">Measured {stat.measured}</p>
                       <span className="cat-open">Open board <span className="arr" aria-hidden="true">→</span></span>
                       </div>
                     ) : (
                       <p className="cat-stat mono cat-stat-dim">
-                        No data published yet
+                        No published results yet
                       </p>
                     )}
                   </div>

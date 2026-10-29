@@ -9,9 +9,15 @@ import {
   categoryLabel,
   allBrands,
   brandHistory,
+  answeredPerQuestion,
+  brandByEngine,
+  brandCompanions,
+  brandPositions,
   brandTone,
   latestRun,
+  loadQuestionText,
   loadHistory,
+  questionOrder,
   slugify,
   standings,
 } from "@/lib/data";
@@ -49,7 +55,7 @@ export async function generateMetadata({
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
 
   const description = row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))} measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))}, measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
       : `Tracking how often AI assistants name ${brand}.`;
   const url = `/brand/${category}/${slug}`;
   return {
@@ -76,6 +82,20 @@ export default async function BrandPage({
   const rank = board.findIndex((s) => s.brand === brand);
   const row = rank >= 0 ? board[rank] : null;
   const tone = run ? brandTone(run, brand) : null;
+  const perEngine = run && row ? brandByEngine(run, brand) : [];
+  const positions = run && row ? brandPositions(run, brand) : null;
+  const companions = run && row ? brandCompanions(run, brand) : null;
+  // Question by question, strongest first: which buying questions bring this
+  // brand up, and which never do.
+  const qText = run ? loadQuestionText(category, run) : {};
+  const denominators = run ? answeredPerQuestion(run) : [];
+  const perQuestion =
+    run && row
+      ? questionOrder(run)
+          .map((id, i) => ({ id, text: qText[id] ?? id, named: row.stepNamed[i] ?? 0, of: denominators[i] ?? 0 }))
+          .filter((q) => q.of > 0)
+          .sort((a, b) => b.named / b.of - a.named / a.of || a.id.localeCompare(b.id))
+      : [];
   const runs = loadHistory(category);
   const label = categoryLabel(category);
   const engineLabels = new Map(loadProviders().map((p) => [p.id, p.label]));
@@ -86,6 +106,20 @@ export default async function BrandPage({
 
   return (
     <section className="shell section">
+      {/* The breadcrumb, machine-readable, so a search result shows board > brand. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: label, item: `https://unprompted.report/chart/${category}` },
+              { "@type": "ListItem", position: 2, name: brand, item: `https://unprompted.report/brand/${category}/${slug}` },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
       <nav className="crumbs label" aria-label="Breadcrumb">
         <Link href={`/chart/${category}`}>{label}</Link>
         <span aria-hidden="true">/</span>
@@ -99,7 +133,7 @@ export default async function BrandPage({
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {inSentence(label)} measured on{" "}
+            {row.totalRuns} answers about {inSentence(label)}, measured on{" "}
             {run!.measured_on || run!.run_date}, and recommended it first in{" "}
             {Math.round(row.firstShare * 100)}% of them.
           </>
@@ -107,13 +141,18 @@ export default async function BrandPage({
           <>{brand} was not named in any answer in the latest measurement.</>
         )}
       </p>
+      {/* Trust is asked at the top, not after the history table. */}
+      <p className="brand-trust rise" style={{ "--i": 2 } as React.CSSProperties}>
+        Counted from {run ? run.engines.length : "several"} AI assistants&rsquo; answers to the same buying
+        questions. Nobody can pay to appear. <Link href="/methodology">How this is measured →</Link>
+      </p>
 
       {row && (
         <div className="kpi-row">
           <Kpi i={0} label="Board position" value={`#${rank + 1}`} unit={` of ${board.length}`} note="Ranked by how often it was the first pick." />
           <Kpi i={1} label="Named in" value={Math.round(row.rotation * 100)} unit="%" note={`${row.named} of ${row.totalRuns} answers mentioned it.`} meter={row.rotation} />
           <Kpi i={2} label="Named first" value={Math.round(row.firstShare * 100)} unit="%" note="Share of answers where it was the first recommendation." meter={row.firstShare} />
-          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Median place in the list when it was named." />
+          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Its usual place in the list when it was named (the median)." />
         </div>
       )}
 
@@ -128,12 +167,12 @@ export default async function BrandPage({
 
       {row && (
         <div className="cmp-grid" style={{ marginTop: 14 }}>
-          <div className="cmp-pick reveal">
+          <div className="cmp-pick">
             <TrimTop />
-            <h3 style={{ marginTop: 6 }}>Every answer, one square each</h3>
+            <h2 className="pick-h" style={{ marginTop: 6 }}>Every answer, one square each</h2>
             <div className="answer-grid" role="img" aria-label={`${row.named} of ${row.cells.length} answers named ${brand}.`}>
               {row.cells.map((on, i) => (
-                <i key={i} className="seq-cell" data-on={on} style={{ animationDelay: `${Math.min(i, 120) * 8}ms` }} />
+                <i key={i} className="seq-cell" data-on={on} />
               ))}
             </div>
             <p className="kpi-note" style={{ marginTop: 12 }}>
@@ -141,17 +180,38 @@ export default async function BrandPage({
             </p>
           </div>
 
-          {tone ? (
-            <div className="cmp-pick reveal">
-              <TrimTop />
-              <h3 style={{ marginTop: 6 }}>How it was described</h3>
-              <ToneBar tone={tone} />
-              <p className="tone-caveat">
-                Judged from the wording of each answer by our reading model, not stated by
-                the assistants. Treat it as softer evidence than the counts.
-              </p>
-            </div>
-          ) : null}
+          <div className="cmp-pick">
+            <TrimTop />
+            {positions && (
+              <>
+                <h2 className="pick-h" style={{ marginTop: 6 }}>Where it appears in the answer</h2>
+                <div className="pos-rows">
+                  {(["First", "Second", "Third", "Fourth or later"] as const).map((label, i) => (
+                    <div className="pos-row" key={label}>
+                      <span>{label}</span>
+                      <span className="meter" data-tone={i === 0 ? undefined : "soft"} aria-hidden="true">
+                        <i style={{ "--v": positions[i] / Math.max(1, row.named) } as React.CSSProperties} />
+                      </span>
+                      <span className="mono">{positions[i]}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="kpi-note" style={{ marginTop: 10 }}>
+                  Out of the {row.named} answers that named {brand}.
+                </p>
+              </>
+            )}
+            {tone ? (
+              <>
+                <h2 className="pick-h" style={{ marginTop: 22 }}>How it was described</h2>
+                <ToneBar tone={tone} />
+                <p className="tone-caveat">
+                  Judged from the wording of each answer by our reading model, not stated by
+                  the assistants. Treat it as softer evidence than the counts.
+                </p>
+              </>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -166,9 +226,91 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Where it sits on the board</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            Its closest neighbours this week. Pale bar: named at all. Solid bar: named first.
+            Its closest neighbours in the latest reading. Pale bar: named at all. Solid bar: named first.
           </p>
           <LeaderBars rows={neighbours} start={from} highlight={brand} hrefFor={(b) => brandHref(category, b)} />
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <span className="label" style={{ alignSelf: "center" }}>Compare with</span>
+            {neighbours
+              .filter((n) => n.brand !== brand)
+              .map((n) => (
+                <Link
+                  key={n.brand}
+                  className="btn btn-sm btn-ghost"
+                  href={`/compare?${new URLSearchParams({ c: category, a: slug, b: slugify(n.brand) })}`}
+                >
+                  {n.brand}
+                </Link>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {perEngine.length > 1 && (
+        <div className="reveal">
+          <h2 className="sub-h">Which assistants name it</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            The same questions, split by who answered. Pale bar: named at all. Solid bar: named first.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {perEngine.map((e) => (
+              <div className="seq-row eng-row" key={e.engine}>
+                <span className="eng-name">{engineLabels.get(e.engine) ?? e.engine}</span>
+                <span className="eng-bars" aria-hidden="true">
+                  <span className="meter" data-tone="soft"><i style={{ "--v": e.named / e.of } as React.CSSProperties} /></span>
+                  <span className="meter"><i style={{ "--v": e.first / e.of } as React.CSSProperties} /></span>
+                </span>
+                <span className="mono eng-num">
+                  {Math.round((e.named / e.of) * 100)}%
+                  <small>{e.named}/{e.of} · {e.first} first</small>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {companions && companions.rows.length > 0 && (
+        <div className="reveal">
+          <h2 className="sub-h">Usually named alongside</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            When an answer named {brand}, these brands often came up in the same answer.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {companions.rows.map((c) => (
+              <div className="seq-row bq-row" key={c.brand}>
+                <Link className="bq-text" href={brandHref(category, c.brand)}>{c.brand}</Link>
+                <span className="meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": c.together / companions.of } as React.CSSProperties} /></span>
+                <span className="mono bq-num">{Math.round((c.together / companions.of) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+          <p className="kpi-note" style={{ marginTop: 10 }}>
+            Share of the {companions.of} answers that named {brand}.
+          </p>
+        </div>
+      )}
+
+      {perQuestion.length > 1 && (
+        <div className="reveal">
+          <h2 className="sub-h">Question by question</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            How many answers to each question named {brand}, strongest first. Open a question to read those answers.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {perQuestion.map((q) => (
+              <div className="seq-row bq-row" key={q.id}>
+                <Link className="bq-text" href={`/questions?${new URLSearchParams({ c: category, date: run!.run_date, brand, question: q.id })}#${q.id}`}>
+                  {q.text}
+                </Link>
+                <span className="meter" aria-hidden="true"><i style={{ "--v": q.named / q.of } as React.CSSProperties} /></span>
+                <span className="mono bq-num">{q.named}/{q.of}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -208,16 +350,17 @@ export default async function BrandPage({
         <Link className="btn" href={`/chart/${category}`}>
           Back to the {inSentence(label)} board <span className="arr" aria-hidden="true">→</span>
         </Link>
-        {run && (
-          <Link className="btn btn-ghost" href={`/questions?c=${category}&date=${run.run_date}`}>
-            Read the answers
+        {run && row && (
+          <Link className="btn btn-ghost" href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, brand })}`}>
+            Read the answers that named {brand}
           </Link>
         )}
       </div>
 
       <p className="mono" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 20 }}>
-        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. The raw
-        answers behind every figure are in the public repository.
+        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. Nobody can pay
+        to appear. <Link href="/methodology">How we measure</Link> ·{" "}
+        <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">the raw answers behind every figure</a>.
       </p>
     </section>
   );
@@ -227,7 +370,8 @@ export default async function BrandPage({
 function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
   const W = 720;
   const H = 140;
-  const padX = 8;
+  // Room for the centred date labels at either end when points are labelled.
+  const padX = history.length <= 8 ? 44 : 8;
   const padY = 14;
   const xy = history.map((h, i) => ({
     x: history.length === 1 ? W / 2 : padX + (i * (W - padX * 2)) / (history.length - 1),
@@ -239,6 +383,7 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
   const hasBreak = history.some((h, i) => i > 0 && h.breakReason);
   const area = hasBreak ? null : `M${xy[0].x},${H - padY} ${xy.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} L${xy[xy.length - 1].x},${H - padY} Z`;
   const last = history[history.length - 1];
+  const labelled = history.length <= 8;
 
   return (
     <div className="reveal">
@@ -246,7 +391,7 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
       <p className="section-lead" style={{ marginBottom: 14 }}>
         Share of answers that mentioned it, one point per measurement, evenly spaced.
       </p>
-      <div className="panel spark-panel">
+      <div className="panel spark-panel" data-labelled={labelled}>
         <div className="spark-axis mono" aria-hidden="true">
           <span>100%</span>
           <span>50%</span>
@@ -279,12 +424,38 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
               style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%` }}
             />
           ))}
+          {/* With only a handful of points, and with breaks that leave them
+              unjoined, a bare dot says nothing. Print each value and its date. */}
+          {labelled &&
+            xy.map((p, i) => (
+              <span
+                key={history[i].date}
+                className="spark-val mono"
+                style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%` }}
+              >
+                {Math.round(history[i].rotation * 100)}%
+              </span>
+            ))}
+          {labelled &&
+            xy.map((p, i) => (
+              <span key={history[i].date} className="spark-date mono" style={{ left: `${(p.x / W) * 100}%` }}>
+                {history[i].date}
+              </span>
+            ))}
         </div>
-        <div className="spark-dates mono" aria-hidden="true">
-          <span>{history[0].date}</span>
-          <span>{last.date} · {Math.round(last.rotation * 100)}%</span>
-        </div>
-        {hasBreak && <p className="kpi-note" style={{ marginTop: 10 }}>The line breaks where the method changed and weeks cannot be compared.</p>}
+        {!labelled && (
+          <div className="spark-dates mono" aria-hidden="true">
+            <span>{history[0].date}</span>
+            <span>{last.date} · {Math.round(last.rotation * 100)}%</span>
+          </div>
+        )}
+        {hasBreak && (
+          <p className="kpi-note" style={{ marginTop: 10 }}>
+            {history.slice(1).every((h) => h.breakReason)
+              ? "The method changed between every one of these measurements, so the points are not joined: they cannot be compared as a trend."
+              : "The line breaks where the method changed and weeks cannot be compared."}
+          </p>
+        )}
       </div>
     </div>
   );

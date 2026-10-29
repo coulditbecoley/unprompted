@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/agreement.test.mjs tests/routes.test.mjs"
+    "test": "node --test tests/agreement.test.mjs tests/routes.test.mjs tests/brand-highlight.test.mjs tests/first-pick-summary.test.mjs"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",

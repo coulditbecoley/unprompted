@@ -16,13 +16,33 @@ export const contentType = "image/png";
  * Built from the same materials as the site: graphite ground, bone type, one
  * the board's own step colour, and the mark's step rhythm. No gradients.
  */
-export function boardCard(category: string, date?: string) {
+export function boardCard(category: string, date?: string, brand?: string) {
   // A dated permalink must preview that week, not whatever leads today.
   const run = date
     ? loadHistory(category, true).find((r) => r.run_date === date) ?? null
     : latestRun(category);
-  const board = run ? standings(run).slice(0, 5) : [];
+  const full = run ? standings(run) : [];
+  const board = full.slice(0, 5);
   const leader = board[0];
+  // A brand page previews that brand: its own numbers in place of the top five.
+  const rank = brand ? full.findIndex((b) => b.brand === brand) : -1;
+  const focus = rank >= 0 ? full[rank] : undefined;
+  const headline = focus
+    ? `AI assistants name ${focus.brand} in ${Math.round(focus.rotation * 100)}% of answers.`
+    : brand
+      ? `${brand} was not named in the latest reading.`
+      : leader
+      ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers.`
+      : "What AI recommends when nobody's paying.";
+  const stats: Array<[string, string]> = focus
+    ? [
+        ["BOARD POSITION", `#${rank + 1} of ${full.length}`],
+        ["NAMED IN", `${focus.named}/${focus.totalRuns}`],
+        ["NAMED FIRST", `${Math.round(focus.firstShare * 100)}%`],
+      ]
+    : brand
+      ? []
+      : board.map((b) => [b.brand.toUpperCase(), `${Math.round(b.firstShare * 100)}%`]);
 
   const GRAPHITE = "#08090A";
   const BONE = "#F7F8F8";
@@ -61,7 +81,7 @@ export function boardCard(category: string, date?: string) {
         <div
           style={{
             display: "flex",
-            fontSize: leader ? 86 : 66,
+            fontSize: focus || brand ? 74 : leader ? 86 : 66,
             fontWeight: 800,
             letterSpacing: "-0.04em",
             lineHeight: 1.02,
@@ -69,18 +89,16 @@ export function boardCard(category: string, date?: string) {
             maxWidth: 1000,
           }}
         >
-          {leader
-            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs.`
-            : "What AI recommends when nobody's paying."}
+          {headline}
         </div>
 
         <div style={{ display: "flex", flex: 1 }} />
 
         {/* The board, abbreviated. Real numbers, never a mock-up. */}
-        {board.length > 0 && (
+        {stats.length > 0 && (
           <div style={{ display: "flex", gap: 40, marginBottom: 28 }}>
-            {board.map((b) => (
-              <div key={b.brand} style={{ display: "flex", flexDirection: "column" }}>
+            {stats.map(([label, value]) => (
+              <div key={label} style={{ display: "flex", flexDirection: "column" }}>
                 <div
                   style={{
                     display: "flex",
@@ -89,12 +107,12 @@ export function boardCard(category: string, date?: string) {
                     letterSpacing: "0.1em",
                   }}
                 >
-                  {b.brand.toUpperCase()}
+                  {label}
                 </div>
                 <div
                   style={{ display: "flex", fontSize: 34, fontWeight: 700, marginTop: 6 }}
                 >
-                  {`${Math.round(b.firstShare * 100)}%`}
+                  {value}
                 </div>
               </div>
             ))}

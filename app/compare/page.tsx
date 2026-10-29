@@ -5,6 +5,9 @@ import Link from "next/link";
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
 import {
   allBrands,
+  answered,
+  brandByEngine,
+  leadIsClear,
   brandHistory,
   brandTone,
   categoryLabel,
@@ -16,6 +19,7 @@ import {
   type BrandStanding,
 } from "@/lib/data";
 import { AwaitingFirstRun, Kpi, ToneBar, TrimTop, brandHref } from "@/components/ui";
+import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
 
 type Params = { a?: string; b?: string; c?: string };
@@ -60,16 +64,15 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<Params>;
 }): Promise<Metadata> {
-  const { category, left, right } = resolve(await searchParams);
-  if (!left || !right) return { title: "Head to head" };
-
-  // Spelled out because the link is the artefact that travels: a pasted
-  // comparison should say what it is before anyone clicks it.
-  return {
-    title: `${left} vs ${right}`,
-    openGraph: { title: `${left} vs ${right}`, description: `Compare brand mentions in AI answers about ${inSentence(categoryLabel(category))}.` },
-    description: `How often AI assistants name ${left} against ${right} when asked about ${inSentence(categoryLabel(category))}. Measured question by question.`,
-  };
+  const { category, left, right, run } = resolve(await searchParams);
+  const title = left && right ? `${left} vs ${right}: ${categoryLabel(category)}` : `Compare brands: ${categoryLabel(category)}`;
+  const board = run ? standings(run) : [];
+  const first = (brand: string) => Math.round((board.find(row => row.brand === brand)?.firstShare ?? 0) * 100);
+  const description = run && left && right && board.length
+    ? `${left} is named first in ${first(left)}% of answers; ${right} in ${first(right)}%. ${categoryLabel(category)}, measured ${run.measured_on || run.run_date}. Errors and refusals excluded.`
+    : `Compare recorded brand mentions for ${inSentence(categoryLabel(category))}. No published comparison is available yet.`;
+  const url = `/compare?${new URLSearchParams({ c: category, ...(left ? { a: slugify(left) } : {}), ...(right ? { b: slugify(right) } : {}) })}`;
+  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
 }
 
 export default async function ComparePage({
@@ -91,13 +94,27 @@ export default async function ComparePage({
   }
 
   const board = standings(run);
+  const presets = CATEGORIES.flatMap(c => {
+    const reading = c.slug === category ? run : latestRun(c.slug);
+    const leaders = reading ? standings(reading) : [];
+    return leaders.length < 2 ? [] : [{ label: `${c.label}: top two`, category: c.slug, a: leaders[0].brand, b: leaders[1].brand }];
+  });
+  const gap = [...board].sort((a, b) => (b.named - b.firstNamed) - (a.named - a.firstNamed))[0];
+  const rival = board.find(row => row.brand !== gap?.brand);
+  if (gap && rival && gap.named > gap.firstNamed) presets.push({
+    label: `Largest mention/first-pick gap: ${gap.brand} vs ${rival.brand}`,
+    category, a: gap.brand, b: rival.brand,
+  });
   const rowFor = (brand: string) => board.find((s) => s.brand === brand) ?? null;
   const sides = [left, right].map((brand) => ({
     brand,
     row: rowFor(brand),
     history: brandHistory(category, brand),
+    assistants: brandByEngine(run, brand),
   }));
   const [L, R] = sides;
+  const total = answered(run).length;
+  const labels = new Map(loadProviders().map(p => [p.id, p.label]));
 
   const questions = loadQuestionText(category, run);
   const order = questionOrder(run);
@@ -111,39 +128,50 @@ export default async function ComparePage({
         {L.brand} <span className="cmp-vs-title">vs</span> {R.brand}
       </h1>
       <p className="section-lead cmp-lead">
-        Compare how often AI assistants mention these two brands, so you can see
-        which gets more visibility in their answers.
+        See how often AI assistants mention each brand and name it first.
       </p>
-      <p className="cmp-note">
-        <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} />{" "}
+      <p className="cmp-note cmp-verdict">
+        <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} total={total} />{" "}
         {categoryLabel(category)}, measured on {run.measured_on || run.run_date}.
       </p>
 
       <Picker category={category} brands={brands} left={L.brand} right={R.brand} />
+      <nav className="cmp-presets" aria-label="Suggested comparisons">
+        <p className="cmp-note">Choose a suggested comparison.</p>
+        <div>{presets.map(p => <a className="btn btn-sm" key={p.label} href={`/compare?${new URLSearchParams({ c: p.category, a: slugify(p.a), b: slugify(p.b) })}`}>{p.label}</a>)}</div>
+        <p className="cmp-note">The gap counts answers that mention a brand without naming it first.</p>
+      </nav>
       <div className="kpi-row">
-        <Kpi label="Usable answers" value={board[0]?.totalRuns ?? 0} note="The same answers are used for both brands." />
+        <Kpi label="Answers" value={total} note="The same answers are used for both brands." />
         <Kpi i={1} label="Questions answered" value={order.length} note="Compare mentions for each question below." />
-        <Kpi i={2} label="Measurements" value={weeks} note="History retains breaks where methods differ." />
+        <Kpi i={2} label="Measurements" value={weeks} note="Lines stop where methods differ." />
       </div>
       <p className="cmp-note">
         Named means mentioned anywhere in an answer; named first means the first
-        brand mentioned. Percentages exclude failed calls and refusals. They
-        measure visibility, not product quality. Median position is the middle
-        position among answers that mention the brand.
+        brand mentioned. Percentages exclude failed attempts and refusals. They
+        measure visibility, not product quality. Typical place in the list is the middle
+        position among answers that mention the brand. Repeating a question can produce similar answers. A clear lead here does not prove a lasting preference.
       </p>
 
+      <nav className="evidence-links" aria-label="Check this comparison">
+        <Link href={`/questions?${new URLSearchParams({ c: category, date: run.run_date })}`}>Read the recorded answers</Link>
+        <Link href="/methodology#glossary">How the answers are counted</Link>
+      </nav>
+      <p className="label codex-section-label">Overview</p>
+      <h2 className="sub-h">The two brands</h2>
+      <p className="cmp-note">First picks and mentions in this reading.</p>
       <div className="cmp-grid cmp-cards">
         {sides.map(({ brand, row, history }, index) => (
           <div className="cmp-pick reveal" key={`${brand}-${index}`}>
             <TrimTop />
-            <h3>
+            <h3 className="cmp-brand-title">
               <Link href={brandHref(category, brand)}>{brand}</Link>
             </h3>
             {row ? (
               <>
                 <p className="cmp-headline">
                   <span className="mono cmp-big">{Math.round(row.firstShare * 100)}%</span>
-                  <span className="cmp-big-label">of usable answers named it first</span>
+                  <span className="cmp-big-label">of answers named it first</span>
                 </p>
                 <span className="meter cmp-bar" aria-hidden="true"><i style={{ "--v": row.firstShare } as React.CSSProperties} /></span>
                 <div className="cmp-stat">
@@ -153,11 +181,11 @@ export default async function ComparePage({
                   </span>
                 </div>
                 <div className="cmp-stat">
-                  <span>Median position</span>
+                  <span>Typical place in the list</span>
                   <span>{row.medianPosition ?? "—"}</span>
                 </div>
                 <div className="cmp-stat">
-                  <span>Questions mentioned more often</span>
+                  <span>Questions with more mentions</span>
                   <span>{questionsLed(row, sides[index === 0 ? 1 : 0].row)}</span>
                 </div>
                 <div className="cmp-stat">
@@ -170,7 +198,7 @@ export default async function ComparePage({
                     <div className="cmp-tone">
                       <span className="label">Tone of mentions</span>
                       <ToneBar tone={tone} />
-                      <p className="cmp-note">Tone is the extraction model&rsquo;s interpretation of the wording.</p>
+                      <p className="cmp-note">An AI model judges the tone of each mention.</p>
                     </div>
                   ) : null;
                 })()}
@@ -184,25 +212,57 @@ export default async function ComparePage({
         ))}
       </div>
 
+      <p className="label codex-section-label">Assistants</p>
+      <h2 className="sub-h" id="assistants">Assistant by assistant <SectionLink id="assistants" label="Assistant by assistant" /></h2>
+      <p className="cmp-note" id="assistant-counting">
+        Each assistant’s count and share of answers mentioning each brand.
+      </p>
+      <p className="cmp-note">
+        Both brands use the same answers, excluding errors and refusals. Assistants with no remaining answers are left out.
+      </p>
+      {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in this reading.</p> : (
+        <div className="panel cmp-assistants">
+          <table aria-describedby="assistant-counting">
+            <caption className="sr-only">Brand mentions by assistant</caption>
+            <thead><tr><th scope="col">Assistant</th><th scope="col">{L.brand}</th><th scope="col">{R.brand}</th></tr></thead>
+            <tbody>{L.assistants.map(l => {
+              const r = R.assistants.find(row => row.engine === l.engine)!;
+              return <tr key={l.engine} data-engine={l.engine}>
+                <th scope="row">{labels.get(l.engine) ?? l.engine}</th>
+                {[l, r].map((entry, i) => <td key={i}>
+                  <span className="mono cmp-assistant-count">{entry.named}/{entry.of} <span className="sr-only">answers named {sides[i].brand}; </span></span>
+                  <span className="mono cmp-assistant-share">{Math.round(entry.named / entry.of * 100)}%</span>
+                  <span className="meter" aria-hidden="true"><i style={{ "--v": entry.named / entry.of } as React.CSSProperties} /></span>
+                </td>)}
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      )}
+
       {L.row && R.row && (
         <>
-          <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
-          {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
+          <p className="label codex-section-label">Questions</p>
+      <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
+          {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list.</p>}
           <p className="cmp-note">
-            Each percentage is the share of usable answers to that question
-            that mention the brand. Bold marks the larger share, not a proven
-            difference in quality.
+            The share of answers mentioning each brand, question by question.
           </p>
-          <div className="panel h2h reveal">
-            <div className="h2h-row h2h-head">
-              <span className="label">Question</span>
-              <span className="label h2h-name">{L.brand}</span>
-              <span className="label h2h-name">{R.brand}</span>
+          <p className="cmp-note">
+            Bold marks the larger share, not a proven
+            difference in quality. Select a question to read its answers.
+          </p>
+          <div className="panel h2h reveal" role="table" aria-label="Brand mentions by question">
+            <div className="h2h-row h2h-head" role="row">
+              <span className="label" role="columnheader">Question</span>
+              <span className="label h2h-name" role="columnheader">{L.brand}</span>
+              <span className="label h2h-name" role="columnheader">{R.brand}</span>
             </div>
             {order.map((qid, i) => (
               <QuestionRow
                 key={qid}
                 text={questions[qid] ?? qid}
+                href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, question: qid })}#${qid}`}
                 a={L.row!.steps[i] ?? 0}
                 b={R.row!.steps[i] ?? 0}
                 aName={L.brand}
@@ -215,17 +275,22 @@ export default async function ComparePage({
 
       {weeks > 1 && (
         <>
-          <h2 className="sub-h" id="history">Mentions over time <SectionLink id="history" label="Mentions over time" /></h2>
+          <p className="label codex-section-label">History</p>
+      <h2 className="sub-h" id="history">Mentions over time <SectionLink id="history" label="Mentions over time" /></h2>
           <p className="cmp-note">
-            Rotation is the share of usable answers that mention a brand. Zero
-            means none mentioned it. Points are evenly spaced by measurement,
+            Each point shows the share of answers that mention a brand.
+          </p>
+          <p className="cmp-note">
+            Zero means none mentioned it. Points are evenly spaced by measurement,
             not by elapsed time.
           </p>
           <TwoLines a={L} b={R} weeks={weeks} />
         </>
       )}
 
+      <p className="label codex-section-label">Explore</p>
       <h2 className="sub-h" id="other-brands">Compare {L.brand} with <SectionLink id="other-brands" label="Other comparisons" /></h2>
+      <p className="cmp-note">Choose another brand to keep exploring this category.</p>
       <div className="q-chips">
         {brands
           .filter((brand) => brand !== L.brand)
@@ -306,65 +371,51 @@ function Picker({
         ))}
       </select>
       <button className="btn btn-go" type="submit">
-        Compare
+        Compare brands
       </button>
     </form>
   );
 }
 
-/**
- * States both figures and which is larger.
- *
- * It never declares a winner or says one brand is better: this publication
- * reports what machines said and does not rank.
- */
-function Verdict({
-  left,
-  right,
-  leftName,
-  rightName,
-}: {
+/** First picks share a denominator; test their lead before describing one. */
+function Verdict({ left, right, leftName, rightName, total }: {
   left: BrandStanding | null;
   right: BrandStanding | null;
   leftName: string;
   rightName: string;
+  total: number;
 }) {
-  if (!left || !right) return <>Not enough data to compare these two yet.</>;
-  const a = Math.round(left.firstShare * 100);
-  const b = Math.round(right.firstShare * 100);
-  if (a === b) {
-    return (
-      <>
-        {leftName} and {rightName} are each named first in {a}% of usable answers, rounded to whole percentages.
-      </>
-    );
+  if (leftName === rightName) return <>Both selections show {leftName}. Choose two different brands to compare.</>;
+  if (!total) return <>No answers are available to compare these brands in this reading.</>;
+  const a = left?.firstNamed ?? 0;
+  const b = right?.firstNamed ?? 0;
+  const aShare = Math.round(a / total * 100);
+  const bShare = Math.round(b / total * 100);
+  if (a === b) return <>{leftName} and {rightName} were each named first in {a} of {total} answers ({aShare}%). Neither has a first-pick lead.</>;
+  if (!leadIsClear(Math.max(a, b), Math.min(a, b), total)) {
+    return <>{leftName} was named first in {aShare}% of answers; {rightName} in {bShare}%. This sample does not establish a clear first-pick lead.</>;
   }
-  const lead = a > b ? leftName : rightName;
-  const trail = a > b ? rightName : leftName;
-  return (
-    <>
-      {lead} is named first more often: {Math.max(a, b)}% of usable answers against{" "}
-      {Math.min(a, b)}% for {trail}.
-    </>
-  );
+  return <>{a > b ? leftName : rightName} has a clear first-pick lead in this sample. {Math.max(aShare, bShare)}% versus {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
 }
 
 function QuestionRow({
   text,
+  href,
   a,
   b,
   aName,
   bName,
 }: {
   text: string;
+  href: string;
   a: number;
   b: number;
   aName: string;
   bName: string;
 }) {
   return (
-    <div className="h2h-row">
-      <span className="h2h-q">{text}</span>
+    <div className="h2h-row" role="row">
+      <span className="h2h-q" role="rowheader"><a href={href}>{text}</a></span>
       <Side value={a} lead={a > b} label={aName} />
       <Side value={b} lead={b > a} label={bName} />
     </div>
@@ -374,7 +425,7 @@ function QuestionRow({
 /** Intensity plus the figure. Weight marks the larger value, never colour. */
 function Side({ value, lead, label }: { value: number; lead: boolean; label: string }) {
   return (
-    <span className="h2h-side">
+    <span className="h2h-side" role="cell">
       <span className="meter cmp-question-meter" aria-hidden="true"><i style={{ "--v": value } as React.CSSProperties} /></span>
       <span className="mono h2h-pct" data-lead={lead}>
         <span className="sr-only">{label}: </span>
@@ -410,17 +461,22 @@ function TwoLines({
 }) {
   const W = 720;
   const H = 180;
-  const pad = 14;
+  const pad = 48;
   const dates = [...new Set([...a.history, ...b.history].map(h => h.date))].sort();
   const x = (date: string) => pad + (dates.indexOf(date) * (W - pad * 2)) / Math.max(dates.length - 1, 1);
-  const y = (share: number) => H - pad - share * (H - pad * 2);
+  const y = (share: number) => H - 18 - share * (H - 56);
   const hasBreak = [a, b].some(side => side.history.some((h, i) => i > 0 && h.breakReason));
+  const labelled = dates.length <= 8;
+  const allBreaks = hasBreak && [a, b].every(side => side.history.slice(1).every(h => h.breakReason));
+  const allMethodChanges = allBreaks && [a, b].every(side => side.history.slice(1).every(h => h.breakReason?.includes("changed")));
   return (
     <div className="panel cmp-chart reveal">
+      <div className="cmp-chart-scroll" role="region" aria-label="Mention history" tabIndex={0}>
+      <div style={labelled ? { minWidth: dates.length * 100 } : undefined}>
       <div className="cmp-plot">
         <div className="cmp-axis mono" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
         <svg viewBox={`0 0 ${W} ${H}`} className="cmp-history-svg" preserveAspectRatio="none" role="img"
-          aria-label={`Share of usable answers mentioning ${a.brand} and ${b.brand} across ${weeks} measurements. Lines stop at method changes.`}>
+          aria-label={`Share of answers mentioning ${a.brand} and ${b.brand} across ${weeks} measurements. Lines stop at method changes.`}>
           {[0, 0.5, 1].map(t => <line key={t} className="spark-grid" x1={pad} x2={W-pad} y1={y(t)} y2={y(t)} />)}
           {[a, b].map((side, index) => <g key={index}>
             <path className={`cmp-history-line${index ? " is-b" : ""}`} d={side.history.map((h, i) =>
@@ -429,15 +485,27 @@ function TwoLines({
         </svg>
         <div className="cmp-history-dots">
           {[a, b].map((side, index) => side.history.map(h => <span key={`${index}-${h.date}`}
-            className={`cmp-history-dot${index ? " is-b" : ""}`} tabIndex={0}
+            className={`cmp-history-dot${index ? " is-b" : ""}`} tabIndex={0} role="img"
+            data-right={x(h.date) > W / 2}
             aria-label={`${side.brand}, ${h.date}: ${Math.round(h.rotation * 100)} percent`}
-            title={`${side.brand}, ${h.date}: ${Math.round(h.rotation * 100)}%${h.breakReason ? ` ? ${h.breakReason}` : ""}`}
+            title={`${side.brand}, ${h.date}: ${Math.round(h.rotation * 100)}%${h.breakReason ? `: ${h.breakReason}` : ""}`}
             style={{ left: `${x(h.date)/W*100}%`, top: `${y(h.rotation)/H*100}%` }} />))}
+          {labelled && [a, b].map((side, index) => side.history.map(h => {
+            const other = (index ? a : b).history.find(point => point.date === h.date);
+            const close = other && Math.abs(y(other.rotation) - y(h.rotation)) < 34;
+            const upper = other && (h.rotation > other.rotation || (h.rotation === other.rotation && index === 0));
+            return <span key={`value-${index}-${h.date}`} className={`cmp-history-value mono${index ? " is-b" : ""}`}
+              style={{ left: `${x(h.date)/W*100}%`, top: `${y(close ? Math.max(h.rotation, other.rotation) : h.rotation)/H*100}%`, marginTop: close && upper ? -32 : -12 }}>
+              <span aria-hidden="true">{index ? "\u25a1" : "\u25cf"} </span><span className="sr-only">{side.brand}: </span>{Math.round(h.rotation * 100)}%
+            </span>;
+          }))}
         </div>
       </div>
-      <div className="cmp-history-dates mono"><span>{dates[0]}</span><span>{dates.at(-1)}</span></div>
-      <div className="cmp-legend"><span><i className="cmp-key" aria-hidden="true" /> {a.brand} (solid)</span><span><i className="cmp-key is-b" aria-hidden="true" /> {b.brand} (dashed)</span></div>
-      {hasBreak && <p className="kpi-note">Some measurements cannot be compared, so they appear as separate dots. No line is drawn across a method change.</p>}
+      {labelled ? <div className="cmp-history-dates cmp-labelled-dates mono">{dates.map(date => <span key={date} style={{ left: `${x(date)/W*100}%` }}>{date}</span>)}</div>
+        : <div className="cmp-history-dates mono"><span>{dates[0]}</span><span>{dates.at(-1)}</span></div>}
+      </div></div>
+      <div className="cmp-legend"><span><i className="cmp-key" aria-hidden="true" /> {a.brand} (solid dot)</span><span><i className="cmp-key is-b" aria-hidden="true" /> {b.brand} (open square)</span></div>
+      {hasBreak && <p className="kpi-note">{allMethodChanges ? "The method changed between every measurement shown. These points cannot be read as a trend." : allBreaks ? "None of these measurements can be compared as a trend; focus a point to read why." : "Gaps in the lines mark measurements that cannot be compared; focus a point to read why."}</p>}
     </div>
   );
 }

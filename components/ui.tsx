@@ -10,9 +10,10 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
+import { boardTakeaways } from "@/lib/metrics";
 // From lib/shared, not lib/data: this file is imported by a client component,
 // and lib/data reads the repository with node:fs.
-import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
+import { OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
 
 /* -- hairline trim -------------------------------------------------------- */
 
@@ -29,6 +30,7 @@ export function SequencerRow({
   href,
   activeStep = null,
   onStep,
+  transitionName,
 }: {
   standing: BrandStanding;
   rank: number;
@@ -37,6 +39,8 @@ export function SequencerRow({
   /** Which question column is being read, if any. See LiveBoard. */
   activeStep?: number | null;
   onStep?: (step: number | null) => void;
+  /** Lets a re-sort animate each row to its new place. See LiveBoard. */
+  transitionName?: string;
 }) {
   const name = href ? (
     <Link href={href} style={{ textDecoration: "none" }}>
@@ -47,13 +51,17 @@ export function SequencerRow({
   );
 
   return (
-    <div className="seq-row">
-      <span className="mono seq-rank" data-lead={rank === 1}>
+    <div
+      className="seq-row"
+      role="row"
+      style={transitionName ? ({ viewTransitionName: transitionName, viewTransitionClass: "board-row" } as React.CSSProperties) : undefined}
+    >
+      <span className="mono seq-rank" role="cell" data-lead={rank === 1}>
         {String(rank).padStart(2, "0")}
       </span>
       {/* The rotation bar makes the ordering readable without reading a number.
           Deliberately neutral: colour on this board means movement. */}
-      <span className="seq-brand">
+      <span className="seq-brand" role="rowheader">
         {name}
         <i
           className="seq-bar"
@@ -75,8 +83,8 @@ export function SequencerRow({
       */}
       <span
         className="seq-cells"
-        role="img"
-        aria-label={`Named in ${standing.named} of ${standing.totalRuns} runs, across ${standing.steps.length} questions`}
+        role="cell"
+        aria-label={`Named in ${standing.named} of ${standing.totalRuns} answers, across ${standing.steps.length} questions`}
         data-focus={activeStep !== null}
         onMouseMove={
           onStep &&
@@ -95,15 +103,14 @@ export function SequencerRow({
             data-level={
               v >= 0.999 ? "4" : v >= 0.6 ? "3" : v >= 0.3 ? "2" : v > 0 ? "1" : "0"
             }
-            style={{ animationDelay: `${i * 30}ms` }}
           />
         ))}
       </span>
 
-      <span className="mono seq-rot">
+      <span className="mono seq-rot" role="cell">
         {standing.named}/{standing.totalRuns}
       </span>
-      <span className="mono seq-first" data-lead={rank === 1}>
+      <span className="mono seq-first" role="cell" data-lead={rank === 1}>
         {Math.round(standing.firstShare * 100)}%
       </span>
       <Delta move={move} />
@@ -117,9 +124,9 @@ export function SequencerRow({
  * anyone who cannot distinguish the two hues.
  */
 export function Delta({ move }: { move?: Movement }) {
-  if (!move) return <span className="mono seq-delta" />;
-  if (move.isNew) return <span className="mono seq-delta is-new">NEW</span>;
-  if (move.rotationDelta === 0) return <span className="mono seq-delta">—</span>;
+  if (!move) return <span role="cell" className="mono seq-delta" />;
+  if (move.isNew) return <span role="cell" className="mono seq-delta is-new">NEW</span>;
+  if (move.rotationDelta === 0) return <span role="cell" className="mono seq-delta">—</span>;
 
   const up = move.rotationDelta > 0;
 
@@ -130,7 +137,7 @@ export function Delta({ move }: { move?: Movement }) {
   if (!move.significant) {
     return (
       <span
-        className="mono seq-delta is-noise"
+        role="cell" className="mono seq-delta is-noise"
         title="Within the noise of this sample. Reported, not called a move."
       >
         {up ? "+" : "−"}
@@ -140,7 +147,7 @@ export function Delta({ move }: { move?: Movement }) {
   }
 
   return (
-    <span className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
+    <span role="cell" className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
       {up ? "▲" : "▼"}
       {Math.abs(move.rotationDelta)}
     </span>
@@ -162,11 +169,12 @@ export function StatusBar({
 }) {
   return (
     <div className="statusbar">
-      <span className="mono">RUN {runDate}</span>
-      <span className="mono">METHOD v{methodVersion}</span>
-      <span className="mono">{runsPerQuestion} RUNS/Q</span>
+      {/* Plain words: "5 RUNS/Q" read as code to anyone outside the project. */}
+      <span className="mono">Published {runDate}</span>
+      <span className="mono">Method v{methodVersion}</span>
+      <span className="mono">Each question asked {runsPerQuestion}× per assistant</span>
       <span className="mono">
-        {engines.length} ENGINE{engines.length === 1 ? "" : "S"}: {engines.join(" · ").toUpperCase()}
+        {engines.length} assistant{engines.length === 1 ? "" : "s"}: {engines.join(" · ")}
       </span>
     </div>
   );
@@ -343,21 +351,24 @@ export function HowToRead({ runsPerQuestion }: { runsPerQuestion: number }) {
           </span>
           Squares
         </b>
-        One per question. Darker means more of that question&rsquo;s answers
-        named the brand, pooled across every assistant ({runsPerQuestion} runs each).
+        One per question. Darker means more of its answers named the brand
+        ({runsPerQuestion} per assistant, all assistants together).
       </p>
       <p style={{ margin: 0 }}>
         <b>Named</b>
-        How many answers mentioned the brand at all, out of every answer we got.
+        Answers that mentioned the brand at all, out of every answer.
       </p>
       <p style={{ margin: 0 }}>
         <b>First</b>
-        How often it was the very first brand recommended. The ranking uses this.
+        How often it was recommended first. The ranking uses this.
       </p>
       <p style={{ margin: 0 }}>
         <b>Δ change</b>
-        Points up or down since the last comparable week. Small moves are shown
-        without an arrow because the sample cannot back them.
+        Up or down since the last comparable reading. Small moves get no
+        arrow: the sample cannot back them.
+      </p>
+      <p className="howto-more" style={{ margin: 0 }}>
+        <Link href="/methodology#glossary">Every term explained →</Link>
       </p>
     </div>
   );
@@ -449,6 +460,111 @@ export function LeaderBars({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Each assistant's own favourite, one card per assistant. The board pools every
+ * engine; this is the quickest way to see that they do not all agree.
+ */
+export function TopPicks({
+  picks,
+  labels,
+  hrefFor,
+}: {
+  picks: Array<{ engine: string; brands: string[]; first: number; of: number }>;
+  labels: Map<string, string>;
+  hrefFor: (brand: string) => string;
+}) {
+  const brands = [...new Set(picks.flatMap((p) => p.brands))];
+  const ties = picks.some((p) => p.brands.length > 1);
+  const list = brands.join(", ").replace(/, ([^,]*)$/, " and $1");
+  return (
+    <>
+      <p className="section-lead" style={{ marginBottom: 16 }}>
+        {brands.length === 1
+          ? `Every assistant put ${brands[0]} first more often than anything else.`
+          : `Taken one at a time, the ${picks.length} assistants split between ${brands.length} favourites: ${list}.`}
+        {ties && " Where two brands were put first equally often, both are shown."}
+      </p>
+      <div className="pick-grid">
+        {picks.map((p, i) => (
+          <div key={p.engine} className="pick-card rise" style={{ "--i": i } as React.CSSProperties}>
+            <span className="label">{labels.get(p.engine) ?? p.engine}</span>
+            <span className="pick-brand">
+              {p.brands.map((b, j) => (
+                <span key={b}>
+                  {j > 0 && <span className="pick-tie"> tied with </span>}
+                  <Link href={hrefFor(b)}>{b}</Link>
+                </span>
+              ))}
+            </span>
+            <span className="meter" aria-hidden="true"><i style={{ "--v": p.first / p.of } as React.CSSProperties} /></span>
+            <span className="pick-note">
+              first in {p.first} of {p.of} answers{p.brands.length > 1 ? " each" : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Two sentences a newcomer would otherwise have to work out from the board:
+ * whether the lead is real at this sample size, and which brand is mentioned
+ * far more often than it is picked first. Decided by `boardTakeaways`.
+ */
+export function Insights({ board }: { board: BrandStanding[] }) {
+  const { lead, gap } = boardTakeaways(board);
+  const pct = (v: number) => Math.round(v * 100);
+  const items: React.ReactNode[] = [];
+  if (lead?.kind === "level") {
+    items.push(
+      <>
+        <b>{lead.a.brand}</b> and <b>{lead.b.brand}</b> are level on first picks, at {pct(lead.a.firstShare)}% each.
+      </>,
+    );
+  } else if (lead) {
+    // Points from the printed (rounded) figures, so the sentence matches them.
+    const pa = pct(lead.a.firstShare);
+    const pb = pct(lead.b.firstShare);
+    const verdict = lead.clear
+      ? "That gap is larger than the noise at this sample size."
+      : "At this sample size that is too close to call: treat them as level.";
+    items.push(
+      pa === pb ? (
+        <>
+          <b>{lead.a.brand}</b> was named first in {lead.answers} more answer{lead.answers === 1 ? "" : "s"} than{" "}
+          <b>{lead.b.brand}</b>; both round to {pa}%. {verdict}
+        </>
+      ) : (
+        <>
+          <b>{lead.a.brand}</b> leads <b>{lead.b.brand}</b> by {pa - pb} point{pa - pb === 1 ? "" : "s"} on first
+          picks ({pa}% to {pb}%). {verdict}
+        </>
+      ),
+    );
+  }
+  if (gap) {
+    items.push(
+      <>
+        <b>{gap.brand}</b> comes up in {pct(gap.rotation)}% of answers but is named first in{" "}
+        {pct(gap.firstShare)}%: the widest gap in the top eight between being mentioned and being the
+        first pick.
+      </>,
+    );
+  }
+  if (!items.length) return null;
+  return (
+    <div className="insights panel">
+      <p className="label">What stands out</p>
+      <ul>
+        {items.map((it, i) => (
+          <li key={i}>{it}</li>
+        ))}
+      </ul>
     </div>
   );
 }
