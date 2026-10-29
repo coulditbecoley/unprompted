@@ -113,7 +113,7 @@ class GeminiEngine(Engine):
             refuse_new_paid_work("Gemini model probe")
             from datetime import date
             from ..budget import MONTHLY_CEILING, spent_in_month
-            if spent_in_month(date.today()) >= MONTHLY_CEILING:
+            if MONTHLY_CEILING > 0 and spent_in_month(date.today()) >= MONTHLY_CEILING:  # 0 = no ceiling
                 raise ProviderError("gemini: the month's budget is spent, so not even the model probe runs")
             try:
                 metadata = self._probe()

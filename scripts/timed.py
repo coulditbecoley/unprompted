@@ -9,19 +9,21 @@ hands network work to remote and credential helpers that would otherwise keep
 going after this script has reported failure.
 """
 import os
+import signal
 import subprocess
 import sys
 
 
 def run(seconds: float, command: list[str]) -> int:
-    process = subprocess.Popen(command)
+    # Its own process group on POSIX, so the whole group can be ended.
+    process = subprocess.Popen(command, start_new_session=os.name != "nt")
     try:
         return process.wait(timeout=seconds)
     except subprocess.TimeoutExpired:
         if os.name == "nt":
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
         else:
-            process.kill()  # ponytail: POSIX kills the child only; the launcher is Windows
+            os.killpg(process.pid, signal.SIGKILL)
         process.wait()
         print(f"timed out after {seconds}s: {' '.join(command)}", file=sys.stderr)
         return 124

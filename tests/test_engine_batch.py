@@ -414,7 +414,12 @@ def test_gemini_is_told_to_search_and_reports_the_model_google_serves(monkeypatc
     with pytest.raises(ProviderError, match="budget is spent"):
         engine.identify()
     assert not sent
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 0)  # a disabled ceiling never refuses
+    assert engine.identify()["model"] == "gemini-3.6-flash"
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    monkeypatch.setattr(budget, "MONTHLY_CEILING", 350.0)
     monkeypatch.setattr(budget, "spent_in_month", lambda when: 0)
+    sent.clear()
     assert engine.identify() == {"model": "gemini-3.6-flash", "version": "requested gemini-3.5-flash"}
     probe = sent[0]  # bounded and search-free
     assert "tools" not in probe and probe["generationConfig"]["maxOutputTokens"] == 16
