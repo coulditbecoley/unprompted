@@ -15,6 +15,7 @@ import {
   movement,
   questionOrder,
   standings,
+  topPickByEngine,
   theSnub,
 } from "@/lib/data";
 import { LiveBoard } from "@/components/board-live";
@@ -23,7 +24,7 @@ import { Subscribe } from "@/components/subscribe";
 import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -44,6 +45,7 @@ export default function Home() {
   const questions = run?.methodology?.questions?.questions ?? spec.questions;
 
   const board = run ? standings(run) : [];
+  const picks = run ? topPickByEngine(run) : [];
   const older = history.at(-2);
   const comparisonNote = run ? comparisonReason(run, older) : null;
   const baselineDate = older?.measured_on || older?.run_date;
@@ -215,6 +217,14 @@ export default function Home() {
                   brand but reach for something else first.
                 </p>
                 <LeaderBars rows={board.slice(0, 6)} hrefFor={(b) => brandHref(CATEGORY, b)} />
+              </div>
+            )}
+
+            {picks.length > 1 && (
+              <div className="reveal" style={{ marginTop: 48 }}>
+                <p className="label">Assistant by assistant</p>
+                <h2 style={{ margin: "4px 0 6px" }}>Each assistant&rsquo;s favourite</h2>
+                <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(CATEGORY, b)} />
               </div>
             )}
           </>

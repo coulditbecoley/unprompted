@@ -11,7 +11,7 @@ import { inSentence } from "@/lib/shared";
 import { notFound } from "next/navigation";
 import { AwaitingFirstRun, Kpi } from "@/components/ui";
 
-type Params = { c?: string; date?: string; engine?: string };
+type Params = { c?: string; date?: string; engine?: string; question?: string };
 
 function resolve(params: Params): string {
   return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
@@ -81,6 +81,7 @@ export default async function QuestionsPage({
   const run = params.date ? history.find(r => r.run_date === params.date) : history.at(-1);
   if (params.date && !run) notFound();
   if (run?.methodology?.questions) spec = run.methodology.questions;
+  if (params.question && !spec.questions.some(q => q.id === params.question)) notFound();
 
   if (!run) {
     return (
@@ -135,8 +136,8 @@ export default async function QuestionsPage({
         </div>)}
       </div>
       <p className="cmp-note">
-        Each line lists the brands found in one answer. Open it to read the
-        original text and recorded source links. Sources may be citations or
+        Each line lists the brands found in one answer. Choose a question to load
+        its original answers and recorded source links. Sources may be citations or
         search results; a link alone does not show which brand it supports.
       </p>
 
@@ -152,6 +153,15 @@ export default async function QuestionsPage({
           <div className="q-block panel" key={q.id} id={q.id}>
             <p className="label" style={{ marginTop: 6 }}>{q.id}</p>
             <h2 className="q-text">{q.text} <SectionLink id={q.id} label={q.text} /></h2>
+            {rows.length > 0 && <p className="q-load-answers">
+              <a className="btn btn-sm" href={`/questions?${new URLSearchParams({
+                c: category, date: run.run_date,
+                ...(selectedEngine ? { engine: selectedEngine } : {}),
+                ...(params.question === q.id ? {} : { question: q.id }),
+              })}#${q.id}`}>
+                {params.question === q.id ? "Hide full answer text" : "Read full answers to this question"}
+              </a>
+            </p>}
             {rows.length === 0 && <p className="cmp-note">No attempts for this question were recorded in this reading.</p>}
 
             {engines.map((engine) => {
@@ -160,7 +170,7 @@ export default async function QuestionsPage({
                 .sort((a, b) => a.run_index - b.run_index);
 
               return (
-                <details className="q-engine-group" key={engine}>
+                <details className="q-engine-group" key={engine} open={params.question === q.id}>
                   <summary>{labels.get(engine) ?? engine} <span className="mono">{runs.length} recorded answers</span></summary>
                   <div className="q-names">
                     {runs.map((r, i) => (
@@ -174,11 +184,11 @@ export default async function QuestionsPage({
                         ) : (
                           <em>No recognized brand found</em>
                         )}
-                        <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
+                        {params.question === q.id && <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
                           <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "Raw text was not recorded for this answer."}</p>
                           <p>Source evidence: {r.source_kind || "type not recorded"}</p>
                           <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
-                        </details>
+                        </details>}
                       </div>
                     ))}
                   </div>

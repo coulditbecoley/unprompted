@@ -45,14 +45,14 @@ export function Freshness({ runDate }: { runDate: string }) {
 
   return (
     <div className="freshness">
-      <span>MEASURED {runDate}</span>
-      {age !== null && age > 8 && <span role="status">STALE: {age} DAYS OLD · NO NEWER MEASUREMENT SHOWN</span>}
+      <span>Measured {runDate}</span>
+      {age !== null && age > 8 && <span role="status">{age} days old · no newer measurement published yet</span>}
       <span className="next" suppressHydrationWarning>
-        {when ? `NEXT RUN ${when}` : "UPDATES EVERY MONDAY"}
+        {when ? `Next update ${when}` : "Updates every Monday"}
       </span>
       <span className="spacer" />
       <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">
-        CHECK THE RAW DATA →
+        Check the raw data →
       </a>
     </div>
   );
@@ -83,10 +83,10 @@ export function ShareRow({ headline, url = "https://unprompted.report" }: { head
   return (
     <div className="share-row">
       <button type="button" className="share-btn" onClick={copy} data-done={copied}>
-        {copied ? "COPIED" : "COPY THIS RESULT"}
+        {copied ? "Copied" : "Copy this result"}
       </button>
       <a className="share-btn" href={intent} target="_blank" rel="noopener noreferrer">
-        SHARE ON X
+        Share on X
       </a>
     </div>
   );

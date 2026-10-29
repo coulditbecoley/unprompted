@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { SectionLink } from "@/components/contact";
 
 import {
@@ -26,6 +26,7 @@ export function CategoryBrowser({
   counts: Record<string, { leader: string | null; share: number; measured: string } | undefined>;
 }) {
   const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
     () =>
@@ -48,6 +49,7 @@ export function CategoryBrowser({
         </label>
         <input
           id="cat-q"
+          ref={searchInput}
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -66,7 +68,7 @@ export function CategoryBrowser({
             No categories match &ldquo;{query}&rdquo;. Try a broader term or clear
             the search to see all categories.
           </p>
-          <button type="button" className="btn" onClick={() => setQuery("")}>Clear search</button>
+          <button type="button" className="btn" onClick={() => { setQuery(""); searchInput.current?.focus(); }}>Clear search</button>
         </div>
       )}
 

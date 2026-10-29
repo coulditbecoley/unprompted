@@ -519,6 +519,64 @@ export function engineDivergence(
     .sort((a, b) => b.differs - a.differs || a.engine.localeCompare(b.engine));
 }
 
+/**
+ * One brand, read engine by engine: how many of each assistant's answered runs
+ * named it, and how many put it first. Same denominator as the board (answered
+ * runs only), split by who answered. Engines that answered nothing are left out
+ * rather than shown as zero.
+ */
+export function brandByEngine(
+  run: RunRecord,
+  brand: string,
+): Array<{ engine: string; named: number; first: number; of: number }> {
+  const counts = new Map<string, { named: number; first: number; of: number }>();
+  for (const ex of answered(run)) {
+    const entry = counts.get(ex.engine) ?? { named: 0, first: 0, of: 0 };
+    entry.of += 1;
+    const hit = ex.brands.find((b) => b.name === brand);
+    if (hit) {
+      entry.named += 1;
+      if (hit.position === 1) entry.first += 1;
+    }
+    counts.set(ex.engine, entry);
+  }
+  return run.engines
+    .filter((e) => counts.has(e))
+    .map((engine) => ({ engine, ...counts.get(engine)! }))
+    .sort((a, b) => b.named / b.of - a.named / a.of || a.engine.localeCompare(b.engine));
+}
+
+/**
+ * Each assistant's own first choice: the brand it put first most often across
+ * its answered runs. Ties go to the brand named more often overall, then by
+ * name, so the result never depends on file order. An engine with no
+ * first-placed brand at all is left out.
+ */
+export function topPickByEngine(
+  run: RunRecord,
+): Array<{ engine: string; brand: string; first: number; of: number }> {
+  const per = new Map<string, { of: number; first: Map<string, number>; named: Map<string, number> }>();
+  for (const ex of answered(run)) {
+    const e = per.get(ex.engine) ?? { of: 0, first: new Map(), named: new Map() };
+    e.of += 1;
+    for (const b of ex.brands) {
+      e.named.set(b.name, (e.named.get(b.name) ?? 0) + 1);
+      if (b.position === 1) e.first.set(b.name, (e.first.get(b.name) ?? 0) + 1);
+    }
+    per.set(ex.engine, e);
+  }
+  const out: Array<{ engine: string; brand: string; first: number; of: number }> = [];
+  for (const engine of run.engines) {
+    const e = per.get(engine);
+    if (!e || e.first.size === 0) continue;
+    const [brand, first] = [...e.first.entries()].sort(
+      (a, b) => b[1] - a[1] || (e.named.get(b[0]) ?? 0) - (e.named.get(a[0]) ?? 0) || a[0].localeCompare(b[0]),
+    )[0];
+    out.push({ engine, brand, first, of: e.of });
+  }
+  return out;
+}
+
 /* -- tone ----------------------------------------------------------------- */
 
 export type Tone = { positive: number; neutral: number; negative: number; total: number };

@@ -141,18 +141,19 @@ export default async function ConsensusPage({
             there is no majority. Missing picks also prevent full agreement.
           </p>
 
-          <div className="panel cns reveal" role="region" aria-label="Assistant picks by question" tabIndex={0}>
+          <div className="panel cns reveal" role="table" aria-label="Assistant picks by question" tabIndex={0}>
             <div
               className="cns-row cns-head"
+              role="row"
               style={{ "--engines": engines.length } as React.CSSProperties}
             >
-              <span className="label">Question</span>
+              <span className="label" role="columnheader">Question</span>
               {engines.map((engine) => (
-                <span className="label cns-engine" key={engine}>
+                <span className="label cns-engine" role="columnheader" key={engine}>
                   {labels.get(engine) ?? engine}
                 </span>
               ))}
-              <span className="label cns-verdict">Verdict</span>
+              <span className="label cns-verdict" role="columnheader">Verdict</span>
             </div>
 
             {rows.map((row) => (
@@ -210,22 +211,23 @@ function Row({ row, engines, labels }: { row: QuestionConsensus; engines: number
   const threeWay = row.agree <= 1 && row.picks.length > 1;
 
   return (
-    <div className="cns-row" style={{ "--engines": engines } as React.CSSProperties}>
-      <span className="cns-q">{row.text}</span>
+    <div className="cns-row" role="row" style={{ "--engines": engines } as React.CSSProperties}>
+      <span className="cns-q" role="rowheader">{row.text}</span>
       {row.picks.map((pick) => {
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (
-          <span className="cns-pick" key={pick.engine} data-differs={differs}>
+          <span className="cns-pick" role="cell" key={pick.engine} data-differs={differs}>
             <span className="sr-only">{labels.get(pick.engine) ?? pick.engine}: </span>
             {pick.brand ?? "—"}
-            <i className="cns-share mono" aria-hidden="true">
+            <i className="cns-share mono">
               {Math.round(pick.share * 100)}%
+              <span className="sr-only"> named first</span>
             </i>
             <span className="meter cns-pick-meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": pick.share } as React.CSSProperties} /></span>
           </span>
         );
       })}
-      <span className="mono cns-verdict" data-settled={row.settled}>
+      <span className="mono cns-verdict" role="cell" data-settled={row.settled}>
         {row.settled ? "Agree ?" : "Split"}
       </span>
     </div>

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TrimTop, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TopPicks, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
@@ -21,6 +21,7 @@ import {
   shortfall,
   sourceCounts,
   standings,
+  topPickByEngine,
   theSnub,
 } from "@/lib/data";
 
@@ -75,6 +76,7 @@ export function ChartBoard({
   }));
 
   const board = standings(run);
+  const picks = topPickByEngine(run);
   const older = loadHistory(category.slug).filter(r => (r.measured_on || r.run_date) < (run.measured_on || run.run_date)).at(-1);
   const comparisonNote = comparisonReason(run, older);
   const baselineDate = older?.measured_on || older?.run_date;
@@ -236,6 +238,13 @@ export function ChartBoard({
         </div>
       )}
 
+      {picks.length > 1 && (
+        <div className="reveal" style={{ marginTop: 44 }}>
+          <h2 className="sub-h">Each assistant&rsquo;s favourite</h2>
+          <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(category.slug, b)} />
+        </div>
+      )}
+
       {snub && (
         <div className="snub reveal">
           <p className="label" style={{ color: "var(--down)" }}>
@@ -267,7 +276,8 @@ export function ChartBoard({
               <div className="sp-row" key={p.brand}>
                 <span className="sp-brand">
                   {p.brand}
-                  <small>made by {engineLabels.get(p.engine) ?? p.engine}</small>
+                  {/* One brand can belong to two engines ("claude, claude-code"); name each. */}
+                  <small>made by the company behind {p.engine.split(", ").map((e) => engineLabels.get(e) ?? e).join(" and ")}</small>
                   <span className="sp-meters" aria-hidden="true">
                     <span className="meter"><i style={{ "--v": p.ownRate } as React.CSSProperties} /></span>
                     <span className="meter" data-tone="soft"><i style={{ "--v": p.rivalRate } as React.CSSProperties} /></span>

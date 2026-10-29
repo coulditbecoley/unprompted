@@ -119,10 +119,10 @@ function renderMarkdown(md: string): React.ReactNode[] {
         i += 1;
       }
       out.push(
-        <div key={key++} style={{ overflowX: "auto" }}>
+        <div key={key++} style={{ overflowX: "auto" }} role="region" aria-label={`Table: ${head.join(", ")}`} tabIndex={0}>
           <table>
             <thead>
-              <tr>{head.map((c, n) => <th key={n}>{inline(c)}</th>)}</tr>
+              <tr>{head.map((c, n) => <th scope="col" key={n}>{inline(c)}</th>)}</tr>
             </thead>
             <tbody>
               {body.map((row, n) => (

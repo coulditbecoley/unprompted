@@ -136,9 +136,9 @@ export default async function ComparePage({
         {sides.map(({ brand, row, history }, index) => (
           <div className="cmp-pick reveal" key={`${brand}-${index}`}>
             <TrimTop />
-            <h3>
+            <h2 className="cmp-brand-title">
               <Link href={brandHref(category, brand)}>{brand}</Link>
-            </h3>
+            </h2>
             {row ? (
               <>
                 <p className="cmp-headline">
@@ -193,11 +193,11 @@ export default async function ComparePage({
             that mention the brand. Bold marks the larger share, not a proven
             difference in quality.
           </p>
-          <div className="panel h2h reveal">
-            <div className="h2h-row h2h-head">
-              <span className="label">Question</span>
-              <span className="label h2h-name">{L.brand}</span>
-              <span className="label h2h-name">{R.brand}</span>
+          <div className="panel h2h reveal" role="table" aria-label="Brand mentions by question">
+            <div className="h2h-row h2h-head" role="row">
+              <span className="label" role="columnheader">Question</span>
+              <span className="label h2h-name" role="columnheader">{L.brand}</span>
+              <span className="label h2h-name" role="columnheader">{R.brand}</span>
             </div>
             {order.map((qid, i) => (
               <QuestionRow
@@ -363,8 +363,8 @@ function QuestionRow({
   bName: string;
 }) {
   return (
-    <div className="h2h-row">
-      <span className="h2h-q">{text}</span>
+    <div className="h2h-row" role="row">
+      <span className="h2h-q" role="rowheader">{text}</span>
       <Side value={a} lead={a > b} label={aName} />
       <Side value={b} lead={b > a} label={bName} />
     </div>
@@ -374,7 +374,7 @@ function QuestionRow({
 /** Intensity plus the figure. Weight marks the larger value, never colour. */
 function Side({ value, lead, label }: { value: number; lead: boolean; label: string }) {
   return (
-    <span className="h2h-side">
+    <span className="h2h-side" role="cell">
       <span className="meter cmp-question-meter" aria-hidden="true"><i style={{ "--v": value } as React.CSSProperties} /></span>
       <span className="mono h2h-pct" data-lead={lead}>
         <span className="sr-only">{label}: </span>
@@ -429,7 +429,8 @@ function TwoLines({
         </svg>
         <div className="cmp-history-dots">
           {[a, b].map((side, index) => side.history.map(h => <span key={`${index}-${h.date}`}
-            className={`cmp-history-dot${index ? " is-b" : ""}`} tabIndex={0}
+            className={`cmp-history-dot${index ? " is-b" : ""}`} tabIndex={0} role="img"
+            data-right={x(h.date) > W / 2}
             aria-label={`${side.brand}, ${h.date}: ${Math.round(h.rotation * 100)} percent`}
             title={`${side.brand}, ${h.date}: ${Math.round(h.rotation * 100)}%${h.breakReason ? ` ? ${h.breakReason}` : ""}`}
             style={{ left: `${x(h.date)/W*100}%`, top: `${y(h.rotation)/H*100}%` }} />))}
