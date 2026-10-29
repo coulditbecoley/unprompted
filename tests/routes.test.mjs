@@ -345,6 +345,24 @@ test("route integration: analytics and stale editor protection", async (t) => {
     assert.equal((await commit(request("/api/admin/commit", body, { cookie }))).status, 200);
     assert.equal(remote, body.content);
   });
+  await t.test("a question-bank edit without a version bump is refused before GitHub", async () => {
+    const bank = (version, text) => `category: ai-coding-assistants
+method_version: ${version}
+runs_per_question: 5
+questions:
+  - id: q1
+    text: ${text}
+`;
+    remote = bank(5, "Best tool?");
+    calls.length = 0;
+    const edit = { target: "questions", category: "ai-coding-assistants", baseline: remote, content: bank(5, "Best AI tool?") };
+    const refused = await commit(request("/api/admin/commit", edit, { cookie }));
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).error, /method_version/);
+    assert.ok(!calls.some(c => c[0] === "PUT"));
+    edit.content = bank(6, "Best AI tool?");
+    assert.equal((await commit(request("/api/admin/commit", edit, { cookie }))).status, 200);
+  });
   await t.test("prototype targets and invalid question identities refuse before GitHub", async () => {
     calls.length = 0;
     for (const target of ["toString", "__proto__"]) {

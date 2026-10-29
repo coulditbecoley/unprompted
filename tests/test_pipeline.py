@@ -311,6 +311,13 @@ def test_large_rotation_swing_holds_the_week():
     assert result.held and "moved" in " ".join(result.reasons)
 
 
+def test_a_leader_that_vanished_is_the_largest_swing_not_an_exemption():
+    this = [_week("CGC", 0.5), _week("BGS", 0.4)]
+    last = [_week("PSA", 0.9), _week("CGC", 0.5), _week("BGS", 0.4)]
+    result = run_checks(_run([ex(brands=["CGC"])]), this, last)
+    assert result.held and any("PSA rotation moved 90 points" in r for r in result.reasons)
+
+
 def test_small_rotation_swing_passes():
     # Two brands, so this isolates the swing rule instead of also tripping the
     # minimum-brand-count rule.

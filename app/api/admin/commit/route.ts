@@ -86,6 +86,11 @@ export async function POST(request: Request) {
   }
   const current = (await head.json()) as { sha: string; content: string };
   if (Buffer.from(current.content, "base64").toString("utf-8").replace(/\r\n/g, "\n") !== baseline.replace(/\r\n/g, "\n")) return NextResponse.json({ error: "This file changed since you opened it. Reload and merge your edits." }, { status: 409 });
+  // The runner refuses a changed question bank without a version bump, but
+  // only on Monday, after the week's calls are paid for. Refuse it here.
+  if (target === "questions" && unversionedChange(baseline, content)) {
+    return NextResponse.json({ error: "This changes the question bank without raising method_version. Bump it (and add a dated note to METHODOLOGY.md), or the next weekly run will refuse to start." }, { status: 400 });
+  }
 
   const put = await fetch(api, {
     method: "PUT",
@@ -110,6 +115,20 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
 }
 
+/** True when the parsed bank changed but method_version did not go up. */
+function unversionedChange(baseline: string, content: string): boolean {
+  let before: Record<string, unknown>, after: Record<string, unknown>;
+  try {
+    before = loadYaml(baseline) as Record<string, unknown>;
+    after = loadYaml(content) as Record<string, unknown>;
+  } catch {
+    return false; // validate() has already reported the edit; a bad baseline is not the editor's change
+  }
+  if (!before || typeof before !== "object") return false;
+  const strip = ({ method_version: _version, ...rest }: Record<string, unknown>) => JSON.stringify(rest);
+  return strip(before) !== strip(after) && !(Number(after.method_version) > Number(before.method_version));
+}
+
 function validate(target: Target, content: string): string | null {
   let parsed: unknown;
   try {
@@ -125,7 +144,7 @@ function validate(target: Target, content: string): string | null {
     if (!Number.isInteger(spec.runs_per_question) || Number(spec.runs_per_question) < 1 || Number(spec.runs_per_question) > 100) {
       return "runs_per_question must be an integer from 1 to 100";
     }
-    if (spec.max_brands !== undefined && (!Number.isInteger(spec.max_brands) || Number(spec.max_brands) < 1)) return "max_brands must be a positive integer";
+    if (spec.max_brands !== undefined && (!Number.isInteger(spec.max_brands) || Number(spec.max_brands) < 1 || Number(spec.max_brands) > 50)) return "max_brands must be an integer from 1 to 50";
     if (!Array.isArray(spec.questions) || spec.questions.length === 0) {
       return "questions must be a non-empty list";
     }

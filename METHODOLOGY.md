@@ -369,6 +369,11 @@ what surrounds it is not, so every category takes a
 method version bump: coding moves to version 5, images and writing to version 6.
 Week-over-week movement is not reported across the change.
 
+The swing check (a brand moving more than 40 points in a week holds it) now
+counts a brand missing from either week as zero. Before, a brand that vanished
+entirely, the largest swing there is, passed without comment. No published
+pair of weeks is affected: every one so far crossed a version change.
+
 ### Model upgrade (September 28, 2026)
 
 From the September 28 week the hosted engines move to current models: Claude
