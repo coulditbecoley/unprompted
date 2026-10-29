@@ -2,7 +2,7 @@ import { DEFAULT_CATEGORY } from "@/lib/categories";
 import { categoryLabel, latestRun, consensus, consensusScore } from "@/lib/data";
 import { shareCard } from "@/app/compare/share-card";
 
-export const alt = "Unprompted Consensus: how many questions have full agreement in the default category.";
+export const alt = `Unprompted Consensus: how many questions had the same first pick across all assistants in ${categoryLabel(DEFAULT_CATEGORY)}.`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

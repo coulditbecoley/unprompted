@@ -105,7 +105,7 @@ export default async function ConsensusPage({
       </p>
       <p className="cmp-note">
         An assistant's pick is the brand it names first most often. Agreement means every assistant has the same pick.
-        It does not mean that product is best. Percentages exclude failed calls and refusals.
+        It does not mean that product is best. Percentages exclude failed attempts and refusals.
       </p>
 
       <div style={{ marginTop: 20 }}>

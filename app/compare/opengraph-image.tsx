@@ -2,7 +2,7 @@ import { DEFAULT_CATEGORY } from "@/lib/categories";
 import { categoryLabel, latestRun, standings } from "@/lib/data";
 import { shareCard } from "./share-card";
 
-export const alt = "Unprompted Compare: the default category's top two brands and their first-pick shares.";
+export const alt = `Unprompted Compare: how often the two leading brands in ${categoryLabel(DEFAULT_CATEGORY)} were named first.`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

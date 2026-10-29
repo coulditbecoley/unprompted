@@ -13,7 +13,7 @@ import type { BrandStanding, Movement } from "@/lib/data";
 import { boardTakeaways } from "@/lib/metrics";
 // From lib/shared, not lib/data: this file is imported by a client component,
 // and lib/data reads the repository with node:fs.
-import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
+import { OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
 
 /* -- hairline trim -------------------------------------------------------- */
 

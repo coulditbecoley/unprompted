@@ -266,7 +266,9 @@ export default async function QuestionsPage({
                         )}
                         {params.question === q.id && <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
                           <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer ? <BrandHighlight text={r.answer} brand={selectedBrand} /> : "The original text was not saved for this answer."}</p>
-                          <p>Source type: {r.source_kind || "type not recorded"}</p>
+                          <p>{r.source_kind === "cited" ? "Sources were recorded as citations in the answer."
+                            : r.source_kind === "retrieved" ? "Sources were recorded as search results."
+                            : "How sources were used was not recorded."}</p>
                           <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
                         </details>}
                       </div>

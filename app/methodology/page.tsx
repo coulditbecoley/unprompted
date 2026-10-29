@@ -46,7 +46,7 @@ export default function MethodologyPage() {
         <h2 className="sub-h" id="recent-changes">What changed recently</h2>
         <p className="cmp-note">Read the latest updates to the collection and counting rules.</p>
         <details className="panel method-changes">
-        <summary>Read version notes</summary>
+        <summary>Read recent changes</summary>
         <div className="prose">{renderMarkdown(changes)}</div>
       </details></>}
       <p className="label codex-section-label">Process</p>
@@ -57,8 +57,8 @@ export default function MethodologyPage() {
           ["Ask", "Use the fixed set of buying questions for the category."],
           ["Repeat", "Ask each active assistant each question five times."],
           ["Read", "Record brands, order and sources. Set aside unrecognised names."],
-          ["Check", "Hold results that fail the publication checks."],
-          ["Publish", "Keep passing results and their evidence in the public archive."],
+          ["Check", "Keep results off the chart if they fail the checks."],
+          ["Publish", "Publish checked results with their original answers."],
         ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
           <span className="mono method-step" aria-hidden="true">{i + 1}</span>
           <h3 id={`process-${title.toLowerCase()}`}>{title}</h3><p>{detail}</p>

@@ -2,7 +2,7 @@ import { DEFAULT_CATEGORY } from "@/lib/categories";
 import { categoryLabel, latestRun, answered, loadQuestionText } from "@/lib/data";
 import { shareCard } from "@/app/compare/share-card";
 
-export const alt = "Unprompted Questions: inspect the default category's recorded answers and sources.";
+export const alt = `Unprompted Questions: original answers and sources for ${categoryLabel(DEFAULT_CATEGORY)}.`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

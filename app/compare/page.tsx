@@ -148,9 +148,9 @@ export default async function ComparePage({
       </div>
       <p className="cmp-note">
         Named means mentioned anywhere in an answer; named first means the first
-        brand mentioned. Percentages exclude failed calls and refusals. They
+        brand mentioned. Percentages exclude failed attempts and refusals. They
         measure visibility, not product quality. Typical place in the list is the middle
-        position among answers that mention the brand. Repeated answers are related. A clear lead here does not prove a lasting preference.
+        position among answers that mention the brand. Repeating a question can produce similar answers. A clear lead here does not prove a lasting preference.
       </p>
 
       <nav className="evidence-links" aria-label="Check this comparison">
