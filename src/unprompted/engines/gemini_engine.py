@@ -23,11 +23,13 @@ call, 879 answer tokens came with 853 thinking tokens, so counting only
 from __future__ import annotations
 
 import json
+import time
 import urllib.request
 from urllib.parse import urlparse
 
 from ..cli_provider import ProviderError
-from .base import SYSTEM_PROMPT, Engine, refuse_new_paid_work
+from .base import (BACKOFF_SECONDS, MAX_ATTEMPTS, RATE_LIMIT_BACKOFF_SECONDS, SYSTEM_PROMPT, Engine,
+                   is_rate_limit, refuse_new_paid_work)
 
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -115,14 +117,24 @@ class GeminiEngine(Engine):
             from ..budget import MONTHLY_CEILING, spent_in_month
             if MONTHLY_CEILING > 0 and spent_in_month(date.today()) >= MONTHLY_CEILING:  # 0 = no ceiling
                 raise ProviderError("gemini: the month's budget is spent, so not even the model probe runs")
-            try:
-                metadata = self._probe()
-                if not metadata.get("modelVersion"):
-                    raise ProviderError("gemini: the response did not say which model answered")
-                _SERVED[MODEL] = metadata["modelVersion"]
-            except Exception as exc:  # noqa: BLE001 - reported by the caller as a refusal
-                _SERVED[MODEL] = exc if isinstance(exc, ProviderError) else ProviderError(
-                    f"gemini: could not tell which model answers: {type(exc).__name__}: {exc}")
+            for attempt in range(MAX_ATTEMPTS):
+                try:
+                    metadata = self._probe()
+                    if not metadata.get("modelVersion"):
+                        raise ProviderError("gemini: the response did not say which model answered")
+                    _SERVED[MODEL] = metadata["modelVersion"]
+                    break
+                except Exception as exc:  # noqa: BLE001 - reported by the caller as a refusal
+                    failure = exc if isinstance(exc, ProviderError) else ProviderError(
+                        f"gemini: could not tell which model answers: {type(exc).__name__}: {exc}")
+                    if isinstance(exc, ProviderError) or not self.is_retryable(exc):
+                        _SERVED[MODEL] = failure  # permanent: not repeated for each category
+                        break
+                    # A 503 or 429 on Monday morning must not cost the whole week.
+                    if attempt < MAX_ATTEMPTS - 1:
+                        time.sleep((RATE_LIMIT_BACKOFF_SECONDS if is_rate_limit(exc) else BACKOFF_SECONDS) * (attempt + 1))
+            else:
+                raise failure  # transient each time: the next category may try again
         if isinstance(_SERVED[MODEL], ProviderError):
             raise _SERVED[MODEL]
         return {"model": _SERVED[MODEL], "version": f"requested {MODEL}"}

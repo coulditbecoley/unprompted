@@ -161,10 +161,15 @@ def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list
             continue
         try:
             saved = json.loads(job.read_text(encoding="utf-8"))
-            if not saved.get("id") and not (job in claude and saved.get("collected")):
+            # The guard's own rule for extraction jobs (budget.py): only a started
+            # submission without an id is ambiguous. A Claude state is written
+            # as intent before its POST, so a missing id is always ambiguous.
+            if not saved.get("id") and (saved.get("submission_started") if job not in claude else not saved.get("collected")):
                 # Never resubmitted: the POST may have succeeded. Reported, so
                 # --collect-only cannot claim the guard is satisfied.
                 failed.append(f"needs reconciliation in the provider console (submission has no batch id): {job}")
+                continue
+            if not saved.get("id"):
                 continue
             if job in claude:
                 if saved.get("collected"):

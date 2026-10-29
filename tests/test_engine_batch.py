@@ -548,3 +548,26 @@ def test_checkpoints_with_less_metadata_still_collect_but_conflicts_do_not(tmp_p
     write_json(state, {**json.loads(state.read_text()), "collected": False}, replace=True)
     with pytest.raises(ValueError, match="differs"):
         batch.collect(state, "offline")
+
+
+def test_a_transient_gemini_probe_failure_is_retried_not_fatal(monkeypatch):
+    from unprompted import budget
+    from unprompted.engines import gemini_engine
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    monkeypatch.setattr(budget, "spent_in_month", lambda when: 0)
+    monkeypatch.setattr(gemini_engine.time, "sleep", lambda s: None)
+    replies = [ConnectionError("503 UNAVAILABLE"), {"modelVersion": "gemini-3.6-flash"}]
+    def probe(self):
+        reply = replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    monkeypatch.setattr(gemini_engine.GeminiEngine, "_probe", probe)
+    assert gemini_engine.GeminiEngine().identify()["model"] == "gemini-3.6-flash"
+
+
+def test_an_idless_extraction_intent_blocks_recovery_only_when_it_was_submitted(tmp_path):
+    for started, failures in ((False, 0), (True, 1)):
+        job = tmp_path / f"{started}/.unprompted/2026-09-14/alpha/batch.json"
+        write_json(job, {"result_checkpoint_version": 1, **({"submission_started": True} if started else {})})
+        assert len(batch.collect_outstanding(job.parents[2], "offline")[1]) == failures

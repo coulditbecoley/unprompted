@@ -38,6 +38,10 @@ RUN_SECONDS = 7 * 3600
 
 
 def _started() -> float:
+    # Only the launcher's own run: a manual run hours after an aborted weekly
+    # start must not inherit a nearly spent clock.
+    if not os.environ.get("UNPROMPTED_WEEKLY_RUN"):
+        return time.monotonic()
     marker = Path(__file__).resolve().parents[3] / ".unprompted" / "weekly-started"
     try:
         age = time.time() - float(marker.read_text(encoding="utf-8"))

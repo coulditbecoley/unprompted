@@ -88,6 +88,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set "UNPROMPTED_WEEKLY_RUN=1"
 "%UNPROMPTED_PYTHON%" -m unprompted.run --category all --summary-file .unprompted\weekly-summary.json >> "%TEMP%\unprompted-weekly.log" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
 
