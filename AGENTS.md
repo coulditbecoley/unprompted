@@ -31,7 +31,9 @@ command to fill a gap; report the gap.
 the weekly run checks first: each local engine's isolation canary, the model
 every engine reports, and the run's full method-change comparison (real
 calls: two per local harness on the subscription, and Gemini's model probe,
-up to three tiny attempts; nothing is measured).
+up to three tiny attempts; nothing is measured). `scripts/readiness.py` runs it
+for the coming Monday every Sunday at 18:00 and opens a GitHub issue if it
+finds anything (registered by `scripts/install-weekly-task.ps1`).
 
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in

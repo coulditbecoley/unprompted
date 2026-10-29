@@ -2450,3 +2450,24 @@ def test_analytics_validation_rejects_values_the_readers_trip_over(record):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import scripts.sync_analytics as sa  # noqa: PLC0415
     assert not sa.well_formed(json.loads(record))
+
+
+def test_readiness_checks_the_coming_monday_and_opens_one_issue(monkeypatch, capsys):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.readiness as rd  # noqa: PLC0415
+    assert rd.next_monday(date(2026, 11, 1)) == date(2026, 11, 2)   # Sunday -> tomorrow
+    assert rd.next_monday(date(2026, 11, 2)) == date(2026, 11, 9)   # Monday -> next week
+    calls = []
+    def fake(argv, **kw):
+        calls.append(argv)
+        if argv[:3] == ["gh", "issue", "list"]:
+            return SimpleNamespace(stdout="[]", returncode=0)
+        if argv[:3] == ["gh", "issue", "create"]:
+            return SimpleNamespace(stdout="", returncode=0)
+        return SimpleNamespace(returncode=2, stderr="", stdout=json.dumps({"issues": ["codex: model `x` changed\nnow"], "engines_identified": {}}))
+    monkeypatch.setattr(rd.subprocess, "run", fake)
+    monkeypatch.setattr(rd.sys, "argv", ["readiness"])
+    assert rd.main() == 2
+    assert "--qualify" in calls[0] and any(c[:3] == ["gh", "issue", "create"] for c in calls)
+    body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
+    assert "- `codex: model x changed now`" in body
