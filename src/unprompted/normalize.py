@@ -275,6 +275,8 @@ def normalize(
     cleaned: list[Extraction] = []
 
     for ex in extractions:
+        if ex.extracted is None:  # first pass only: later passes see canonical names
+            ex.extracted = [b.to_dict() for b in ex.brands]
         kept = []
         seen: set[str] = set()
         for brand in sorted(ex.brands, key=lambda b: b.position):

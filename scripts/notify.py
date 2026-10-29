@@ -47,8 +47,13 @@ HEADLINE = {
 }
 
 
-def write_status(status: str, detail: str, exit_code: int) -> None:
-    """The durable half. Committed with the run, so the record is in git."""
+def write_status(status: str, detail: str, exit_code: int, summary: dict | None = None) -> None:
+    """The durable half. Committed with the run, so the record is in git.
+
+    `categories` (from the run's summary) gives each category's outcome --
+    passed, held, failed, not_started or not_run -- with its reasons, so a
+    reader or an agent need not parse `detail`.
+    """
     destination = REPO / ".unprompted" / "last-attempt.json" if status == "failed" else STATUS_FILE
     write_json(destination,
             {
@@ -56,6 +61,7 @@ def write_status(status: str, detail: str, exit_code: int) -> None:
                 "detail": detail,
                 "exit_code": exit_code,
                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                **{k: summary[k] for k in ("run_date", "categories") if summary and k in summary},
             }, replace=True,
     )
     print(f"  wrote {destination.relative_to(REPO)}", file=sys.stderr)
@@ -95,7 +101,7 @@ def open_issue(status: str, detail: str, exit_code: int) -> None:
             detail.strip() or "(no detail recorded)",
             "```",
             "",
-            "The log is at `%TEMP%\\unprompted-weekly.log` on the machine that runs it.",
+            "The log is at `.unprompted\\logs\\weekly.log` in the checkout on the machine that runs it.",
             "",
             "Categories can have different outcomes. Passed readings are in `data/runs/`;",
             "held readings are in `data/held/`. A failed or refused category may have",
@@ -134,6 +140,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    summary = None
     if args.summary_file:
         try:
             summary = json.loads(args.summary_file.read_text(encoding="utf-8"))
@@ -146,7 +153,7 @@ def main() -> int:
     # Everything below is best effort. This script exists to report a problem,
     # and it must never become one.
     try:
-        write_status(args.status, args.detail, args.exit_code)
+        write_status(args.status, args.detail, args.exit_code, summary)
     except Exception as exc:  # noqa: BLE001
         print(f"  could not write the status file: {exc}", file=sys.stderr)
 

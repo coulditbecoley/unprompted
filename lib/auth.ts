@@ -34,15 +34,23 @@ export async function validSession(token: string, secret: string, now = Math.flo
   return expires > now && expires <= now + 8 * 3600 && safeEqual(token, await deriveSessionToken(secret, expires));
 }
 
-// ponytail: process-local login throttle; deployment-wide limits need shared edge protection.
+// Deployment-wide through the shared limiter when Redis answers: the local map
+// alone gave each new server instance a fresh ten tries. The local throttle
+// still applies, and is all there is while the store is unreachable.
 const attempts = new Map<string, { until: number; count: number }>();
 export async function allowLogin(request: Request): Promise<boolean> {
+  // Loaded here, not at the top: metric tests import this file without the
+  // bundler, and only a login needs the Redis client.
+  const { sharedLimit } = await import("./rate-limit");
+  if ((await sharedLimit(request, "login")) === false) return false;
   const now = Date.now();
   for (const [key, item] of attempts) if (item.until <= now) attempts.delete(key);
   const address = request.headers.get("x-forwarded-for")?.split(",")[0] ?? "unknown";
   const key = toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${process.env.ADMIN_PASSWORD}:${address}`))));
   const item = attempts.get(key) ?? { until: now + 60_000, count: 0 };
-  if (!attempts.has(key) && attempts.size >= 1000) return false;
+  // Full: forget the oldest caller rather than refusing everyone new, which let
+  // traffic from many addresses lock the operator out.
+  if (!attempts.has(key) && attempts.size >= 1000) attempts.delete(attempts.keys().next().value!);
   item.count++;
   attempts.set(key, item);
   return item.count <= 10;

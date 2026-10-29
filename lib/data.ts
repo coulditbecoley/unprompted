@@ -6,6 +6,7 @@
  * what makes the archive publicly verifiable.
  */
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { cache } from "react";
 import path from "node:path";
@@ -52,6 +53,41 @@ function isRunRecord(v: unknown): v is RunRecord {
   );
 }
 
+/**
+ * Parsed archive files, kept across requests. Re-parsing every week of a
+ * category on every request -- which `cache` alone did, being per request --
+ * grew with the archive. The file is still read each time and the parse is
+ * reused only for identical text, so a rewritten file is never served stale.
+ * ponytail: holds every parsed published week in memory; a precomputed
+ * standings file per week is the upgrade if that ever matters.
+ */
+const parsedFiles = new Map<string, { digest: string; value: unknown }>();
+function parseArchived(file: string): unknown {
+  const text = fs.readFileSync(file, "utf-8");
+  // A digest rather than the text itself, so the cache holds one copy per week.
+  const digest = createHash("sha256").update(text).digest("hex");
+  const hit = parsedFiles.get(file);
+  if (hit && hit.digest === digest) return hit.value;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error(`${file} is not valid JSON`);
+  }
+  // Shared across requests now, so frozen: a page that sorted a cached week in
+  // place would otherwise change it for every later reader.
+  parsedFiles.set(file, { digest, value: deepFreeze(value) });
+  return value;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
 export const loadHistory = cache(function loadHistory(category: string, allReadings = false): RunRecord[] {
   if (!fs.existsSync(RUNS_DIR)) return [];
   const dates = fs
@@ -63,12 +99,7 @@ export const loadHistory = cache(function loadHistory(category: string, allReadi
   for (const date of dates) {
     const file = path.join(RUNS_DIR, date, `${category}.json`);
     if (!fs.existsSync(file)) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
-    } catch {
-      throw new Error(`${file} is not valid JSON`);
-    }
+    const parsed = parseArchived(file);
     // Loud, not silent. A skipped week would quietly change every published
     // number and every week-over-week delta derived from it; a failed build is
     // the cheaper failure.

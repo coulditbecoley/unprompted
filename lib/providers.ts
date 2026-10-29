@@ -82,9 +82,9 @@ export const KNOWN_CLIS: Array<{
     engineId: "claude-code",
     engineLabel: "Claude Code (local)",
     command: "claude",
-    // --strict-mcp-config keeps the operator's MCP servers out of a pass that
-    // is only meant to read one block of prose.
-    args: ["-p", "--strict-mcp-config"],
+    // Mirrors ALLOWED_CLIS in src/unprompted/cli_provider.py, which explains
+    // each flag: no user settings, web search and fetch only, model pinned.
+    args: ["-p", "--safe-mode", "--strict-mcp-config", "--setting-sources", "project", "--model", "claude-opus-5-5", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--disallowedTools", "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate"],
     versionArgs: ["--version"],
   },
   {

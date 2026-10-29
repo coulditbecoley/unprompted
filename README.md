@@ -38,7 +38,8 @@ rotation = times_named / total_runs
 ```
 
 Brand names are normalised against [`aliases/`](aliases/). Anything unrecognised
-is quarantined and never reaches the chart. Five sanity checks then run, and if
+is quarantined and never reaches the chart. The publication checks in
+[`checks.py`](src/unprompted/checks.py) then run, and if
 any of them trips, the week is held for a human instead of published.
 
 Full detail, including what we deliberately do *not* measure, is in
@@ -60,6 +61,26 @@ found. It does not authenticate credentials, validate checkpoint compatibility,
 change the budget ceiling, start a measurement, or certify publication. A
 combined estimate above the ceiling means a later category may refuse after
 earlier categories spend; it does not change the existing per-category policy.
+
+Add `--qualify` to also run what the weekly run checks first, still without
+measuring: each local engine's isolation canary, the model every engine
+reports, and the full method-change comparison against the last published
+week. It makes a few real calls (two per local harness on the subscription,
+and Gemini's tiny model probe).
+
+```powershell
+python -m unprompted.run --preflight --qualify
+```
+
+Two recovery commands make no new paid calls:
+
+```powershell
+python -m unprompted.run --collect-only            # download batches already paid for
+python -m unprompted.reextract 2026-11-02 --category ai-writing-tools --renormalize
+```
+
+The second re-applies today's `aliases/` to a held reading's stored raw brand
+names (readings from November 2026 on) and writes a new dated reading.
 
 Use a project virtual environment. On Windows:
 
@@ -84,8 +105,9 @@ export PERPLEXITY_API_KEY=...           # and will hold the week
 python -m unprompted.run --category ai-coding-assistants --dry-run
 ```
 
-`--dry-run` executes the full pipeline and reports the checks without writing
-anything. Drop the flag to write a real run record.
+`--dry-run` executes the full pipeline, paid calls included, and reports the
+checks; it keeps its checkpoints in `.unprompted/` but writes no run record.
+Drop the flag to write a real run record.
 
 ### The web app's own keys
 
@@ -128,7 +150,7 @@ one category was held, and the reasons are printed.
 A run that passes its checks is written to `data/runs/`, which the site reads. A
 run that is held is written to `data/held/` instead, where it is kept for review
 and never published. Re-read a held run's stored answers, without re-querying
-any engine, with:
+any engine (the re-read is a paid extraction pass, about $2 per category), with:
 
 ```bash
 python -m unprompted.reextract 2026-08-23 --category ai-image-generators
@@ -198,7 +220,7 @@ files and run commands. Two containments apply to every harness:
 
 Neither is a sandbox — a harness can still reach the network and the wider
 filesystem by absolute path. Per-harness flags in the allowlist remove more
-(`--strict-mcp-config` for Claude; `--ignore-user-config --ignore-rules
+(for Claude: no user settings, web search and fetch as the only tools, everything else refused, model pinned; `--ignore-user-config --ignore-rules
 --sandbox read-only` for Codex). Note that `claude --tools ""` is **not** relied
 on: its help says it disables all tools, and it was observed reading a file from
 disk anyway.
@@ -386,6 +408,23 @@ in it ever imported that module. Both audits flagged the three implementations.
 
 Ratios are compared at four decimal places, because that is where Python stores
 them. The counts they come from are compared exactly.
+
+## Reading the data
+
+The latest board per category, small enough for an assistant to read whole:
+`https://unprompted.report/standings/<category>.json` (rank, brand, named and
+named first, each with its denominator). The full record is below.
+
+One file per category per reading: `data/runs/<run_date>/<category>.json`.
+`measured_on` is the week the answers were collected; `run_date` differs from it
+only for a re-reading of stored answers. `method_version` and `methodology` (the
+frozen questions, engines, prompts and extractor) say what was measured; compare
+weeks only within one version. Each item in `extractions` is one answer:
+`engine`, `question_id`, `run_index`, the verbatim `answer`, its `sources`,
+`error` and `refused`, and `brands` as `{name, position, sentiment}` after
+normalisation. An answer counts toward a share only when `error` is null and
+`refused` is false. `publication_checks` records why the week was allowed to
+publish; held weeks have the same shape under `data/held/`.
 
 ## Audits
 

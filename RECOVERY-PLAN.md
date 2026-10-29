@@ -1,5 +1,8 @@
 # Recovery plan: weekly analytics (final, 2026-10-28; reviewed with Codex over 5 rounds, approved)
 
+> Historical record. Written before the 2026-09-28 re-reads were published on
+> 2026-10-28; for current status read `data/last-run.json` and `data/runs/`.
+
 ## What happened
 
 Nothing has been published since 2026-09-14. The weekly task fired every Monday

@@ -345,6 +345,35 @@ test("route integration: analytics and stale editor protection", async (t) => {
     assert.equal((await commit(request("/api/admin/commit", body, { cookie }))).status, 200);
     assert.equal(remote, body.content);
   });
+  await t.test("a question-bank edit without a version bump is refused before GitHub", async () => {
+    const bank = (version, text) => `category: ai-coding-assistants
+method_version: ${version}
+runs_per_question: 5
+questions:
+  - id: q1
+    text: ${text}
+`;
+    remote = bank(5, "Best tool?");
+    calls.length = 0;
+    const edit = { target: "questions", category: "ai-coding-assistants", baseline: remote, content: bank(5, "Best AI tool?") };
+    const refused = await commit(request("/api/admin/commit", edit, { cookie }));
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).error, /method_version/);
+    assert.ok(!calls.some(c => c[0] === "PUT"));
+    edit.content = bank(6, "Best AI tool?");
+    assert.equal((await commit(request("/api/admin/commit", edit, { cookie }))).status, 200);
+    // Key order is not a change (Python compares mappings by content)...
+    const reordered = "method_version: 6\ncategory: ai-coding-assistants\nruns_per_question: 5\nquestions:\n  - text: Best AI tool?\n    id: q1\n";
+    edit.baseline = remote; edit.content = reordered;
+    assert.equal((await commit(request("/api/admin/commit", edit, { cookie }))).status, 200);
+    // ...but values Python and JSON disagree on, and cycles, are refused cleanly.
+    for (const extra of ["note: .nan\n", "note: &x [*x]\n"]) {
+      edit.baseline = remote; edit.content = remote + extra;
+      const response = await commit(request("/api/admin/commit", edit, { cookie }));
+      assert.equal(response.status, 400);
+      assert.match((await response.json()).error, /plain values/);
+    }
+  });
   await t.test("prototype targets and invalid question identities refuse before GitHub", async () => {
     calls.length = 0;
     for (const target of ["toString", "__proto__"]) {
@@ -363,4 +392,38 @@ test("route integration: analytics and stale editor protection", async (t) => {
     }
     assert.equal(calls.length, 0);
   });
+});
+
+test("login throttle falls back locally and a flood of addresses cannot lock the operator out", async () => {
+  // The fixture's limiter is unavailable, so this is the local fallback path.
+  const { allowLogin } = await import("../lib/auth.ts");
+  const from = (ip) => new Request("http://localhost/admin", { headers: { "x-forwarded-for": ip } });
+  for (let i = 0; i < 10; i += 1) assert.equal(await allowLogin(from("198.51.100.7")), true);
+  assert.equal(await allowLogin(from("198.51.100.7")), false);
+  for (let i = 0; i < 1000; i += 1) await allowLogin(from(`10.0.${i >> 8}.${i & 255}`));
+  assert.equal(await allowLogin(from("203.0.113.9")), true);
+});
+
+test("the standings JSON carries each share with its denominator and refuses unknown files", async () => {
+  const { GET, generateStaticParams } = await import("../app/standings/[file]/route.ts");
+  const { latestRun, standings } = await import("../lib/data.ts");
+  const files = generateStaticParams().map(p => p.file);
+  assert.ok(files.includes("ai-coding-assistants.json"));
+  assert.equal((await GET(new Request("http://localhost/x"), { params: Promise.resolve({ file: "../admin.json" }) })).status, 404);
+  const run = latestRun("ai-coding-assistants");
+  if (!run) return;
+  const body = await (await GET(new Request("http://localhost/x"), { params: Promise.resolve({ file: "ai-coding-assistants.json" }) })).json();
+  const top = standings(run)[0];
+  assert.deepEqual([body.brands[0].brand, body.brands[0].named, body.brands[0].of], [top.brand, top.named, top.totalRuns]);
+  assert.equal(body.week, run.measured_on || run.run_date);
+});
+
+test("every top-level page is known to the proxy, so its visits are not counted as missing", () => {
+  const source = fs.readFileSync(new URL("proxy.ts", root), "utf8");
+  const known = [...source.match(/const KNOWN = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const pages = fs.readdirSync(new URL("app/", root), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_") && !entry.name.startsWith("("))
+    .map((entry) => `/${entry.name}`);
+  const missing = pages.filter((page) => !known.some((prefix) => page === prefix || `${page}/`.startsWith(prefix)));
+  assert.deepEqual(missing, []);
 });

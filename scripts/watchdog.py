@@ -99,6 +99,31 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
     return produced, missing, unstarted
 
 
+OUTCOMES = {"passed", "held", "failed", "not_started", "not_run"}
+
+
+def _span(value) -> str:
+    """Untrusted text (brand names from AI answers) as one inline code span."""
+    return "`" + " ".join(str(value).replace("`", "").split())[:200] + "`"
+
+
+def category_lines(status: dict) -> list[str]:
+    """Each category's recorded outcome, for the alarm. Malformed data never
+    stops the alarm itself: it is skipped and said to be skipped."""
+    categories = status.get("categories")
+    if categories is None:
+        return []
+    if not isinstance(categories, dict):
+        return ["Per-category outcomes in `data/last-run.json` are malformed and were skipped.", ""]
+    lines = []
+    for name, item in sorted(categories.items(), key=lambda kv: str(kv[0])):
+        if not (isinstance(item, dict) and isinstance(item.get("outcome"), str) and item["outcome"] in OUTCOMES and isinstance(item.get("reasons", []), list)):
+            lines.append(f"- {_span(name)}: malformed outcome, skipped")
+            continue
+        lines.append(f"- {_span(name)}: {item['outcome']}" + "".join(f" · {_span(r)}" for r in item.get("reasons", [])[:3]))
+    return lines + [""]
+
+
 def measured_in(base: Path, monday: date, category: str) -> bool:
     """Is there a record for this category measured in this week under `base`?
 
@@ -218,6 +243,7 @@ def main() -> int:
             f"`data/last-run.json` says: **{status.get('status', 'nothing at all')}**"
             + (f" at {status['at']}" if status.get("at") else ""),
             "",
+            *category_lines(status),
             "What to do:" if steps else
             "Its reason is not one this check recognises; see the detail in `data/last-run.json`." if status else
             "No status for this week reached GitHub, so the reason is not known here; check the run log on the measuring machine.",

@@ -129,6 +129,21 @@ forced; the grounding check holds any week in which Gemini stops searching.
 Google's products are affiliated with the Gemini engine for self-preference:
 Gemini Code Assist, Imagen and Gemini.
 
+Re-measured on 2026-10-29, after Gemini held the October 12 and 19 weeks:
+requests for `gemini-3.5-flash` are now answered by `gemini-3.6-flash` (the
+response's `modelVersion`), so the pin no longer holds on Google's side, and
+that model searched for 1 of 8 buying questions. Requests for 3.7 and 3.8 were
+answered by `gemini-3.8-flash`, which searched for none; higher thinking and
+`ANY` tool mode changed nothing. One sentence appended to Gemini's copy of the
+system prompt, "Search the web for current information before answering.",
+made it search for 8 of 8. From the November 2 week Gemini carries that
+sentence; the other engines already search without being told, so it moves
+Gemini onto the question the chart asks rather than away from the shared
+prompt's intent. Each run also asks Gemini which model answers and records
+that, so a later re-route stops the run before the measured calls, and an
+answer from any other model mid-run is recorded as a failed call. The grounding
+check still holds any week in which Gemini stops searching.
+
 ## How much of a change is real
 
 Fifteen questions asked five times is a small sample, and a share drawn from a
@@ -148,6 +163,11 @@ so treat the interval as the smallest honest uncertainty, not the whole of it.
 
 A brand that was named last week and not once this week is a disappearance
 rather than a wobble, and always counts.
+
+Positions count charted brands only. A name the alias map excludes, or one
+still in quarantine, is removed before positions are numbered, so "named
+first" means first among the brands this chart tracks, not necessarily the
+first name in the answer.
 
 ---
 
@@ -176,7 +196,7 @@ the thing worth measuring, so each engine is queried natively.
 | ChatGPT | OpenAI API (`gpt-6-sol`) with OpenAI's own web search | v1 |
 | Claude | Anthropic API (`claude-opus-5-5`) with Anthropic's web search | v1 |
 | Perplexity | Perplexity Agent API (`perplexity/sonar`) with Perplexity's web search | v1 |
-| Gemini | Gemini API (`gemini-3.5-flash`) with Google Search grounding | from September 28, 2026 |
+| Gemini | Gemini API (`gemini-3.5-flash` requested, `gemini-3.6-flash` served from October 2026) with Google Search grounding and a search instruction | from September 28, 2026 |
 | Claude Code | Local CLI harness on the operator's machine | v2 |
 | Codex | Local CLI harness on the operator's machine | v2 |
 | Google AI Overviews | Planned, via a SERP data provider | not yet active |
@@ -332,6 +352,32 @@ cannot guarantee provider balances or the token usage of a changed reader.
 Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
+
+### Local Claude Code engine isolated (October 29, 2026)
+
+Until this week the Claude Code row ran with the operator's own Claude Code
+setup: their settings, permission mode, instructions file, memory, plugins and
+hooks. A test showed that setup let a prompt run shell commands, and a web page
+the engine reads could in principle have done the same. From the November 2
+week the harness runs in safe mode with no user settings, its only tools are
+web search and web fetch, everything else is refused, and the model is pinned
+to `claude-opus-5-5`, the model it already reported. Each run first asks each local
+harness to write one file and print another planted beside it, and stops
+before any paid call if the file appears or the planted text is printed. The
+harness's arguments are now part of the frozen engine configuration, so a later
+change to them is caught like any other unversioned change.
+
+The same week Gemini's instruction gains one sentence asking it to search (see
+[Why an engine has to search](#why-an-engine-has-to-search)), and its recorded
+model becomes the one Google serves. The Claude Code model is unchanged, but
+what surrounds it is not, so every category takes a
+method version bump: coding moves to version 5, images and writing to version 6.
+Week-over-week movement is not reported across the change.
+
+The swing check (a brand moving more than 40 points in a week holds it) now
+counts a brand missing from either week as zero. Before, a brand that vanished
+entirely, the largest swing there is, passed without comment. No published
+pair of weeks is affected: every one so far crossed a version change.
 
 ### Model upgrade (September 28, 2026)
 

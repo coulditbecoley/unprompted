@@ -10,6 +10,7 @@
     Remove it with:
 
         Unregister-ScheduledTask -TaskName "Unprompted weekly run" -Confirm:$false
+        Unregister-ScheduledTask -TaskName "Unprompted Monday readiness" -Confirm:$false
 #>
 
 $ErrorActionPreference = "Stop"
@@ -35,7 +36,6 @@ $action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
 # StartWhenAvailable matters more than the exact time: a laptop that was asleep
 # on Monday should still produce the week when it next wakes, because a missing
 # week costs more than a late one.
-#
 # ExecutionTimeLimit is generous. Five engines including two local agents is a
 # few hundred calls per category and can run for hours.
 $settings = New-ScheduledTaskSettingsSet `
@@ -65,11 +65,25 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     -Force | Out-Null
 }
 
+# Sunday 18:00: the weekly run's own first checks, the evening before, so a
+# drifted CLI model or a broken key is an issue to fix rather than a lost week.
+$readyName    = "Unprompted Monday readiness"
+$readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
+$readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
+$readySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 45) -MultipleInstances IgnoreNew
+if (Get-ScheduledTask -TaskName $readyName -ErrorAction SilentlyContinue) {
+    Set-ScheduledTask -TaskName $readyName -Trigger $readyTrigger -Action $readyAction -Settings $readySettings -Principal $principal | Out-Null
+} else {
+    Register-ScheduledTask -TaskName $readyName -Description "Runs the weekly run's first checks the evening before and opens an issue if they fail." `
+        -Trigger $readyTrigger -Action $readyAction -Settings $readySettings -Principal $principal -Force | Out-Null
+}
+
 Write-Host "Registered '$taskName'."
+Write-Host "Registered '$readyName' (Sundays 18:00)."
 Write-Host "  runs:   Mondays at 13:00 local; wake requested, catch up when available"
 Write-Host "  needs:  this machine powered on and the operator signed in (locking is fine)"
 Write-Host "  script: $script"
-Write-Host "  log:    $env:TEMP\unprompted-weekly.log"
+Write-Host "  log:    $repo\.unprompted\logs\weekly.log"
 Write-Host ""
 Write-Host "Run it once now to check it works:"
 Write-Host "  Start-ScheduledTask -TaskName '$taskName'"

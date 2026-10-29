@@ -44,7 +44,9 @@ class PerplexityEngine(Engine):
 
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             body = json.loads(response.read().decode("utf-8"))
-        return read_response(body)
+        # Which model answered, as reported: the only proof a pin held.
+        metadata = {k: body[k] for k in ("model", "status") if isinstance(body.get(k), str)}
+        return (*read_response(body), metadata or None)
 
 
 def read_response(body: dict) -> tuple[str, list[str], dict[str, int]]:

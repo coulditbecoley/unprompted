@@ -64,6 +64,10 @@ class Verdict:
         return self.spent + self.estimate.dollars
 
 
+# Relative paths: this text lands in the committed, public data/last-run.json.
+COLLECT_HINT = "collect it with `python -m unprompted.run --collect-only` (downloads only, no new paid work) before new paid work"
+
+
 def _archived_runs() -> list[dict]:
     """Every run this repo has recorded, published or held.
 
@@ -101,7 +105,7 @@ def _archived_runs() -> list[dict]:
             try:
                 entries = read_batch_results(job)
             except (OSError, ValueError, KeyError, TypeError) as exc:
-                raise ValueError(f"unaccounted extraction batch: collect {job} before new paid work") from exc
+                raise ValueError(f"unaccounted extraction batch: {job.relative_to(state.parent).as_posix()}; {COLLECT_HINT}") from exc
             usage_by_answer = {
                 tuple(saved["answer_keys"][entry.custom_id]):
                 ({f"extract_{k}": v for k, v in anthropic_usage(entry.result.message).items()}
@@ -128,7 +132,7 @@ def _archived_runs() -> list[dict]:
                             "extractions": [{"engine": key[0], "usage": usage} for key, usage in usage_by_answer.items()]})
     for job in state.glob("????-??-??/*/claude-batch/state.json"):
         if not json.loads(job.read_text(encoding="utf-8")).get("collected"):
-            raise ValueError(f"unaccounted Claude batch: collect {job} before new paid work")
+            raise ValueError(f"unaccounted Claude batch: {job.relative_to(state.parent).as_posix()}; {COLLECT_HINT}")
     for manifest in state.glob("????-??-??/*/methodology.json"):
         day, category = manifest.parent.parent.name, manifest.parent.name
         if (day, category) in completed:

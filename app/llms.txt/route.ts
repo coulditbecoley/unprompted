@@ -57,6 +57,8 @@ export async function GET() {
     "- Where the assistants agree: https://unprompted.report/consensus",
     "- The latest board as CSV: https://unprompted.report/chart/<category-slug>/board.csv",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
+    "- Every published week as JSON: https://github.com/coulditbecoley/unprompted/tree/main/data/runs",
+    "  (one file per category per week; fields under 'Reading the data' in the README)",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",
     "## Current categories",
@@ -72,11 +74,16 @@ export async function GET() {
     }
     const board = standings(run);
     const leader = board[0];
+    // The week the answers were collected; a re-reading has a later run_date.
+    const week = run.measured_on || run.run_date;
     const detail = leader
       ? `${leader.brand} was named first in ${Math.round(leader.firstShare * 100)}% ` +
-        `of ${leader.totalRuns} answers, measured ${run.measured_on || run.run_date}`
-      : `no brand was named, measured ${run.measured_on || run.run_date}`;
+        `of ${leader.totalRuns} answers, measured ${week}`
+      : `no brand was named, measured ${week}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
+    // For readers that would rather count than quote: the board, then the full record.
+    lines.push(`  Standings (JSON): https://unprompted.report/standings/${category.slug}.json`);
+    lines.push(`  Every answer (JSON): https://raw.githubusercontent.com/coulditbecoley/unprompted/main/data/runs/${run.run_date}/${category.slug}.json`);
   }
 
   lines.push(

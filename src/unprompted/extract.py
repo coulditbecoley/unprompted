@@ -38,6 +38,7 @@ from .cli_provider import CliProvider, ProviderError, parse_json_reply
 from .models import BrandMention, EngineAnswer, Extraction
 from .storage import write_json
 from .engines.anthropic_engine import _usage as anthropic_usage
+from .engines.base import refuse_new_paid_work, wait_deadline
 
 # Letters and digits only, for checking that an extracted name occurs in the
 # answer. Deliberately a local copy rather than an import from normalize: this
@@ -62,7 +63,7 @@ TIMEOUT_SECONDS = 120
 # killed the run mid-week. A timed-out job may still complete and bill: keep
 # its ID and collect it before further spending.
 BATCH_POLL_SECONDS = 15
-BATCH_MAX_WAIT_SECONDS = 3600
+BATCH_MAX_WAIT_SECONDS = 6 * 3600  # bounded by the run's clock: engines/base.py wait_deadline
 
 EXTRACT_PROMPT = """\
 Below is an answer an AI assistant gave to a shopper's question.
@@ -271,8 +272,10 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
 
     The CLI path has no schema enforcement at all, and the batch path returns
     schema-shaped text that still has to be json.loads'd, so both arrive here as
-    a plain dict. A malformed entry is dropped rather than raised: one unreadable
-    brand should cost that brand, not the whole answer.
+    a plain dict. A malformed brand entry (no name, a bad or repeated position,
+    an unknown sentiment) fails the whole answer as an extraction error rather
+    than being dropped: a reply that got one entry wrong cannot be trusted for
+    the positions of the rest. Names absent from the answer text are dropped.
     """
     if not isinstance(parsed, dict) or type(parsed.get("refused")) is not bool or not isinstance(parsed.get("brands"), list):
         base.error = "extract failed: expected boolean refused and a brands list"
@@ -295,16 +298,8 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
             base.brands = []
             return base
         positions.add(item["position"])
-        name = str(item.get("name", "")).strip()
-        if not name:
-            continue
-        try:
-            position = int(item.get("position", len(mentions) + 1))
-        except (TypeError, ValueError):
-            position = len(mentions) + 1
-        sentiment = str(item.get("sentiment", "neutral")).strip().lower()
-        if sentiment not in {"positive", "neutral", "negative"}:
-            sentiment = "neutral"
+        # Validated above, so these are exactly what was sent.
+        name, position, sentiment = item["name"].strip(), item["position"], item.get("sentiment", "neutral")
         # A name the answer does not contain was not read out of it. Dropped
         # rather than quarantined: quarantine is the list of real names awaiting
         # a human decision, and an invented one is not awaiting anything. Counted
@@ -403,7 +398,7 @@ def _local_schema(model: type[BaseModel]) -> dict:
 def _wait_ended(client, batch, deadline: float | None = None):
     from .engines.anthropic_batch import read_retrying
 
-    deadline = time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
+    deadline = wait_deadline(BATCH_MAX_WAIT_SECONDS) if deadline is None else deadline
     while batch.processing_status != "ended":
         if time.monotonic() >= deadline:
             raise TimeoutError(f"batch {batch.id} remains pending; collect it before new paid work")
@@ -449,11 +444,11 @@ def collect_batch(checkpoint: Path, api_key: str | None = None, deadline: float 
     destination = checkpoint.parent / "extraction-batch/results.json"
     if not destination.exists():
         client = _client(api_key)
-        recovery, deadline = deadline, time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
+        deadline = wait_deadline(BATCH_MAX_WAIT_SECONDS) if deadline is None else deadline
         label = f"batch {state['id']}"
         batch = _wait_ended(client, read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label), deadline)
         # A dropped stream restarts the whole download; nothing partial is written.
-        entries = read_retrying(lambda: download(client.messages.batches.results(batch.id), recovery, label),
+        entries = read_retrying(lambda: download(client.messages.batches.results(batch.id), deadline, label),
                                 deadline, label)
         # Complete download first: parsing cannot strand the provider's usage.
         write_json(destination, {"id": state["id"], "identity": state["identity"], "entries": entries})
@@ -545,6 +540,7 @@ def extract_all_batch(
             intent = {"identity": identity, "model": model, "answers": len(requests), "submission_started": True,
                       "result_checkpoint_version": 1,
                       "answer_keys": answer_keys}
+            refuse_new_paid_work("extraction batch")
             if checkpoint:
                 write_json(checkpoint, intent)
             batch = client.messages.batches.create(requests=requests)
@@ -580,7 +576,9 @@ def extract_all_batch(
                 base.error = "extract failed: incomplete response"
                 continue
             try:
-                _apply(base, json.loads(message.content[0].text))
+                # The text block, not block 0: a thinking block can come first
+                # (2026-09-14), and reading it threw away a paid extraction.
+                _apply(base, json.loads("".join(b.text for b in message.content if getattr(b, "type", None) == "text")))
             except (ValueError, IndexError, AttributeError) as exc:
                 base.error = f"extract failed: {type(exc).__name__}: {exc}"
                 continue

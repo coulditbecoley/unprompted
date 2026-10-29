@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import os
 import re
 import subprocess
 import sys
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
@@ -30,7 +32,7 @@ from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .extract import EXTRACT_PROMPT, extract_run
-from .engines.base import SYSTEM_PROMPT
+from .engines.base import SYSTEM_PROMPT, refuse_new_paid_work, run_time_left
 from .models import EngineAnswer, RunRecord
 from .storage import run_lock, write_json
 from .normalize import AliasMap, normalize
@@ -43,6 +45,7 @@ HELD_EXIT_CODE = 2
 # seconds, ChatGPT over a minute), so they run concurrently. Serially a full week
 # is roughly 2.5 hours, which would blow the CI timeout and delay the chart for
 # no reason. Kept modest so we stay well inside every provider's rate limits.
+CATEGORY_RESERVE_SECONDS = 90 * 60
 MAX_WORKERS = 6
 
 
@@ -91,8 +94,9 @@ def git_sha() -> str:
 
 
 def load_questions(category: str) -> dict:
-    if category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
-        raise ValueError("unknown category")
+    known = sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
+    if category not in known:
+        raise ValueError(f"unknown category {category!r}; known: {', '.join(known)}")
     path = ROOT / "questions" / f"{category}.yml"
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(spec, dict) or spec.get("category") != category:
@@ -206,30 +210,13 @@ def _run_category(
     # as_completed rather than map: a twenty-minute run that prints nothing until
     # it finishes looks identical to a hung one, both here and in CI logs.
     checkpoint = ROOT / ".unprompted" / run_date / category
-    methodology = {
-        "questions": spec,
-        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {})}
-                    for name, e in engines.items()},
-        "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
-        "system_prompt": SYSTEM_PROMPT,
-        "extraction_prompt": EXTRACT_PROMPT,
-        "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
-    }
+    methodology = build_methodology(spec, engines, identities, category, extractor)
     alias_data = methodology["aliases"] or {}
     aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
     measurement_commit = git_sha()
-    prior = load_history(ROOT / "data" / "runs", category)
-    if prior and prior[-1].get("method_version") == spec["method_version"]:
-        before = prior[-1].get("methodology", {})
-        changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
-                   if before and before.get(k) != methodology[k]]
-        if changed:
-            models = [f"{n}: {before['engines'].get(n, {}).get('model')} -> {c['model']}"
-                      for n, c in methodology["engines"].items()
-                      if "engines" in changed and before.get("engines", {}).get(n, {}).get("model") != c["model"]]
-            raise ValueError("methodology changed without a version bump; refusing before paid calls. "
-                             f"Changed: {', '.join(changed)}" + (f" ({'; '.join(models)})" if models else "")
-                             + ". If a local harness switched model, bump method_version in the question bank.")
+    refusal = unversioned_change(category, spec, methodology)
+    if refusal:
+        raise ValueError(refusal)
     manifest = checkpoint / "methodology.json"
     if manifest.exists():
         if json.loads(manifest.read_text(encoding="utf-8")) != methodology:
@@ -247,12 +234,17 @@ def _run_category(
 
     answers = []
     pending = []
+    retried: dict[str, str] = {}  # checkpoint name -> the error it replaces
     for engine, qid, text, run_index in tasks:
         saved = checkpoint / f"{engine.name}-{qid}-{run_index}.json"
         if saved.exists():
             answer = EngineAnswer(**json.loads(saved.read_text(encoding="utf-8")))
             if (answer.engine, answer.question_id, answer.question, answer.run_index) != (engine.name, qid, text, run_index):
                 raise ValueError(f"checkpoint answer identity differs: {saved.name}")
+            if retryable_on_resume(answer, engine, extraction_state):
+                retried[saved.name] = answer.error
+                pending.append((engine, qid, text, run_index))
+                continue
             answers.append(answer)
         else:
             pending.append((engine, qid, text, run_index))
@@ -285,9 +277,13 @@ def _run_category(
     if answers:
         print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):
+        refuse_new_paid_work(f"{engine.name} {qid}#{run_index}")  # queued past the run's end
         answer = engine.ask_one(qid, text, run_index)
         answer.measurement_git_sha = measurement_commit
-        write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
+        name = f"{answer.engine}-{answer.question_id}-{answer.run_index}.json"
+        if name in retried:  # the earlier rejection stays on the record
+            answer.metadata = {**(answer.metadata or {}), "resumed_after": retried[name]}
+        write_json(checkpoint / name, answer.to_dict(), replace=name in retried)
         return answer
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -445,6 +441,116 @@ def all_categories() -> list[str]:
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
 
 
+def build_methodology(spec: dict, engines: dict, identities: dict, category: str, extractor) -> dict:
+    """The frozen description of what this week measures, compared week to week."""
+    hosted = isinstance(extractor, ApiExtractor)
+    return {
+        "questions": spec,
+        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {}),
+                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {}),
+                           **({"prompt_suffix": e.prompt_suffix} if getattr(e, "prompt_suffix", "") else {})}
+                    for name, e in engines.items()},
+        "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
+        "system_prompt": SYSTEM_PROMPT,
+        "extraction_prompt": EXTRACT_PROMPT,
+        "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
+    }
+
+
+def unversioned_change(category: str, spec: dict, methodology: dict) -> str | None:
+    """Why the run must refuse: the method changed since the last published week
+    without a version bump. None when it may go ahead."""
+    prior = load_history(ROOT / "data" / "runs", category)
+    if not prior or prior[-1].get("method_version") != spec["method_version"]:
+        return None
+    before = prior[-1].get("methodology", {})
+    changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
+               if before and before.get(k) != methodology[k]]
+    if not changed:
+        return None
+    models = [f"{n}: {before['engines'].get(n, {}).get('model')} -> {c['model']}"
+              for n, c in methodology["engines"].items()
+              if "engines" in changed and before.get("engines", {}).get(n, {}).get("model") != c["model"]]
+    return ("methodology changed without a version bump; refusing before paid calls. "
+            f"Changed: {', '.join(changed)}" + (f" ({'; '.join(models)})" if models else "")
+            + ". If a local harness switched model, bump method_version in the question bank.")
+
+
+# Only calls that were never sent: the engine refused locally after a provider
+# failure, or was not configured. Anything that reached a provider, even one
+# that ended in a rejection, may have had an earlier attempt that was billed,
+# and error text cannot prove otherwise.
+_NEVER_SENT = ("not attempted after provider failure:", "not available:")
+
+
+REFUSAL_WARNING_SHARE = 0.5
+
+
+def refusal_warnings(record: dict) -> list[str]:
+    """Engines that declined most of their questions this week. Not a hold.
+
+    A refusal is a real outcome and leaves the denominator, so an engine that
+    starts refusing everything passes every check and quietly stops counting.
+    Whether that should hold a week is a method decision; until it is made,
+    it is at least said, in the run summary and data/last-run.json.
+    """
+    by_engine: dict[str, list[int]] = {}
+    for e in record.get("extractions", []):
+        if e.get("error"):
+            continue
+        counts = by_engine.setdefault(e.get("engine", "?"), [0, 0])
+        counts[0] += e.get("refused") is True
+        counts[1] += 1
+    return [f"{engine} declined {refused} of {answered} replies"
+            for engine, (refused, answered) in sorted(by_engine.items())
+            if answered and refused / answered > REFUSAL_WARNING_SHARE]
+
+
+def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
+    """Ask again on a restart: a synchronous call that was never sent.
+
+    Typically every call queued behind a spend cap or a revoked key, once the
+    operator has fixed it. Anything a provider saw stays as recorded; a batch
+    answer belongs to its batch; once extraction is submitted the answers are
+    fixed.
+    """
+    return (bool(answer.error) and answer.error.startswith(_NEVER_SENT) and not answer.usage
+            and not extraction_state.exists() and getattr(engine, "transport", None) != "messages-batch")
+
+
+def qualify(categories: list[str]) -> tuple[dict, list[str]]:
+    """What the weekly run's own first steps would say, without measuring anything.
+
+    The CLI canaries, the model each engine reports, and the run's complete
+    unversioned-change comparison against the last published week, built the
+    same way the run builds it. Makes real calls: each local harness twice
+    (canary, model), and Gemini's model probe (up to three tiny attempts).
+    """
+    identified, issues = {}, []
+    try:
+        engines = {name: e for name, e in all_engines().items() if e.is_configured}
+        extractor = resolve_extractor()
+    except (ProviderError, OSError, ValueError) as exc:
+        return identified, [f"cannot qualify: {exc}"]  # preflight reports the detail
+    for name, engine in sorted(engines.items()):
+        if hasattr(engine, "identify"):
+            try:
+                identified[name] = engine.identify()
+            except (ProviderError, TimeoutError, OSError, subprocess.SubprocessError) as exc:
+                issues.append(f"{name}: {exc}")
+    for category in categories:
+        try:
+            spec = load_questions(category)
+            refusal = unversioned_change(category, spec, build_methodology(spec, engines, identified, category, extractor))
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
+            # The run's own guard would raise here too, so this is a refusal to report.
+            issues.append(f"{category}: could not compare with the last published week: {type(exc).__name__}: {exc}")
+            continue
+        if refusal:
+            issues.append(f"{category}: {refusal}")
+    return identified, issues
+
+
 def preflight(categories: list[str], run_date: str) -> dict:
     """Read-only configuration and aggregate budget inspection, not a paid dry run."""
     if date.fromisoformat(run_date).isoformat() != run_date:
@@ -508,18 +614,41 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--summary-file", type=Path, help="write category outcomes for the scheduler notification")
-    parser.add_argument("--dry-run", action="store_true", help="do not write files")
+    parser.add_argument("--dry-run", action="store_true", help="still makes PAID provider calls and keeps their checkpoints in .unprompted/; only the final run record is not written")
+    parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
+    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers (real calls: two per local harness on the subscription and Gemini's model probe, up to three tiny attempts; no measurement)")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
         help="run even if the month's ceiling in data/rates.json would be passed",
     )
     args = parser.parse_args()
+    if args.qualify and not args.preflight:
+        parser.error("--qualify is an addition to --preflight")
+    if args.collect_only and (args.preflight or args.dry_run or args.ignore_budget):
+        parser.error("--collect-only runs alone")
+    if not (args.preflight or args.collect_only or args.ignore_budget) and args.date[:7] != date.today().isoformat()[:7]:
+        # Spend is booked by run date and the ceiling is checked for this month,
+        # so a run dated in another month would be paid for outside the check.
+        parser.error(f"--date {args.date} is outside this month: its spend would be booked to another month's "
+                     "budget. Pass --ignore-budget to run it anyway.")
     if args.preflight and (args.dry_run or args.ignore_budget):
         parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
     load_local_env()
+    if args.collect_only:
+        # The one recovery command, for any batch kind the budget guard names.
+        from .engines.anthropic_batch import collect_outstanding
+        from .engines.anthropic_engine import AnthropicEngine
+        with run_lock(ROOT / ".unprompted"):
+            collected, failed = collect_outstanding(ROOT / ".unprompted", AnthropicEngine().api_key)
+        for job in collected:
+            print(f"collected {job}")
+        for reason in failed:
+            print(reason, file=sys.stderr)
+        print(f"{len(collected)} collected, {len(failed)} failed")
+        return 1 if failed else 0
 
     categories = all_categories() if args.category == "all" else [args.category]
     if not categories:
@@ -527,11 +656,30 @@ def main() -> int:
         return 1
     if args.preflight:
         result = preflight(categories, args.date)
+        if args.qualify:
+            result["engines_identified"], found = qualify(categories)
+            result["issues"] += found
+            result["status"] = "issues_found" if result["issues"] else "checks_passed"
+            result["scope"] = ("Preflight plus the weekly run's first steps: real calls to each local harness "
+                               "(isolation canary, model) and Gemini's model probe, and the full method-change "
+                               "comparison. No measurement, extraction, Git or publication is tested.")
         print(json.dumps(result, indent=2))
         return 2 if result["issues"] else 0
 
+    # Held for the whole week: the daily sync's pull and the readiness check
+    # wait on it, so inputs cannot change between categories. The wait covers a
+    # pull, or a readiness check (30-minute limit), already in flight.
+    from .engines.base import booked_to
+    booked = None if args.ignore_budget else args.date[:7]
+    with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=35 * 60):
+        return _measure(args, categories)
+
+
+def _measure(args, categories: list[str]) -> int:
     held: dict[str, list[str]] = {}
     outcomes: list[str] = []
+    # Machine-readable twin of `outcomes`, committed in data/last-run.json.
+    results: dict[str, dict] = {}
     total = 0.0
 
     if not args.dry_run:
@@ -553,11 +701,28 @@ def main() -> int:
             # not the budget reader recognises that checkpoint's format.
             for category in categories:
                 held[category] = ["not run: an outstanding paid batch could not be collected"]
+                results[category] = {"outcome": "not_run", "reasons": held[category] + failed}
                 outcomes.append(f"{category}: not run — outstanding batch recovery failed")
             categories = []
 
     for category in categories:
+        if not args.ignore_budget and date.today().isoformat()[:7] != args.date[:7]:
+            # The month turned during the run (a Monday that is the last of the
+            # month): later categories would spend outside this month's check.
+            # ponytail: per category, so calls already in flight finish under the old date.
+            held[category] = ["not started: the month changed during the run, so its spend would be booked to the previous month"]
+            results[category] = {"outcome": "not_started", "reasons": held[category]}
+            outcomes.append(f"{category}: not started — the month changed during the run")
+            continue
+        if run_time_left() < CATEGORY_RESERVE_SECONDS:  # --dry-run pays for calls too
+            # Asking takes ~20 minutes and its batch typically an hour; one
+            # started later would strand paid work the run cannot collect.
+            held[category] = ["not started: too little of the weekly run's time was left to finish it"]
+            results[category] = {"outcome": "not_started", "reasons": held[category]}
+            outcomes.append(f"{category}: not started — run time budget nearly spent")
+            continue
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
+        started = time.monotonic()
         try:
             record, reasons = run_category(
                 category, args.date, dry_run=args.dry_run, ignore_budget=args.ignore_budget
@@ -576,28 +741,41 @@ def main() -> int:
             print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc()
             held[category] = [f"the run raised {type(exc).__name__}: {exc}"]
+            results[category] = {"outcome": "failed", "reasons": held[category],
+                                 "minutes": round((time.monotonic() - started) / 60, 1)}
             outcomes.append(f"{category}: failed or refused — {type(exc).__name__}: {exc}")
             continue
 
         print("\nCOST", file=sys.stderr)
         print(format_report(record.to_dict()), file=sys.stderr)
-        total += cost_of_run(record.to_dict())[1]
+        dollars = cost_of_run(record.to_dict())[1]
+        total += dollars
+        # Cost and wall time beside the outcome: the budget and the run clock's
+        # 90-minute reserve can be checked against real weeks without the log.
+        spent = {"dollars": round(dollars, 2), "minutes": round((time.monotonic() - started) / 60, 1)}
+        warnings = refusal_warnings(record.to_dict())
+        if warnings:
+            spent["warnings"] = warnings
+            for warning in warnings:
+                print(f"  WARNING: {warning}", file=sys.stderr)
 
         if reasons:
             held[category] = reasons
+            results[category] = {"outcome": "held", "reasons": reasons, **spent}
             outcomes.append(f"{category}: held — {'; '.join(reasons)}")
             print(f"\nHELD: {category} will not publish:", file=sys.stderr)
             for reason in reasons:
                 print(f"  - {reason}", file=sys.stderr)
         else:
             outcomes.append(f"{category}: passed local publication checks")
+            results[category] = {"outcome": "passed", "reasons": [], **spent}
             print(f"\n{category}: all checks passed.", file=sys.stderr)
 
     if len(categories) > 1:
         print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)
 
     if args.summary_file and not args.dry_run:
-        write_json(args.summary_file, {"run_date": args.date,
+        write_json(args.summary_file, {"run_date": args.date, "categories": results,
                    "detail": "\n".join(outcomes) + "\nCommit and push follow; deployment is not verified."}, replace=True)
 
     # One held category must not suppress the others. Everything that passed is
@@ -607,9 +785,12 @@ def main() -> int:
         out = os.environ.get("GITHUB_OUTPUT")
         if out:
             lines = [f"{c}: {r}" for c, rs in held.items() for r in rs]
+            # A random delimiter: reasons quote brand names from AI answers, and
+            # a line reading exactly EOF would end the block and set outputs.
+            marker = f"EOF_{secrets.token_hex(16)}"
             with open(out, "a", encoding="utf-8") as handle:
                 handle.write("held=true\n")
-                handle.write("reasons<<EOF\n" + "\n".join(lines) + "\nEOF\n")
+                handle.write(f"reasons<<{marker}\n" + "\n".join(lines) + f"\n{marker}\n")
         return HELD_EXIT_CODE
 
     return 0

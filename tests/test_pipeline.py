@@ -6,7 +6,9 @@ a stub, because "one dead engine must not cost the week" is a real guarantee.
 
 from __future__ import annotations
 
+import os
 import sys
+from types import SimpleNamespace
 from datetime import date
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from unprompted.aggregate import BrandWeek, brand_week, movement, source_counts,
 from unprompted.checks import MAX_ERROR_RATE, MIN_ROTATION_TO_COUNT, run_checks
 from unprompted.engines.base import Engine
 from unprompted.models import BrandMention, EngineAnswer, Extraction, RunRecord
+from unprompted.cli_provider import ALLOWED_CLIS
 from unprompted.normalize import AliasMap, normalize
 
 
@@ -225,9 +228,9 @@ def test_the_snub_is_none_on_a_quiet_week():
 
 def test_small_sample_dropout_does_not_become_a_headline():
     a, b = _week("A", 1), _week("B", 1)
-    a.total_runs = b.total_runs = 10
+    a.total_runs = b.total_runs = a.named = b.named = 10
     assert the_snub(movement([b], [a])) is None
-    a.total_runs = b.total_runs = 100
+    a.total_runs = b.total_runs = a.named = b.named = 100
     assert the_snub(movement([b], [a])).brand == "A"
 
 
@@ -306,6 +309,13 @@ def test_large_rotation_swing_holds_the_week():
     last = [_week("PSA", 0.9), _week("CGC", 0.5)]
     result = run_checks(_run([ex(brands=["PSA"])]), this, last)
     assert result.held and "moved" in " ".join(result.reasons)
+
+
+def test_a_leader_that_vanished_is_the_largest_swing_not_an_exemption():
+    this = [_week("CGC", 0.5), _week("BGS", 0.4)]
+    last = [_week("PSA", 0.9), _week("CGC", 0.5), _week("BGS", 0.4)]
+    result = run_checks(_run([ex(brands=["CGC"])]), this, last)
+    assert result.held and any("PSA rotation moved 90 points" in r for r in result.reasons)
 
 
 def test_small_rotation_swing_passes():
@@ -836,7 +846,7 @@ def test_an_available_cli_extractor_is_not_an_implicit_sandbox(monkeypatch):
                 "role": "extractor",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             }
         ],
     )
@@ -992,7 +1002,7 @@ def test_a_declared_cli_engine_joins_the_registry(monkeypatch):
                 "role": "engine",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             },
             # An extractor must not be mistaken for an engine.
             {
@@ -1265,7 +1275,7 @@ class _FakeBatches:
                 continue
             usage = type("U", (), {"input_tokens": 11, "output_tokens": 22})()
             message = type(
-                "M", (), {"content": [type("T", (), {"text": text})()], "usage": usage}
+                "M", (), {"content": [type("T", (), {"type": "text", "text": text})()], "usage": usage}
             )()
             yield type(
                 "E",
@@ -1769,7 +1779,7 @@ def test_a_hosted_extractor_with_no_key_refuses_unisolated_fallback(monkeypatch)
                 "role": "extractor",
                 "enabled": True,
                 "command": "claude",
-                "args": ["-p", "--strict-mcp-config"],
+                "args": list(ALLOWED_CLIS["claude"]),
             },
         ],
     )
@@ -1896,6 +1906,12 @@ def test_a_permanent_failure_is_not_retried_three_times():
     # Unknown stays retryable: losing an answer is worse than wasting a call.
     assert Engine.is_retryable(Exception("something nobody has seen before"))
 
+    # urllib's HTTPError carries only a status (Gemini, Perplexity).
+    import io, urllib.error
+    http = lambda code: urllib.error.HTTPError("https://x", code, "msg", {}, io.BytesIO())
+    assert not Engine.is_retryable(http(400)) and not Engine.is_retryable(http(404))
+    assert Engine.is_retryable(http(429)) and Engine.is_retryable(http(503)) and Engine.is_retryable(http(408))
+
 
 def test_a_permanent_failure_stops_after_one_attempt():
     from unprompted.engines.base import Engine
@@ -1919,8 +1935,9 @@ def test_a_permanent_failure_stops_after_one_attempt():
     assert answer.error and "usage limits" in answer.error
 
 
-def test_a_transient_failure_still_gets_its_retries():
+def test_a_transient_failure_still_gets_its_retries(monkeypatch):
     from unprompted.engines.base import Engine
+    monkeypatch.setattr("unprompted.engines.base.time.sleep", lambda s: None)  # 6s of real backoff otherwise
 
     calls = []
 
@@ -2267,11 +2284,13 @@ def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp
     this check stayed green because a held run counted as having happened."""
     wd = _watchdog(monkeypatch, tmp_path, ["alpha"], held=[("2026-10-19", "alpha")])
     (tmp_path / "last-run.json").write_text(json.dumps({"status": "held", "at": "2026-10-19T18:00:00+00:00",
-        "detail": "alpha: held - 2 unrecognised brand name(s) appeared"}), encoding="utf-8")
+        "detail": "alpha: held - 2 unrecognised brand name(s) appeared",
+        "categories": {"alpha": {"outcome": "held", "reasons": ["2 unrecognised brand name(s): `Evil`"]}}}), encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["watchdog", "--date", "2026-10-20"])
     assert wd.main() == 1
     err = capsys.readouterr().err
     assert "Weekly run held, not published: 2026-10-19" in err and "aliases/<category>.yml" in err
+    assert "- `alpha`: held · `2 unrecognised brand name(s): Evil`" in err  # per category, backticks stripped
 
     # A re-reading of that week, published later under the day it ran, settles it.
     d = tmp_path / "data/runs/2026-10-28"
@@ -2287,3 +2306,227 @@ def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp
     assert wd.main() == 1
     err = capsys.readouterr().err
     assert "not one this check recognises" in err and "No status for this week" not in err
+
+
+def test_the_claude_engine_never_inherits_the_operators_permissions():
+    # 2026-10-29: with only -p, the web-reading engine ran under the operator's
+    # bypassPermissions settings and executed Bash from a prompt.
+    args = ALLOWED_CLIS["claude"]
+    pairs = {a: args[i + 1] for i, a in enumerate(args[:-1]) if a.startswith("--")}
+    assert pairs["--setting-sources"] == "project" and pairs["--permission-mode"] == "dontAsk"
+    assert pairs["--tools"] == pairs["--allowedTools"] == "WebSearch,WebFetch"
+    assert {"Bash", "PowerShell", "Write", "Edit"} <= set(pairs["--disallowedTools"].split(","))
+    assert pairs["--model"].startswith("claude-")
+    providers = json.loads((Path(__file__).resolve().parents[1] / "providers.json").read_text(encoding="utf-8"))["providers"]
+    assert all(p["args"] == list(args) for p in providers if p.get("command") == "claude")
+
+
+def test_the_claude_canary_stops_a_harness_that_can_write(monkeypatch, tmp_path):
+    import re as _re
+    from unprompted import cli_provider
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+
+    def obeys(prompt, cwd, extra=()):
+        Path(_re.search(r"create the file (\S+)", prompt).group(1)).write_text("canary")
+        return SimpleNamespace(returncode=0, stdout="DONE", stderr="")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: obeys(*a, **k))
+    with pytest.raises(cli_provider.ProviderError, match="wrote or read"):
+        claude.qualify()
+    for broken in (SimpleNamespace(returncode=1, stdout="", stderr="startup failure"),
+                   SimpleNamespace(returncode=0, stdout="  ", stderr="")):
+        monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, b=broken, **k: b)
+        with pytest.raises(cli_provider.ProviderError, match="inconclusive"):
+            claude.qualify()  # a harness that never started proved nothing
+    def reads(prompt, cwd, extra=()):
+        return SimpleNamespace(returncode=0, stdout=Path(_re.search(r"read the file (\S+)", prompt).group(1)).read_text(), stderr="")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: reads(*a, **k))
+    with pytest.raises(cli_provider.ProviderError, match="wrote or read"):
+        claude.qualify()  # the planted secret in its reply would have been published
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec",
+                        lambda self, *a, **k: SimpleNamespace(returncode=0, stdout="FAILED", stderr=""))
+    claude.qualify()  # refused: nothing written or read, nothing raised
+
+
+def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
+    from unprompted import cli_provider
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen.update(argv=argv, files=os.listdir(kw["cwd"]), **kw)
+        return SimpleNamespace(returncode=0, stdout="An answer.", stderr="")
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(cli_provider.subprocess, "run", fake_run)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    assert claude.ask("untrusted prompt") == "An answer."
+    assert seen["argv"] == ["/bin/claude", *ALLOWED_CLIS["claude"]] and seen["input"] == "untrusted prompt"
+    assert seen["files"] == [] and "shell" not in seen
+    assert "sk-should-not-leak" not in str(seen["env"])
+
+
+def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
+    from unprompted.engines import base
+    slept = []
+    monkeypatch.setattr(base.time, "sleep", slept.append)
+
+    class Limited(base.Engine):
+        name, key_names = "limited", ()
+        def _one_call(self, question):
+            raise RuntimeError("429 Too Many Requests")
+    engine = Limited()
+    engine.api_key = "x"
+    engine.ask_one("q1", "Which?", 0)
+    assert slept == [base.RATE_LIMIT_BACKOFF_SECONDS, 2 * base.RATE_LIMIT_BACKOFF_SECONDS]
+
+
+def _load_watchdog():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.watchdog as wd  # noqa: PLC0415
+    return wd
+
+
+@pytest.mark.parametrize("categories", [["alpha"], {"alpha": {"outcome": "held", "reasons": None}},
+                                        {"alpha": {"outcome": "held", "reasons": {"x": 1}}}, {"alpha": "held"},
+                                        {"alpha": {"outcome": []}}, {"alpha": {"outcome": {}}}])
+def test_malformed_category_outcomes_never_stop_the_alarm(categories):
+    wd = _load_watchdog()
+    lines = wd.category_lines({"categories": categories})
+    assert lines and all("malformed" in l for l in lines if l)
+
+
+def test_alarm_reasons_cannot_break_out_into_markdown():
+    wd = _load_watchdog()
+    reason = "ok" + chr(10) * 2 + "@someone" + chr(10) * 2 + "# injected"
+    line = wd.category_lines({"categories": {"alpha": {"outcome": "held", "reasons": [reason]}}})[0]
+    assert chr(10) not in line and line.count("`") == 4 and "`ok @someone # injected`" in line
+
+
+def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    from unprompted.storage import run_lock
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    monkeypatch.setattr(sv.subprocess, "run", lambda *a, **k: pytest.fail("pulled during a run"))
+    with run_lock(tmp_path / ".unprompted", "week.lock"):
+        sv.pull()
+    # And the pull itself holds the week: a weekly run cannot start inside it.
+    def git(*a, **k):
+        with pytest.raises(OSError):
+            with run_lock(tmp_path / ".unprompted", "week.lock"):
+                pass
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+    monkeypatch.setattr(sv.subprocess, "run", git)
+    sv.pull()
+
+
+@pytest.mark.parametrize("damaged", ["[1, 2]", '"text"', '{"views": "many", "_agents": []}'])
+def test_a_damaged_analytics_day_is_replaced_not_fatal(tmp_path, damaged):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data/2026-10-20.json").write_text(damaged, encoding="utf-8")
+    assert sa.write_raw(tmp_path, "2026-10-20", {"views": 3}, {}) is True
+    assert json.loads((tmp_path / "data/2026-10-20.json").read_text())["views"] == 3
+
+
+def test_damaged_analytics_metadata_is_repaired_and_old_damage_is_skipped(tmp_path):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    (tmp_path / "data").mkdir()
+    day = tmp_path / "data/2026-10-21.json"
+    day.write_text('{"views": 3, "_agents": ["broken"]}', encoding="utf-8")
+    assert sa.write_raw(tmp_path, "2026-10-21", {"views": 3}, {}) is True  # same counters, repaired anyway
+    assert isinstance(json.loads(day.read_text())["_agents"], dict)
+    (tmp_path / "data/2026-07-01.json").write_text("[1, 2]", encoding="utf-8")  # aged out of Redis, damaged
+    sa.write_index(tmp_path, {})
+    index = next(tmp_path.glob("*.md")).read_text(encoding="utf-8")
+    assert "excludes 1 damaged archive file" in index
+    assert index.index("excludes 1 damaged") < index.index("agent hits")  # before every total
+
+
+@pytest.mark.parametrize("record", ['{"views": NaN}', '{"views": Infinity}', '{"views": true}', '{"views": -1}',
+                                    '{"g:Bot": 3, "_agents": {"Bot": []}}'])
+def test_analytics_validation_rejects_values_the_readers_trip_over(record):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    assert not sa.well_formed(json.loads(record))
+
+
+def test_readiness_targets_the_right_monday_and_never_overlaps_the_run():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.readiness as rd  # noqa: PLC0415
+    from datetime import datetime as dt
+    assert rd.target_monday(dt(2026, 11, 1, 18)) == date(2026, 11, 2)   # Sunday evening -> tomorrow
+    assert rd.target_monday(dt(2026, 11, 2, 9)) == date(2026, 11, 2)    # a late start Monday morning
+    assert rd.target_monday(dt(2026, 11, 2, 12)) is None                # too close to 13:00: skip
+    assert rd.target_monday(dt(2026, 11, 4, 10)) == date(2026, 11, 9)   # midweek -> next Monday
+
+
+def _readiness(monkeypatch, replies):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.readiness as rd  # noqa: PLC0415
+    calls = []
+    def fake(argv, **kw):
+        calls.append(argv)
+        reply = replies(argv)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+    monkeypatch.setattr(rd.subprocess, "run", fake)
+    monkeypatch.setattr(rd, "target_monday", lambda now: date(2026, 11, 2))
+    monkeypatch.setattr(rd.sys, "argv", ["readiness"])
+    return rd, calls
+
+
+def test_readiness_opens_one_stable_issue_and_reports_github_failures(monkeypatch):
+    found = SimpleNamespace(returncode=2, stderr="", stdout=json.dumps({"issues": ["codex: model `x` changed" + chr(10) + "now"]}))
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else
+                           SimpleNamespace(returncode=0, stdout="[]", stderr="") )
+    assert rd.main() == 2
+    create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
+    assert create[create.index("--title") + 1] == "Monday readiness: problems before 2026-11-02"
+    assert "- `codex: model x changed now`" in create[-1]
+    # Already open under the same title: not opened twice.
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else SimpleNamespace(
+        returncode=0, stdout=json.dumps([{"title": "Monday readiness: problems before 2026-11-02"}]), stderr=""))
+    assert rd.main() == 2 and not any(c[:3] == ["gh", "issue", "create"] for c in calls)
+    # GitHub refuses: reported, exit 1, and a failed lookup is not taken as "none open".
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else SimpleNamespace(
+        returncode=1, stdout="", stderr="auth required"))
+    assert rd.main() == 1 and not any(c[:3] == ["gh", "issue", "create"] for c in calls)
+
+
+def test_readiness_turns_a_hung_or_unstartable_check_into_an_issue(monkeypatch):
+    import subprocess  # noqa: PLC0415
+    for failure in (subprocess.TimeoutExpired("run", 1), OSError("no python")):
+        rd, calls = _readiness(monkeypatch, lambda a, f=failure: f if "--qualify" in a else
+                               SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+        assert rd.main() == 1
+        create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
+        assert "readiness check itself failed" in create[-1]
+
+
+def test_readiness_holds_the_week_for_the_whole_check(monkeypatch, tmp_path):
+    from unprompted.storage import run_lock
+    rd, calls = _readiness(monkeypatch, lambda a: SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    monkeypatch.setattr(rd, "REPO", tmp_path)
+    inside = []
+    def qualify(monday):
+        try:
+            with run_lock(tmp_path / ".unprompted", "week.lock"):
+                inside.append("a run could start")
+        except OSError:
+            inside.append("held")
+        return {"issues": []}, ""
+    monkeypatch.setattr(rd, "qualify", qualify)
+    assert rd.main() == 0 and inside == ["held"]
+
+
+def test_readiness_keeps_the_runs_warnings(monkeypatch, capsys):
+    reply = SimpleNamespace(returncode=2, stdout=json.dumps({"issues": ["codex: broken"]}),
+                            stderr="noise" + chr(10) + "  WARNING: the Gemini model probe searched 1 time(s)" + chr(10))
+    rd, calls = _readiness(monkeypatch, lambda a: reply if "--qualify" in a else SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    assert rd.main() == 2
+    assert "probe searched 1 time" in capsys.readouterr().out
+    body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
+    assert "Also noted" in body and "probe searched 1 time" in body

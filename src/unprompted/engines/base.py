@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ..models import EngineAnswer
 
@@ -19,6 +21,81 @@ SYSTEM_PROMPT = (
 
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = 2.0
+RATE_LIMIT_BACKOFF_SECONDS = 15.0
+
+
+def is_rate_limit(exc: Exception) -> bool:
+    status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    text = str(exc).lower()
+    return status == 429 or "ratelimit" in type(exc).__name__.lower() or "rate_limit" in text or "429" in text
+
+# Every wait and every new paid request in one weekly run shares this clock.
+# Task Scheduler stops the run at 8 hours, and a run killed there commits
+# nothing at all, so work ends an hour short of it and the categories that did
+# pass still publish. The clock starts when the launcher did
+# (scripts/weekly-run.cmd writes .unprompted/weekly-started), not when Python
+# imported this module after the launcher's own git and preflight steps.
+RUN_SECONDS = 7 * 3600
+
+
+def _started() -> float:
+    # Only the launcher's own run: a manual run hours after an aborted weekly
+    # start must not inherit a nearly spent clock.
+    if not os.environ.get("UNPROMPTED_WEEKLY_RUN"):
+        return time.monotonic()
+    marker = Path(__file__).resolve().parents[3] / ".unprompted" / "weekly-started"
+    try:
+        age = time.time() - float(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        age = 0.0
+    # ponytail: a manual run within 8 hours of a weekly start inherits its clock.
+    return time.monotonic() - (age if 0 <= age < 8 * 3600 else 0.0)
+
+
+_PROCESS_STARTED = _started()
+
+
+def run_time_left() -> float:
+    return _PROCESS_STARTED + RUN_SECONDS - time.monotonic()
+
+
+def wait_deadline(max_wait: float) -> float:
+    """When a batch wait started now must give up: `max_wait`, or the run's end."""
+    return min(time.monotonic() + max_wait, _PROCESS_STARTED + RUN_SECONDS)
+
+
+# The month this run's spend is booked to (its --date), set by run.py; None
+# when the operator accepted spend outside the check with --ignore-budget.
+BOOKED_MONTH: str | None = None
+
+
+@contextmanager
+def booked_to(month: str | None):
+    """Book this block's paid work to `month` (YYYY-MM), restoring the previous
+    booking afterwards; None books nothing, as --ignore-budget does."""
+    global BOOKED_MONTH
+    previous, BOOKED_MONTH = BOOKED_MONTH, month
+    try:
+        yield
+    finally:
+        BOOKED_MONTH = previous
+
+
+def paid_work_refusal() -> str | None:
+    """Why no new paid request may start now, or None."""
+    if run_time_left() <= 0:
+        return f"the weekly run's {RUN_SECONDS // 3600}-hour budget is spent"
+    if BOOKED_MONTH and datetime.now().date().isoformat()[:7] != BOOKED_MONTH:
+        return "the month changed during the run, and its spend is booked to the previous month"
+    return None
+
+
+def refuse_new_paid_work(what: str) -> None:
+    """Nothing new is paid for once the run's clock is spent (it could not be
+    collected) or the month has turned (it would be booked outside the check)."""
+    why = paid_work_refusal()
+    if why:
+        raise TimeoutError(f"{what} not started: {why}")
 
 
 def utc_now() -> str:
@@ -86,8 +163,14 @@ class Engine:
         if any(p in text for p in ("quota", "billing", "credit balance", "usage limit", "spending limit")):
             return False
         # Rate limits are the one 4xx worth waiting out.
-        if "ratelimit" in name or "rate_limit" in text or "429" in text:
+        if is_rate_limit(exc):
             return True
+        # A typed status where there is one: urllib's HTTPError (Gemini,
+        # Perplexity) says only "HTTP Error 400: Bad Request", which no phrase
+        # below matches, so a malformed request was tried three times.
+        status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+        if isinstance(status, int) and 400 <= status < 500 and status != 408:
+            return False
 
         permanent = (
             "authenticationerror", "permissiondeniederror", "notfounderror",
@@ -127,11 +210,15 @@ class Engine:
 
         text, sources, usage, error, metadata = "", [], {}, None, None
         for attempt in range(MAX_ATTEMPTS):
+            if attempt and paid_work_refusal():
+                break  # a retry is new paid work too; keep the last error
             try:
                 # An adapter may add a fourth item: provider metadata for this call.
                 text, sources, usage, *rest = self._one_call(question)
                 metadata = rest[0] if rest else None
-                error = "engine failed: incomplete response" if usage.get("incomplete_response") else None
+                error = ("engine failed: incomplete response" if usage.get("incomplete_response")
+                         else "engine failed: answered by a different model than the run qualified"
+                         if usage.get("served_model_mismatch") else None)
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
                 error = f"{type(exc).__name__}: {exc}"
@@ -141,7 +228,10 @@ class Engine:
                 if not self.is_retryable(exc):
                     break
                 if attempt < MAX_ATTEMPTS - 1:
-                    time.sleep(BACKOFF_SECONDS * (attempt + 1))
+                    # A rate limit needs longer than a reset connection: two and
+                    # four seconds just spent the retries inside the same window.
+                    pause = RATE_LIMIT_BACKOFF_SECONDS if is_rate_limit(exc) else BACKOFF_SECONDS
+                    time.sleep(pause * (attempt + 1))
 
         return EngineAnswer(
             engine=self.name,

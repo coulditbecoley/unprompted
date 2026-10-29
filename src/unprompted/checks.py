@@ -159,16 +159,18 @@ def run_checks(
 
     # 2. Implausible week-over-week swing.
     comparable = previous is None or comparison_reason(run, previous) is None
-    prev = {b.brand: b for b in last_week} if comparable else {}
-    for brand in this_week:
-        before = prev.get(brand.brand)
-        if before is None:
-            continue
-        swing = abs(brand.rotation - before.rotation) * 100
+    # A brand absent from one week is at zero there, not exempt: brand_week()
+    # omits unnamed brands, so a leader that vanished entirely -- the largest
+    # swing there is -- used to pass this check without a word.
+    prev = {b.brand: b.rotation for b in last_week} if comparable else {}
+    now = {b.brand: b.rotation for b in this_week}
+    for name in sorted(set(now) | set(prev)) if prev else []:
+        before, after = prev.get(name, 0.0), now.get(name, 0.0)
+        swing = abs(after - before) * 100
         if swing > MAX_ROTATION_SWING:
             reasons.append(
-                f"{brand.brand} rotation moved {swing:.0f} points "
-                f"({before.rotation:.0%} to {brand.rotation:.0%}), over the "
+                f"{name} rotation moved {swing:.0f} points "
+                f"({before:.0%} to {after:.0%}), over the "
                 f"{MAX_ROTATION_SWING:.0f}-point limit"
             )
 

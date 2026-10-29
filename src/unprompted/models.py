@@ -87,6 +87,11 @@ class Extraction:
     fetched_at: str = ""
     measurement_git_sha: str | None = None
     metadata: dict[str, Any] | None = None
+    # The brands exactly as the extractor read them, before aliases, exclusions
+    # and quarantine. With these, an alias decision can be re-applied to a held
+    # week for free; without them (records before 2026-11) it costs a paid
+    # re-read that is not even reproducible.
+    extracted: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return ({"metadata": self.metadata} if self.metadata is not None else {}) | {
@@ -94,6 +99,7 @@ class Extraction:
             "question_id": self.question_id,
             "run_index": self.run_index,
             "brands": [b.to_dict() for b in self.brands],
+            **({"extracted": self.extracted} if self.extracted is not None else {}),
             "sources": self.sources,
             "source_kind": self.source_kind,
             "refused": self.refused,

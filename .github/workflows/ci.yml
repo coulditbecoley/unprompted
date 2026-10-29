@@ -9,12 +9,16 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes: actions are pinned to commits and the token can only read.
+permissions:
+  contents: read
+
 jobs:
   windows-launcher:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -25,25 +29,32 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
         run: pip install -r requirements.lock -e .
+      - name: Dependency advisories
+        # The Python half of what npm audit does for the web job.
+        run: pip install pip-audit==2.10.1 && pip-audit -r requirements.lock --no-deps --progress-spinner off
       - name: Test
         run: python -m pytest -q
+      - name: Test 45 days ahead (date-fragile tests fail here, not next month)
+        run: |
+          pip install freezegun==1.5.5
+          FAKE_TODAY="$(date -u -d '+45 days' +%Y-%m-%dT10:00:00)" PYTHONPATH=tests python -m pytest -q -p future_date
 
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install Python for metric agreement checks
         run: python -m pip install -r requirements.lock -e .
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
           cache: npm
@@ -57,3 +68,5 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Held weeks ship with admin only
+        run: node scripts/check-traces.mjs

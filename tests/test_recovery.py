@@ -9,6 +9,22 @@ from unprompted.models import EngineAnswer, RunRecord
 from unprompted.storage import run_lock, write_json
 
 
+
+@pytest.fixture(autouse=True)
+def _rereads_may_use_fixed_past_dates(monkeypatch):
+    """Re-read tests date their readings in 2026-09; the month rule has its own test."""
+    from unprompted import reextract
+    monkeypatch.setattr(reextract, "outside_this_month", lambda day: False)
+
+
+from unprompted import reextract as _reextract  # noqa: E402
+_REAL_MONTH_RULE = _reextract.outside_this_month
+
+
+@pytest.fixture
+def real_month_rule(monkeypatch):
+    monkeypatch.setattr(_reextract, "outside_this_month", _REAL_MONTH_RULE)
+
 def test_report_failure_recovers_offline_without_rewriting_archives(tmp_path, monkeypatch):
     from unprompted import report, storage
 
@@ -343,7 +359,8 @@ def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, mo
     monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
     checkpoint = tmp_path / ".unprompted" / operation / "2026-09-15/alpha/batch.json"
     batch = SimpleNamespace(id="offline", processing_status="in_progress" if failure == "timeout" else "ended")
-    monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 0)
+    if failure == "timeout":  # downloads are bounded by the same clock, so only the pending case expires
+        monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 0)
     calls = []
     interrupted = True
     replies = [MessageBatchIndividualResponse.model_validate({"custom_id": f"x{i}", "result": {
@@ -378,6 +395,7 @@ def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, mo
         budget._archived_runs()
     interrupted = False
     batch.processing_status = "ended"
+    monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 3600)  # a later run has its own clock
     assert len(extract.collect_batch(checkpoint)) == 2
     monkeypatch.setattr(extract, "_client", lambda key: pytest.fail("cached results contacted provider"))
     recovered = extract.extract_all_batch(answers, checkpoint=checkpoint)
@@ -519,7 +537,9 @@ def test_fully_cached_restart_publishes_above_budget_without_paid_calls(tmp_path
     batch = SimpleNamespace(id="offline", processing_status="ended")
     reply = MessageBatchIndividualResponse.model_validate({"custom_id": "x0", "result": {
         "type": "succeeded", "message": {"id": "offline", "type": "message", "role": "assistant", "model": "offline",
-        "content": [{"type": "text", "text": '{"refused":false,"brands":[{"name":"Alpha","position":1,"sentiment":"positive"},{"name":"Beta","position":2,"sentiment":"positive"}]}'}],
+        # A thinking block first, as on 2026-09-14: the text block must still be read.
+        "content": [{"type": "thinking", "thinking": "...", "signature": "s"},
+                    {"type": "text", "text": '{"refused":false,"brands":[{"name":"Alpha","position":1,"sentiment":"positive"},{"name":"Beta","position":2,"sentiment":"positive"}]}'}],
         "usage": {"input_tokens": 1000, "output_tokens": 50}, "stop_reason": "end_turn", "stop_sequence": None}}})
     batches = SimpleNamespace(create=lambda **kw: calls.append("extract") or batch,
                               retrieve=lambda key: batch, results=lambda key: [reply])
@@ -798,6 +818,32 @@ def test_local_harness_model_change_refuses_before_paid_calls(tmp_path, monkeypa
     assert len(calls) == asked
 
 
+def test_local_harness_argument_change_refuses_before_paid_calls(tmp_path, monkeypatch):
+    # Tool policy is part of what a harness row measures (2026-10-29), so its
+    # arguments are frozen with the model and a change needs a version bump.
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "git_sha", lambda: "sha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 1,
+            "questions": [{"id": "q1", "text": "Which brand?"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: spec)
+    harness = SimpleNamespace(name="harness", grounds=False, is_configured=True,
+                              provider=SimpleNamespace(args=("-p", "--old")),
+                              identify=lambda: {"model": "model-a", "version": "1.0"},
+                              ask_one=lambda qid, text, index: pytest.fail("paid call"))
+    monkeypatch.setattr(run, "all_engines", lambda: {"harness": harness})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
+    prior = {"questions": spec, "engines": {"harness": {"model": "model-a", "grounds": False, "args": ["-p", "--old"]}},
+             "aliases": {"aliases": {}}, "system_prompt": run.SYSTEM_PROMPT, "extraction_prompt": run.EXTRACT_PROMPT,
+             "extractor": {"id": "fake", "model": ""}}
+    write_json(tmp_path / "data/runs/2026-09-07/alpha.json",
+               {"category": "alpha", "run_date": "2026-09-07", "method_version": 1, "methodology": prior})
+    harness.provider.args = ("-p", "--new")
+    with pytest.raises(ValueError, match="Changed: engines"):
+        run.run_category("alpha", "2026-09-14")
+
+
 def test_harness_model_is_read_from_real_cli_output():
     from unprompted.cli_provider import _reported_model
     claude = json.dumps({"result": "OK", "modelUsage": {
@@ -808,3 +854,211 @@ def test_harness_model_is_read_from_real_cli_output():
     codex_banner = "OpenAI Codex v0.157.1\n--------\nworkdir: /tmp/x\nmodel: gpt-6-astra\nprovider: openai\n"
     assert _reported_model("codex", "OK", codex_banner) == "gpt-6-astra"
     assert _reported_model("codex", "OK", "") == ""
+
+
+def test_hold_reasons_cannot_end_the_github_output_block(tmp_path, monkeypatch):
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
+    record = SimpleNamespace(to_dict=lambda: {"extractions": []})
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: (record, ["brand\nEOF\ninjected=true"]))
+    monkeypatch.setattr(run, "format_report", lambda d: "")
+    monkeypatch.setattr(run, "cost_of_run", lambda d: (None, 0.0))
+    monkeypatch.setattr(run.sys, "argv", ["run"])
+    monkeypatch.setattr(run.sys, "argv", ["run", "--summary-file", str(tmp_path / "s.json")])
+    assert run.main() == run.HELD_EXIT_CODE
+    held = json.loads((tmp_path / "s.json").read_text())["categories"]["alpha"]
+    assert held["outcome"] == "held" and held["dollars"] == 0.0 and held["minutes"] >= 0
+    text = output.read_text()
+    marker = text.split("reasons<<", 1)[1].split("\n", 1)[0]
+    assert marker.startswith("EOF_") and text.rstrip().endswith(marker)
+
+
+def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_path, monkeypatch):
+    from unprompted import reextract
+    from unprompted.models import BrandMention, Extraction
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "git_sha", lambda: "sha")
+    for paid in ("extract_run", "check_budget", "resolve_extractor"):
+        monkeypatch.setattr(reextract, paid, lambda *a, **k: pytest.fail("free mode touched paid machinery"))
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical:\n  Acme: [Acme Inc]\n")
+    held = Extraction("offline", "q1", 0, answer="Acme Inc", extracted=[{"name": "Acme Inc", "position": 1, "sentiment": "neutral"}],
+                      usage={"input_tokens": 900, "extract_input_tokens": 5000, "extract_output_tokens": 80})
+    write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, ["offline"],
+               extractor="claude-api-extract", extractions=[held], quarantined=["Acme Inc"]).to_dict())
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14", "--renormalize"])
+    reextract.main()
+    written = [p for p in (tmp_path / "data").rglob("2026-09-14/alpha.json")]
+    assert len(written) == 1
+    fresh = json.loads(written[0].read_text())
+    assert fresh["extractions"][0]["brands"][0]["name"] == "Acme" and fresh["quarantined"] == []
+    assert fresh["extractions"][0]["extracted"][0]["name"] == "Acme Inc" and fresh["extractor"] == "claude-api-extract"
+    # Free means free: the source's extraction spend is not charged a second time.
+    assert fresh["extractions"][0]["usage"] == {"input_tokens": 900}
+    old = RunRecord("alpha", "2026-09-02", 1, 1, ["offline"], extractions=[Extraction("offline", "q1", 0, answer="x")])
+    write_json(tmp_path / "data/held/2026-09-02/alpha.json", old.to_dict())
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-02", "--category", "alpha", "--out-date", "2026-09-15", "--renormalize"])
+    with pytest.raises(SystemExit, match="predates stored raw brand names"):
+        reextract.main()
+
+
+def test_qualify_uses_the_runs_full_comparison_and_reports_failures_as_issues(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical: {}")
+    spec = {"category": "alpha", "method_version": 3, "runs_per_question": 1, "questions": [{"id": "q1", "text": "Q"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: dict(spec))
+    extractor = SimpleNamespace(id="fake", label="fake")
+    monkeypatch.setattr(run, "resolve_extractor", lambda: extractor)
+    harness = SimpleNamespace(is_configured=True, grounds=False, identify=lambda: {"model": "model-a", "version": "1"})
+    engines = {"harness": harness}
+    monkeypatch.setattr(run, "all_engines", lambda: engines)
+    published = run.build_methodology(spec, engines, {"harness": {"model": "model-a"}}, "alpha", extractor)
+    write_json(tmp_path / "data/runs/2026-10-26/alpha.json", {"category": "alpha", "run_date": "2026-10-26",
+               "method_version": 3, "methodology": published})
+    assert run.qualify(["alpha"]) == ({"harness": {"model": "model-a", "version": "1"}}, [])
+    # Not only the model: a new engine is a change the run would refuse.
+    engines["added"] = SimpleNamespace(is_configured=True, grounds=True)
+    assert any("would" not in i and "Changed: engines" in i for i in run.qualify(["alpha"])[1])
+    del engines["added"]
+    harness.identify = lambda: (_ for _ in ()).throw(run.ProviderError("canary: wrote a file"))
+    assert any("canary" in i for i in run.qualify(["alpha"])[1])
+    spec["method_version"] = 4  # bumped: changes are allowed
+    harness.identify = lambda: {"model": "model-b", "version": "1"}
+    assert run.qualify(["alpha"])[1] == []
+    monkeypatch.setattr(run, "all_engines", lambda: (_ for _ in ()).throw(run.ProviderError("bad registry")))
+    assert run.qualify(["alpha"]) == ({}, ["cannot qualify: bad registry"])  # an issue, not a traceback
+    monkeypatch.setattr(run, "all_engines", lambda: engines)
+    write_json(tmp_path / "data/runs/2026-10-27/alpha.json", {"category": "alpha", "run_date": "2026-10-27",
+               "method_version": 4, "methodology": {"questions": spec}})  # no engines: the guard raises
+    assert any("could not compare" in i for i in run.qualify(["alpha"])[1])
+
+
+def test_collect_only_refuses_to_be_combined(monkeypatch):
+    monkeypatch.setattr(run.sys, "argv", ["run", "--preflight", "--qualify", "--collect-only"])
+    with pytest.raises(SystemExit) as stop:
+        run.main()
+    assert stop.value.code == 2
+
+
+def test_a_restart_reasks_only_calls_that_were_never_sent(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "git_sha", lambda: "sha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 4, "questions": [{"id": "q1", "text": "Which brand?"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: spec)
+    calls = []
+    first = {0: dict(error="not attempted after provider failure: credit balance too low"),  # never sent: ask again
+             1: dict(error="engine failed: incomplete response", usage={"input_tokens": 9}),  # billed: keep
+             2: {},
+             3: dict(error="HTTPError: HTTP Error 503: Service Unavailable")}  # reached a provider: keep
+
+    class Engine:
+        name, grounds, is_configured = "hosted", False, True
+        def ask_one(self, qid, text, index):
+            calls.append(index)
+            outcome = first[index] if len(calls) <= 4 else {}
+            return EngineAnswer(self.name, qid, text, index, text="Alpha", **outcome)
+    monkeypatch.setattr(run, "all_engines", lambda: {"hosted": Engine()})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
+    monkeypatch.setattr(run, "check_budget", lambda *a, **k: SimpleNamespace(ok=True, message="offline"))
+    seen = []
+    def stop(answers, *a, **k):
+        seen.append({a.run_index: a.error for a in answers})
+        raise RuntimeError("stop")
+    monkeypatch.setattr(run, "extract_run", stop)
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="stop"):
+            run.run_category("alpha", "2026-09-07")
+    assert sorted(calls) == [0, 0, 1, 2, 3]  # only the rejected request was asked again
+    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None, 3: "HTTPError: HTTP Error 503: Service Unavailable"}
+    saved = json.loads((tmp_path / ".unprompted/2026-09-07/alpha/hosted-q1-0.json").read_text())
+    assert saved["metadata"]["resumed_after"].startswith("not attempted after provider failure")
+
+
+def test_an_engine_that_declines_most_questions_is_named_not_hidden():
+    rows = ([{"engine": "claude", "refused": True, "error": None}] * 6 + [{"engine": "claude", "refused": False, "error": None}] * 4
+            + [{"engine": "gemini", "refused": False, "error": None}] * 5 + [{"engine": "gemini", "error": "down"}] * 9)
+    assert run.refusal_warnings({"extractions": rows}) == ["claude declined 6 of 10 replies"]
+
+
+def test_a_paid_run_dated_in_another_month_is_refused(monkeypatch):
+    monkeypatch.setattr(run, "load_local_env", lambda: pytest.fail("got past argument checks"))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", "2020-01-06"])
+    with pytest.raises(SystemExit) as stop:
+        run.main()
+    assert stop.value.code == 2
+
+
+def test_a_paid_reread_dated_in_another_month_is_refused(tmp_path, monkeypatch, real_month_rule):
+    from unprompted import reextract
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2020-01-01", "--category", "alpha", "--out-date", "2020-01-08"])
+    with pytest.raises(SystemExit, match="outside this month"):
+        reextract.main()
+
+
+def test_categories_are_not_started_once_the_month_turns(tmp_path, monkeypatch):
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)  # restored after: main() sets it
+    started = []
+    real = run.date
+    today = real.today()
+
+    class Clock(real):
+        shift = 0
+        @classmethod
+        def today(cls):
+            from datetime import timedelta
+            return today + timedelta(days=cls.shift)
+
+    def category(name, *a, **k):
+        started.append(name)
+        Clock.shift = 40  # midnight passes while the first category runs
+        with pytest.raises(TimeoutError, match="month changed"):
+            base.refuse_new_paid_work("a retry")  # no new paid work inside it either
+        raise RuntimeError("stop")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta"])
+    monkeypatch.setattr(run, "run_category", category)
+    monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    monkeypatch.setattr(run, "date", Clock)
+    monkeypatch.setattr(base, "datetime", type("Now", (), {"now": staticmethod(lambda: __import__("datetime").datetime.combine(Clock.today(), __import__("datetime").time()))}))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today.isoformat(), "--summary-file", str(tmp_path / "s.json")])
+    run.main()
+    assert started == ["alpha"]
+    assert json.loads((tmp_path / "s.json").read_text())["categories"]["beta"]["outcome"] == "not_started"
+
+
+def test_the_booking_is_scoped_to_its_run(monkeypatch):
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)
+    with pytest.raises(RuntimeError):
+        with base.booked_to("2026-11"):
+            assert base.BOOKED_MONTH == "2026-11"
+            raise RuntimeError("the run failed")
+    assert base.BOOKED_MONTH is None  # restored even on failure
+
+
+def test_a_standalone_reread_is_booked_to_this_month(tmp_path, monkeypatch):
+    from unprompted import reextract
+    from unprompted.engines import base
+    seen = []
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "_main", lambda: seen.append(base.BOOKED_MONTH) or 0)
+    reextract.main()
+    assert seen == [run.date.today().isoformat()[:7]] and base.BOOKED_MONTH is None

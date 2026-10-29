@@ -86,6 +86,12 @@ export async function POST(request: Request) {
   }
   const current = (await head.json()) as { sha: string; content: string };
   if (Buffer.from(current.content, "base64").toString("utf-8").replace(/\r\n/g, "\n") !== baseline.replace(/\r\n/g, "\n")) return NextResponse.json({ error: "This file changed since you opened it. Reload and merge your edits." }, { status: 409 });
+  // The runner refuses a changed question bank without a version bump, but
+  // only when Monday's run starts, which then measures nothing that week.
+  if (target === "questions") {
+    const refusal = unversionedChange(baseline, content);
+    if (refusal) return NextResponse.json({ error: refusal }, { status: 400 });
+  }
 
   const put = await fetch(api, {
     method: "PUT",
@@ -110,6 +116,46 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
 }
 
+/**
+ * Why this question-bank edit must not commit, or null. Compared the way the
+ * Python guard compares the spec: mappings by content whatever their key
+ * order, lists in order, and only plain JSON values (no NaN, no cycles).
+ */
+function unversionedChange(baseline: string, content: string): string | null {
+  let before: unknown, after: unknown;
+  try {
+    before = canonical(loadYaml(baseline));
+    after = canonical(loadYaml(content));
+  } catch (err) {
+    return `The question bank must hold plain values only: ${err instanceof Error ? err.message : "unsupported value"}`;
+  }
+  if (!before || typeof before !== "object" || !after || typeof after !== "object") return null;
+  const { method_version: was, ...rest } = before as Record<string, unknown>;
+  const { method_version: now, ...next } = after as Record<string, unknown>;
+  if (JSON.stringify(rest) === JSON.stringify(next) || Number(now) > Number(was)) return null;
+  // Conservative: compared with the file as opened, not the last published
+  // week, so a bank already bumped but not yet measured asks for another bump.
+  return "This changes the question bank without raising method_version. Raise it with every change (and add a dated note to METHODOLOGY.md): a bank that differs from the last published week without a bump stops the next weekly run.";
+}
+
+/** A JSON-safe copy with sorted keys; throws on cycles and non-finite numbers. */
+function canonical(value: unknown, seen = new Set<object>()): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("non-finite number");
+    return value;
+  }
+  if (typeof value !== "object") throw new Error(`unsupported ${typeof value}`);
+  if (seen.has(value)) throw new Error("recursive alias");
+  seen.add(value);
+  const out = Array.isArray(value)
+    ? value.map(v => canonical(v, seen))
+    : value instanceof Date ? (() => { throw new Error("date value"); })()
+    : Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical((value as Record<string, unknown>)[k], seen)]));
+  seen.delete(value);
+  return out;
+}
+
 function validate(target: Target, content: string): string | null {
   let parsed: unknown;
   try {
@@ -125,7 +171,7 @@ function validate(target: Target, content: string): string | null {
     if (!Number.isInteger(spec.runs_per_question) || Number(spec.runs_per_question) < 1 || Number(spec.runs_per_question) > 100) {
       return "runs_per_question must be an integer from 1 to 100";
     }
-    if (spec.max_brands !== undefined && (!Number.isInteger(spec.max_brands) || Number(spec.max_brands) < 1)) return "max_brands must be a positive integer";
+    if (spec.max_brands !== undefined && (!Number.isInteger(spec.max_brands) || Number(spec.max_brands) < 1 || Number(spec.max_brands) > 50)) return "max_brands must be an integer from 1 to 50";
     if (!Array.isArray(spec.questions) || spec.questions.length === 0) {
       return "questions must be a non-empty list";
     }

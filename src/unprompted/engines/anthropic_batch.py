@@ -7,13 +7,16 @@ import sys
 import time
 from pathlib import Path
 
-from .anthropic_engine import request_params, read_response, TIMEOUT_SECONDS
-from .base import utc_now
+from .anthropic_engine import request_params, read_response, response_metadata, TIMEOUT_SECONDS
+from .base import refuse_new_paid_work, utc_now, wait_deadline
 from ..models import EngineAnswer
 from ..storage import write_json
 
 POLL_SECONDS = 15
-MAX_WAIT_SECONDS = 3600
+# Batches may take up to 24 hours. One hour stranded the 2026-10-19 image
+# batch after its other 375 calls were paid, and the uncollected batch then
+# refused every later category. Waits are now bounded by the run's own clock.
+MAX_WAIT_SECONDS = 6 * 3600
 
 
 def _client(api_key):
@@ -43,11 +46,10 @@ def read_retrying(call, deadline: float, label: str):
 
 
 def download(entries, deadline: float | None, label: str) -> list[dict]:
-    """A complete results download, abandoned if it outlives the recovery `deadline`.
-
-    None (a normal run collecting its own batch) leaves the download unbounded,
-    as before. ponytail: checked between entries, so one in-flight request can
-    overrun by up to its own timeout; pass per-request timeouts if that matters.
+    """A complete results download, abandoned if it outlives `deadline` (the
+    recovery phase's, or the run's own), so a slow stream cannot eat the hour
+    kept for publishing. None leaves it unbounded. ponytail: checked between
+    entries, so one in-flight request can overrun by up to its own timeout.
     """
     out = []
     for entry in entries:
@@ -76,7 +78,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
     results_path = state_path.with_name("results.json")
     if not results_path.exists():
         client = _client(api_key)
-        recovery, deadline = deadline, time.monotonic() + MAX_WAIT_SECONDS if deadline is None else deadline
+        deadline = wait_deadline(MAX_WAIT_SECONDS) if deadline is None else deadline
         label = f"Claude batch {state['id']}"
         while True:
             batch = read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label)
@@ -89,7 +91,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         # Persist the complete download before interpreting it; a parser error
         # must not lose usage or turn a retry into another paid request. A
         # dropped stream restarts the whole download, never a partial write.
-        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), recovery, label),
+        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), deadline, label),
                                 deadline, label)
         write_json(results_path, {"fetched_at": utc_now(), "entries": entries})
     saved_results = json.loads(results_path.read_text(encoding="utf-8"))
@@ -105,7 +107,9 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         answer.measurement_git_sha = state["measurement_git_sha"]
         result = entry["result"]
         if result["type"] == "succeeded":
-            answer.text, answer.sources, answer.usage = read_response(Message.model_validate(result["message"]))
+            message = Message.model_validate(result["message"])
+            answer.text, answer.sources, answer.usage = read_response(message)
+            answer.metadata = response_metadata(message)
             answer.usage["batch_billed"] = 1
             if answer.usage.get("incomplete_response"):
                 answer.error = "engine failed: incomplete batch response"
@@ -115,7 +119,14 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
             raise ValueError("unknown Claude batch result type")
         destination = state_path.parent.parent / f"claude-{answer.question_id}-{answer.run_index}.json"
         if destination.exists():
-            if json.loads(destination.read_text(encoding="utf-8")) != answer.to_dict():
+            saved = json.loads(destination.read_text(encoding="utf-8"))
+            fresh = answer.to_dict()
+            # Older checkpoints carry less metadata (none before 2026-10-29, no
+            # `cited` before that evening). Added fields are fine; any field
+            # they both have, and everything else, must agree.
+            old_meta, new_meta = saved.get("metadata") or {}, fresh.get("metadata") or {}
+            if ({k: v for k, v in saved.items() if k != "metadata"} != {k: v for k, v in fresh.items() if k != "metadata"}
+                    or any(new_meta.get(k) != v for k, v in old_meta.items())):
                 raise ValueError(f"Claude checkpoint differs from batch result: {destination}")
         else:
             write_json(destination, answer.to_dict())
@@ -150,6 +161,17 @@ def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list
             continue
         try:
             saved = json.loads(job.read_text(encoding="utf-8"))
+            # The guard's own rules for extraction jobs (budget.py): a started
+            # submission without an id is ambiguous, and a v1 job without one
+            # has no results it could ever account for. A Claude state is
+            # written as intent before its POST, so a missing id is ambiguous.
+            unresolved = (saved.get("submission_started") or saved.get("result_checkpoint_version") == 1
+                          if job not in claude else not saved.get("collected"))
+            if not saved.get("id") and unresolved:
+                # Never resubmitted: the POST may have succeeded. Reported, so
+                # --collect-only cannot claim the guard is satisfied.
+                failed.append(f"needs reconciliation in the provider console (submission has no batch id): {job}")
+                continue
             if not saved.get("id"):
                 continue
             if job in claude:
@@ -187,6 +209,7 @@ def ask_batch(engine, tasks: list[tuple], checkpoint: Path, measurement_commit: 
                  "measurement_git_sha": measurement_commit, "collected": False}
         # Write intent BEFORE the POST. A crash between POST and id persistence
         # requires operator reconciliation, never a speculative second POST.
+        refuse_new_paid_work("Claude batch")
         write_json(state_path, state)
         batch = _client(engine.api_key).messages.batches.create(requests=requests)
         write_json(state_path, {**state, "id": batch.id}, replace=True)

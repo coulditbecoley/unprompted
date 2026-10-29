@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.skipif(sys.platform != "win32", reason="executes the actual Windows cmd launcher")
 def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
-    repo = tmp_path / "repo with spaces"
+    repo = tmp_path / "coley's repo with spaces"
     remote = tmp_path / "remote.git"
     repo.mkdir()
     env = {**os.environ, "TEMP": str(tmp_path / "temp with spaces"), "TMP": str(tmp_path / "temp with spaces")}
@@ -34,6 +34,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     (repo / "unprompted/__init__.py").write_text("")
     (repo / ".gitignore").write_text(".venv/\n.unprompted/\n__pycache__/\n")
     shutil.copyfile(ROOT / "scripts/weekly-run.cmd", repo / "scripts/weekly-run.cmd")
+    shutil.copyfile(ROOT / "scripts/timed.py", repo / "scripts/timed.py")
     # All external work is replaced in the disposable checkout only.
     (repo / "unprompted/run.py").write_text(
         "from pathlib import Path\nimport os\n"
@@ -61,7 +62,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     def launch(expected):
         result = subprocess.run(["cmd.exe", "/d", "/c", "scripts\\weekly-run.cmd"],
                                 cwd=repo, env=env, capture_output=True, text=True, timeout=60)
-        log = (Path(env["TEMP"]) / "unprompted-weekly.log").read_text(errors="replace")
+        log = (repo / ".unprompted/logs/weekly.log").read_text(errors="replace")
         assert result.returncode == expected, result.stdout + result.stderr + log
     launch(0)
     assert git("status", "--porcelain") == ""

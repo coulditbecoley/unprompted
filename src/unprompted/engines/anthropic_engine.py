@@ -35,7 +35,28 @@ class AnthropicEngine(Engine):
 
         client = Anthropic(api_key=self.api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
         response = client.messages.create(**request_params(question))
-        return read_response(response)
+        return (*read_response(response), response_metadata(response))
+
+
+def response_metadata(response: object) -> dict | None:
+    """Which model answered, why it stopped, and which pages the answer cited.
+
+    `sources` is every search result Claude was shown, which is what source
+    counts have always used; `cited` is the narrower set its text actually
+    attributes, kept as evidence alongside it rather than replacing it.
+    """
+    metadata = {k: v for k in ("model", "stop_reason") if isinstance(v := getattr(response, k, None), str)}
+    cited = [url for block in getattr(response, "content", None) or [] if getattr(block, "type", None) == "text"
+             for citation in getattr(block, "citations", None) or [] if isinstance(url := getattr(citation, "url", None), str)]
+    if cited:
+        metadata["cited"] = list(dict.fromkeys(cited))
+    # What it searched for: evidence of how an engine frames a buying question.
+    queries = [block.input["query"] for block in getattr(response, "content", None) or []
+               if getattr(block, "type", None) == "server_tool_use" and isinstance(getattr(block, "input", None), dict)
+               and isinstance(block.input.get("query"), str)]
+    if queries:
+        metadata["queries"] = queries
+    return metadata or None
 
 def read_response(response: object) -> tuple[str, list[str], dict[str, int]]:
     # A refusal is a real outcome, not an error. Surface it as empty text so
