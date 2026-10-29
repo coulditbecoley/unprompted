@@ -38,7 +38,7 @@ from .cli_provider import CliProvider, ProviderError, parse_json_reply
 from .models import BrandMention, EngineAnswer, Extraction
 from .storage import write_json
 from .engines.anthropic_engine import _usage as anthropic_usage
-from .engines.base import wait_deadline
+from .engines.base import refuse_new_paid_work, wait_deadline
 
 # Letters and digits only, for checking that an extracted name occurs in the
 # answer. Deliberately a local copy rather than an import from normalize: this
@@ -450,11 +450,11 @@ def collect_batch(checkpoint: Path, api_key: str | None = None, deadline: float 
     destination = checkpoint.parent / "extraction-batch/results.json"
     if not destination.exists():
         client = _client(api_key)
-        recovery, deadline = deadline, wait_deadline(BATCH_MAX_WAIT_SECONDS) if deadline is None else deadline
+        deadline = wait_deadline(BATCH_MAX_WAIT_SECONDS) if deadline is None else deadline
         label = f"batch {state['id']}"
         batch = _wait_ended(client, read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label), deadline)
         # A dropped stream restarts the whole download; nothing partial is written.
-        entries = read_retrying(lambda: download(client.messages.batches.results(batch.id), recovery, label),
+        entries = read_retrying(lambda: download(client.messages.batches.results(batch.id), deadline, label),
                                 deadline, label)
         # Complete download first: parsing cannot strand the provider's usage.
         write_json(destination, {"id": state["id"], "identity": state["identity"], "entries": entries})
@@ -546,6 +546,7 @@ def extract_all_batch(
             intent = {"identity": identity, "model": model, "answers": len(requests), "submission_started": True,
                       "result_checkpoint_version": 1,
                       "answer_keys": answer_keys}
+            refuse_new_paid_work("extraction batch")
             if checkpoint:
                 write_json(checkpoint, intent)
             batch = client.messages.batches.create(requests=requests)

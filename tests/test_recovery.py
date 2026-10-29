@@ -343,7 +343,8 @@ def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, mo
     monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
     checkpoint = tmp_path / ".unprompted" / operation / "2026-09-15/alpha/batch.json"
     batch = SimpleNamespace(id="offline", processing_status="in_progress" if failure == "timeout" else "ended")
-    monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 0)
+    if failure == "timeout":  # downloads are bounded by the same clock, so only the pending case expires
+        monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 0)
     calls = []
     interrupted = True
     replies = [MessageBatchIndividualResponse.model_validate({"custom_id": f"x{i}", "result": {
@@ -378,6 +379,7 @@ def test_interrupted_extraction_download_recovers_and_accounts_once(tmp_path, mo
         budget._archived_runs()
     interrupted = False
     batch.processing_status = "ended"
+    monkeypatch.setattr(extract, "BATCH_MAX_WAIT_SECONDS", 3600)  # a later run has its own clock
     assert len(extract.collect_batch(checkpoint)) == 2
     monkeypatch.setattr(extract, "_client", lambda key: pytest.fail("cached results contacted provider"))
     recovered = extract.extract_all_batch(answers, checkpoint=checkpoint)

@@ -74,6 +74,7 @@ def test_timeout_and_ambiguous_submission_block_spending(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="unaccounted"):
         budget._archived_runs()
     api.retrieve = lambda identifier: NS(processing_status="ended")
+    monkeypatch.setattr(batch, "MAX_WAIT_SECONDS", 3600)  # downloads share the wait's clock
     batch.collect(checkpoint / "claude-batch/state.json", "offline")
     assert len(submitted) == 1 and len(budget._archived_runs()) == 1
     def uncertain(**kwargs):
@@ -383,3 +384,51 @@ def test_batch_waits_end_with_the_run_not_after_one_hour(monkeypatch):
     assert base.wait_deadline(batch.MAX_WAIT_SECONDS) - base.time.monotonic() > 5 * 3600
     monkeypatch.setattr(base, "_PROCESS_STARTED", base.time.monotonic() - base.RUN_SECONDS + 60)
     assert base.wait_deadline(batch.MAX_WAIT_SECONDS) - base.time.monotonic() <= 60
+
+
+def test_gemini_is_told_to_search_and_reports_the_model_google_serves(monkeypatch):
+    # 2026-10-29: gemini-3.5-flash requests were answered by gemini-3.6-flash,
+    # which searched for 1 of 8 questions unprompted and 8 of 8 when told to.
+    import io
+    from unprompted.cli_provider import ProviderError
+    from unprompted.engines import gemini_engine
+    sent = []
+    body = {"modelVersion": "gemini-3.6-flash", "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "OK"}]}}]}
+
+    def urlopen(request, timeout):
+        sent.append(json.loads(request.data))
+        return io.BytesIO(json.dumps(body).encode())
+    monkeypatch.setattr(gemini_engine.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    engine = gemini_engine.GeminiEngine()
+    engine.api_key = "offline"
+    assert engine.identify() == {"model": "gemini-3.6-flash", "version": "requested gemini-3.5-flash"}
+    assert sent[0]["system_instruction"]["parts"][0]["text"].endswith("Search the web for current information before answering.")
+    engine.identify()
+    assert len(sent) == 1  # once per process
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    del body["modelVersion"]
+    with pytest.raises(ProviderError, match="did not say"):
+        engine.identify()
+
+
+def test_nothing_new_is_paid_for_once_the_run_clock_is_spent(tmp_path, monkeypatch):
+    from unprompted.engines import base
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    monkeypatch.setattr(base, "_PROCESS_STARTED", base.time.monotonic() - base.RUN_SECONDS - 1)
+    with pytest.raises(TimeoutError, match="budget is spent"):
+        batch.ask_batch(engine, [(engine, "q1", "Which?", 0)], tmp_path, "sha")
+    assert not submitted and not (tmp_path / "claude-batch/state.json").exists()
+
+
+def test_a_category_is_not_started_without_time_to_finish_it(tmp_path, monkeypatch):
+    from unprompted import run
+    started = []
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(run, "run_time_left", lambda: run.CATEGORY_RESERVE_SECONDS - 1)
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--summary-file", str(tmp_path / "s.json")])
+    assert run.main() == run.HELD_EXIT_CODE and not started
+    assert "not started" in json.loads((tmp_path / "s.json").read_text())["detail"]

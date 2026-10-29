@@ -26,6 +26,7 @@ import json
 import urllib.request
 from urllib.parse import urlparse
 
+from ..cli_provider import ProviderError
 from .base import SYSTEM_PROMPT, Engine
 
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -43,6 +44,15 @@ ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:gene
 # an engine.
 MODEL = "gemini-3.5-flash"
 TIMEOUT_SECONDS = 120
+
+# Pinning does not hold on Google's side: from October 2026 requests for
+# gemini-3.5-flash are answered by gemini-3.6-flash (`modelVersion`), which
+# searches far less on its own. Cited answers fell from about 98% to between
+# 12% and 53% per category, and every category was held. In a test on
+# 2026-10-29 it searched for 1 of 8 buying questions as asked and 8 of 8 with
+# this one sentence added, so Gemini's instruction carries it. Method change:
+# recorded in the frozen engine configuration as `prompt_suffix`.
+PROMPT_SUFFIX = " Search the web for current information before answering."
 
 
 def _sources(grounding: dict) -> list[str]:
@@ -79,9 +89,30 @@ def _sources(grounding: dict) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+_SERVED: dict[str, str] = {}
+
+
 class GeminiEngine(Engine):
     name = "gemini"
     key_names = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+    prompt_suffix = PROMPT_SUFFIX
+
+    def identify(self) -> dict[str, str]:
+        """The model Google actually serves for MODEL, from one short call.
+
+        Recorded as this engine's model in the methodology snapshot, so a silent
+        re-route (3.5 to 3.6 in October 2026) stops the run before paid calls
+        like any other unversioned model change. Once per process.
+        """
+        if MODEL not in _SERVED:
+            try:
+                _, _, _, metadata = self._one_call("Reply with just the word OK.")
+            except Exception as exc:  # noqa: BLE001 - reported by the caller as a refusal
+                raise ProviderError(f"gemini: could not tell which model answers: {type(exc).__name__}: {exc}") from exc
+            if not metadata.get("modelVersion"):
+                raise ProviderError("gemini: the response did not say which model answered")
+            _SERVED[MODEL] = metadata["modelVersion"]
+        return {"model": _SERVED[MODEL], "version": f"requested {MODEL}"}
 
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         payload = json.dumps(
@@ -89,7 +120,7 @@ class GeminiEngine(Engine):
                 # Gemini takes the system prompt as its own field rather than as
                 # a first message, so the shared SYSTEM_PROMPT lands in the same
                 # role it does everywhere else.
-                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "system_instruction": {"parts": [{"text": SYSTEM_PROMPT + self.prompt_suffix}]},
                 "contents": [{"role": "user", "parts": [{"text": question}]}],
                 "tools": [{"google_search": {}}],
             }

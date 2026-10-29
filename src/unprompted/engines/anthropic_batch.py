@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from .anthropic_engine import request_params, read_response, TIMEOUT_SECONDS
-from .base import utc_now, wait_deadline
+from .base import refuse_new_paid_work, utc_now, wait_deadline
 from ..models import EngineAnswer
 from ..storage import write_json
 
@@ -46,11 +46,10 @@ def read_retrying(call, deadline: float, label: str):
 
 
 def download(entries, deadline: float | None, label: str) -> list[dict]:
-    """A complete results download, abandoned if it outlives the recovery `deadline`.
-
-    None (a normal run collecting its own batch) leaves the download unbounded,
-    as before. ponytail: checked between entries, so one in-flight request can
-    overrun by up to its own timeout; pass per-request timeouts if that matters.
+    """A complete results download, abandoned if it outlives `deadline` (the
+    recovery phase's, or the run's own), so a slow stream cannot eat the hour
+    kept for publishing. None leaves it unbounded. ponytail: checked between
+    entries, so one in-flight request can overrun by up to its own timeout.
     """
     out = []
     for entry in entries:
@@ -79,7 +78,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
     results_path = state_path.with_name("results.json")
     if not results_path.exists():
         client = _client(api_key)
-        recovery, deadline = deadline, wait_deadline(MAX_WAIT_SECONDS) if deadline is None else deadline
+        deadline = wait_deadline(MAX_WAIT_SECONDS) if deadline is None else deadline
         label = f"Claude batch {state['id']}"
         while True:
             batch = read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label)
@@ -92,7 +91,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         # Persist the complete download before interpreting it; a parser error
         # must not lose usage or turn a retry into another paid request. A
         # dropped stream restarts the whole download, never a partial write.
-        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), recovery, label),
+        entries = read_retrying(lambda: download(client.messages.batches.results(state["id"]), deadline, label),
                                 deadline, label)
         write_json(results_path, {"fetched_at": utc_now(), "entries": entries})
     saved_results = json.loads(results_path.read_text(encoding="utf-8"))
@@ -190,6 +189,7 @@ def ask_batch(engine, tasks: list[tuple], checkpoint: Path, measurement_commit: 
                  "measurement_git_sha": measurement_commit, "collected": False}
         # Write intent BEFORE the POST. A crash between POST and id persistence
         # requires operator reconciliation, never a speculative second POST.
+        refuse_new_paid_work("Claude batch")
         write_json(state_path, state)
         batch = _client(engine.api_key).messages.batches.create(requests=requests)
         write_json(state_path, {**state, "id": batch.id}, replace=True)

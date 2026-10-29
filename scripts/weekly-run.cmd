@@ -136,7 +136,7 @@ goto :published
 :publish
 git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "Run: measured and published" >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :commit_failed
-git push origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
+git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 push origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :push_failed
 
 REM Confirm the remote actually has it. Neither commit nor push returns non-zero

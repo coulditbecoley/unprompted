@@ -30,7 +30,7 @@ from .cost import cost_of_run, format_report
 from .engines import all_engines
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .extract import EXTRACT_PROMPT, extract_run
-from .engines.base import SYSTEM_PROMPT
+from .engines.base import SYSTEM_PROMPT, refuse_new_paid_work, run_time_left
 from .models import EngineAnswer, RunRecord
 from .storage import run_lock, write_json
 from .normalize import AliasMap, normalize
@@ -43,6 +43,7 @@ HELD_EXIT_CODE = 2
 # seconds, ChatGPT over a minute), so they run concurrently. Serially a full week
 # is roughly 2.5 hours, which would blow the CI timeout and delay the chart for
 # no reason. Kept modest so we stay well inside every provider's rate limits.
+CATEGORY_RESERVE_SECONDS = 90 * 60
 MAX_WORKERS = 6
 
 
@@ -209,7 +210,8 @@ def _run_category(
     methodology = {
         "questions": spec,
         "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {}),
-                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {})}
+                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {}),
+                           **({"prompt_suffix": e.prompt_suffix} if getattr(e, "prompt_suffix", "") else {})}
                     for name, e in engines.items()},
         "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
         "system_prompt": SYSTEM_PROMPT,
@@ -286,6 +288,7 @@ def _run_category(
     if answers:
         print(f"  reused {len(answers)}/{len(tasks)} saved calls; {len(pending)} calls remaining", file=sys.stderr, flush=True)
     def ask_and_save(engine, qid, text, run_index):
+        refuse_new_paid_work(f"{engine.name} {qid}#{run_index}")  # queued past the run's end
         answer = engine.ask_one(qid, text, run_index)
         answer.measurement_git_sha = measurement_commit
         write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
@@ -558,6 +561,12 @@ def main() -> int:
             categories = []
 
     for category in categories:
+        if not args.dry_run and run_time_left() < CATEGORY_RESERVE_SECONDS:
+            # Asking takes ~20 minutes and its batch typically an hour; one
+            # started later would strand paid work the run cannot collect.
+            held[category] = ["not started: too little of the weekly run's time was left to finish it"]
+            outcomes.append(f"{category}: not started — run time budget nearly spent")
+            continue
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
         try:
             record, reasons = run_category(

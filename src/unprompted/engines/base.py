@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ..models import EngineAnswer
 
@@ -20,16 +21,41 @@ SYSTEM_PROMPT = (
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = 2.0
 
-# Every batch wait in one process shares this wall clock. Task Scheduler stops
-# the weekly run at 8 hours, and a run killed there commits nothing at all, so
-# waits end an hour short of it and the categories that did pass still publish.
+# Every wait and every new paid request in one weekly run shares this clock.
+# Task Scheduler stops the run at 8 hours, and a run killed there commits
+# nothing at all, so work ends an hour short of it and the categories that did
+# pass still publish. The clock starts when the launcher did
+# (scripts/weekly-run.cmd writes .unprompted/weekly-started), not when Python
+# imported this module after the launcher's own git and preflight steps.
 RUN_SECONDS = 7 * 3600
-_PROCESS_STARTED = time.monotonic()
+
+
+def _started() -> float:
+    marker = Path(__file__).resolve().parents[3] / ".unprompted" / "weekly-started"
+    try:
+        age = time.time() - float(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        age = 0.0
+    # ponytail: a manual run within 8 hours of a weekly start inherits its clock.
+    return time.monotonic() - (age if 0 <= age < 8 * 3600 else 0.0)
+
+
+_PROCESS_STARTED = _started()
+
+
+def run_time_left() -> float:
+    return _PROCESS_STARTED + RUN_SECONDS - time.monotonic()
 
 
 def wait_deadline(max_wait: float) -> float:
     """When a batch wait started now must give up: `max_wait`, or the run's end."""
     return min(time.monotonic() + max_wait, _PROCESS_STARTED + RUN_SECONDS)
+
+
+def refuse_new_paid_work(what: str) -> None:
+    """Nothing new is paid for once the run's clock is spent: it could not be collected."""
+    if run_time_left() <= 0:
+        raise TimeoutError(f"{what} not started: the weekly run's {RUN_SECONDS // 3600}-hour budget is spent")
 
 
 def utc_now() -> str:
