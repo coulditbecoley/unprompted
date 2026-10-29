@@ -23,7 +23,7 @@
       "per_search": 0.01
     },
     "gemini": {
-      "prices": "gemini-3.5-flash, thinking tokens billed as output; grounding $14 per 1,000 grounded prompts after 5,000 free a month (not credited here)",
+      "prices": "gemini-3.5-flash, thinking tokens billed as output; Google Search grounding $14 per 1,000 search queries (each query in an answer counts; legacy records counted one per grounded prompt) after 5,000 free a month (not credited here)",
       "input_per_m": 1.5,
       "output_per_m": 9.0,
       "per_search": 0.014

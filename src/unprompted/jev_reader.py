@@ -443,7 +443,7 @@ def stored_answers(record: dict) -> list[EngineAnswer]:
             engine=e["engine"], question_id=e["question_id"], question="", run_index=e["run_index"],
             text=e.get("answer", ""), sources=e.get("sources", []),
             source_kind=e.get("source_kind", "unspecified"), fetched_at=e.get("fetched_at", ""),
-            measurement_git_sha=e.get("measurement_git_sha"),
+            measurement_git_sha=e.get("measurement_git_sha"), metadata=e.get("metadata"),
             # An extraction failure is the other reader's; the answer is intact.
             error=None if (e.get("error") or "").startswith("extract failed") else e.get("error"),
             usage={k: v for k, v in (e.get("usage") or {}).items() if not k.startswith("extract_")},

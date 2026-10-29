@@ -35,13 +35,20 @@ class EngineAnswer:
     # Invocation code revision when this response was requested. Legacy saves
     # lack this field; a later reader must not invent their original revision.
     measurement_git_sha: str | None = None
+    # Provider evidence kept verbatim (Gemini: grounding, model version, finish
+    # reason), so a change in provider behaviour can be diagnosed from the
+    # archive. Omitted when absent: older checkpoints compare equal unchanged.
+    metadata: dict[str, Any] | None = None
 
     @property
     def ok(self) -> bool:
         return self.error is None and bool(self.text.strip())
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        if self.metadata is None:
+            del out["metadata"]
+        return out
 
 
 @dataclass
@@ -79,9 +86,10 @@ class Extraction:
     # difference between "measured on Monday" and "re-read on Wednesday".
     fetched_at: str = ""
     measurement_git_sha: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        return ({"metadata": self.metadata} if self.metadata is not None else {}) | {
             "engine": self.engine,
             "question_id": self.question_id,
             "run_index": self.run_index,

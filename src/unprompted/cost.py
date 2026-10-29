@@ -96,11 +96,17 @@ def batch_billed(extractor: str | None) -> bool:
     return bool(extractor) and extractor in BATCH_BILLED
 
 
+def _searches(usage: dict[str, int]) -> int:
+    # Presence, not truthiness: a recorded 0 searches is 0, not "fall back to
+    # the legacy per-prompt `requests` count". Mirrors lib/metrics.ts.
+    return usage["web_searches"] if "web_searches" in usage else usage.get("requests", 0)
+
+
 def _price(engine: str, usage: dict[str, int], rates: dict[str, dict[str, float]] = RATES) -> float:
     rate = rates.get(engine)
     if not rate:
         return 0.0
-    searches = usage.get("web_searches", 0) or usage.get("requests", 0)
+    searches = _searches(usage)
     # OpenAI cached tokens are included in input_tokens; Anthropic cache
     # reads/writes are separate. Reasoning tokens already belong to output.
     cached = usage.get("cached_input_tokens", 0)
@@ -144,7 +150,7 @@ def cost_of_run(run: dict, *, current_rates: bool = False) -> tuple[list[LineIte
             item.input_tokens += (usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
                                   + usage.get("cache_creation_input_tokens", 0))
             item.output_tokens += usage.get("output_tokens", 0)
-            item.searches += usage.get("web_searches", 0) or usage.get("requests", 0)
+            item.searches += _searches(usage)
             item.dollars += _price(engine, usage, rates)
 
         # The extraction pass rides on the same record but is billed separately,

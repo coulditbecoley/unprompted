@@ -286,3 +286,53 @@ def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures
     else:
         assert seen == [True] and f"recovery: could not collect {broken}" in detail
     assert len(submitted) == 1
+
+
+def _gemini(monkeypatch, body):
+    import io
+    from unprompted.engines import gemini_engine
+    monkeypatch.setattr(gemini_engine.urllib.request, "urlopen",
+                        lambda request, timeout: io.BytesIO(json.dumps(body).encode()))
+    monkeypatch.setattr("unprompted.engines.base.time.sleep", lambda s: None)
+    engine = gemini_engine.GeminiEngine()
+    engine.api_key = "offline"
+    return engine.ask_one("q1", "Which?", 0)
+
+
+def test_gemini_keeps_provider_evidence_and_bills_each_search_query(monkeypatch):
+    from unprompted.extract import _base_for
+    grounding = {"webSearchQueries": ["a", "b", "c"], "searchEntryPoint": {"renderedContent": "<html>"},
+                 "groundingChunks": [{"web": {"uri": "https://vertexaisearch/x", "title": "example.com"}}]}
+    body = {"modelVersion": "gemini-3.5-flash-002",
+            "candidates": [{"finishReason": "STOP", "groundingMetadata": grounding,
+                            "content": {"parts": [{"text": "Alpha."}]}}],
+            "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5}}
+    answer = _gemini(monkeypatch, body)
+    assert answer.ok and answer.sources == ["https://example.com"]
+    assert answer.usage["web_searches"] == 3 and "requests" not in answer.usage
+    assert answer.metadata == {"modelVersion": "gemini-3.5-flash-002", "finishReason": "STOP",
+                               "groundingMetadata": {k: v for k, v in grounding.items() if k != "searchEntryPoint"}}
+    assert _base_for(answer)[0].to_dict()["metadata"] == answer.metadata
+
+    # Answered from memory: no grounding key at all, which stays distinguishable from {}.
+    del body["candidates"][0]["groundingMetadata"]
+    ungrounded = _gemini(monkeypatch, body)
+    assert ungrounded.ok and ungrounded.usage["web_searches"] == 0
+    assert "groundingMetadata" not in ungrounded.metadata
+
+    for failed in ({"promptFeedback": {"blockReason": "SAFETY"}, "usageMetadata": {"promptTokenCount": 10}},
+                   {**body, "candidates": [{**body["candidates"][0], "finishReason": "MAX_TOKENS"}]}):
+        answer = _gemini(monkeypatch, failed)
+        assert answer.error == "engine failed: incomplete response"
+        assert answer.usage["input_tokens"] == 10
+
+
+def test_records_without_metadata_round_trip_unchanged_and_searches_price_by_presence():
+    from unprompted.cost import _price, _searches
+    from unprompted.models import EngineAnswer, Extraction
+    legacy = EngineAnswer("claude", "q1", "Which?", 0).to_dict()
+    assert "metadata" not in legacy and EngineAnswer(**legacy).to_dict() == legacy
+    assert "metadata" not in Extraction("claude", "q1", 0).to_dict()
+    assert _searches({"requests": 1}) == 1
+    assert _searches({"web_searches": 0, "requests": 1}) == 0
+    assert _price("gemini", {"web_searches": 2}) == 2 * _price("gemini", {"web_searches": 1}) > 0
