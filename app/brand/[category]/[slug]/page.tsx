@@ -102,6 +102,20 @@ export default async function BrandPage({
 
   return (
     <section className="shell section">
+      {/* The breadcrumb, machine-readable, so a search result shows board > brand. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              { "@type": "ListItem", position: 1, name: label, item: `https://unprompted.report/chart/${category}` },
+              { "@type": "ListItem", position: 2, name: brand, item: `https://unprompted.report/brand/${category}/${slug}` },
+            ],
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
       <nav className="crumbs label" aria-label="Breadcrumb">
         <Link href={`/chart/${category}`}>{label}</Link>
         <span aria-hidden="true">/</span>
@@ -182,7 +196,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Where it sits on the board</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            Its closest neighbours this week. Pale bar: named at all. Solid bar: named first.
+            Its closest neighbours in the latest reading. Pale bar: named at all. Solid bar: named first.
           </p>
           <LeaderBars rows={neighbours} start={from} highlight={brand} hrefFor={(b) => brandHref(category, b)} />
         </div>

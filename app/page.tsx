@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import fs from "node:fs";
 import path from "node:path";
@@ -35,6 +36,19 @@ type QuestionSpec = {
 function questionSpec(): QuestionSpec {
   const file = path.join(REPO_ROOT, "questions", `${CATEGORY}.yml`);
   return loadYaml(fs.readFileSync(file, "utf-8")) as QuestionSpec;
+}
+
+/** The verdict travels with the link: search results and previews show it. */
+export function generateMetadata(): Metadata {
+  const run = latestRun(CATEGORY);
+  const top = run ? standings(run)[0] : undefined;
+  if (!run || !top) return { alternates: { canonical: "/" } };
+  const description = `Which brands do AI assistants recommend when nobody pays? In the latest reading, measured ${run.measured_on || run.run_date}, ${top.brand} was named first in ${Math.round(top.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}. Every question and answer is public.`;
+  return {
+    description,
+    alternates: { canonical: "/" },
+    openGraph: { type: "website", siteName: "Unprompted", title: "Unprompted — what AI recommends when nobody's paying", description },
+  };
 }
 
 export default function Home() {
@@ -118,7 +132,7 @@ export default function Home() {
           <div className="buffer rise" style={{ "--i": 2 } as React.CSSProperties}>
             <div className="buffer-head">
               <span className="buffer-dots" aria-hidden="true"><i /><i /><i /></span>
-              <span className="label">This week&rsquo;s questions</span>
+              <span className="label">The questions we ask</span>
               <span className="label">{questions.length} × {runsPerQ}</span>
             </div>
             <div className="buffer-body" aria-label="The questions being asked">

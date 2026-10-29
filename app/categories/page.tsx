@@ -4,12 +4,13 @@ import { CategoryBrowser } from "@/components/category-browser";
 import { categoriesBySector } from "@/lib/categories";
 import { latestRun, standings, consensus, consensusScore } from "@/lib/data";
 
-export const metadata: Metadata = {
-  title: "Categories",
-  description:
-    "Every category Unprompted measures, grouped by sector. Which brands AI assistants name when people ask what to buy.",
-  openGraph: { title: "Browse AI brand charts", description: "See the leading brand, first-pick share, and measurement date for each category." },
-};
+export function generateMetadata(): Metadata {
+  const categories = categoriesBySector().flatMap(group => group.categories);
+  const published = categories.filter(category => latestRun(category.slug));
+  const title = "Browse AI brand charts by category";
+  const description = `${published.length} of ${categories.length} categories have published results. See which brands lead and how often assistants agree on their first pick.`;
+  return { title, description, alternates: { canonical: "/categories" }, openGraph: { title, description, url: "/categories", type: "website", siteName: "Unprompted" } };
+}
 
 export default function CategoriesPage() {
   const groups = categoriesBySector();
@@ -34,9 +35,9 @@ export default function CategoriesPage() {
         What we measure.
       </h1>
       <p className="section-lead">
-        Choose a category to see which brands AI assistants mention in answers
-        to buying questions. We attempt a measurement each week and publish only
-        results that pass our checks.
+        Choose a category to see its latest published reading of AI answers
+        to buying questions. Check the measurement date on each board; readings
+        may be several weeks old. Only results that pass our checks are published.
       </p>
       <CategoryBrowser groups={groups} counts={counts} />
     </section>

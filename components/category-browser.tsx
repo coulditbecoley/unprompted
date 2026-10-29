@@ -76,7 +76,7 @@ export function CategoryBrowser({
         <section key={sector.slug} className="cat-sector reveal">
           <div className="cat-sector-head">
             <h2 id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
-            <p>{sector.blurb}</p>
+            <p>{sector.blurb.replace(/\bengines\b/g, "assistants")}</p>
           </div>
 
           <div className="cat-grid">
@@ -91,7 +91,7 @@ export function CategoryBrowser({
                   <span className="trim-top" aria-hidden="true" />
                   <div className="cat-card-body">
                     <p className="cat-status" data-live={live}>
-                      {live ? "RESULTS AVAILABLE" : "NO PUBLISHED RESULTS"}
+                      {live ? "Results available" : "No published results"}
                     </p>
                     <h3>{category.label}</h3>
                     <p className="cat-question">{category.question}</p>

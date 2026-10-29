@@ -131,7 +131,7 @@ export function ChartBoard({
       <h1 className="display page-title rise">
         {leader
           ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
-          : "No brand was named this week."}
+          : "No brand was named in this reading."}
       </h1>
 
       {/* This sentence has to match what the board actually draws. */}
@@ -154,7 +154,7 @@ export function ChartBoard({
       */}
       {missed.length > 0 && (
         <p className="section-lead coverage-note">
-          <strong>Smaller sample this week.</strong>{" "}
+          <strong>Smaller sample in this reading.</strong>{" "}
           {missed.map((c, i) => (
             <span key={c.engine}>
               {i > 0 ? ", and " : ""}

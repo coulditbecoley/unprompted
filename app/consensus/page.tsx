@@ -40,11 +40,14 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const category = resolve(await searchParams);
   const label = categoryLabel(category);
-  return {
-    title: `Do AI assistants agree? ${label}`,
-    openGraph: { title: `Do AI assistants agree? ${label}`, description: "Compare each assistant?s first pick, question by question." },
-    description: `Which brand each AI assistant names first, question by question, for ${inSentence(label)}. Where they agree, and where they do not.`,
-  };
+  const run = latestRun(category);
+  const score = run ? consensusScore(consensus(run, loadQuestionText(category, run))) : null;
+  const title = `Do AI assistants agree? ${label}`;
+  const description = run && score && run.engines.length >= 2
+    ? `AI assistants agree on the first pick for ${score.settled} of ${score.total} questions about ${inSentence(label)}. Measured ${run.measured_on || run.run_date}. See each assistant's picks.`
+    : `Not enough published assistant results to compare agreement for ${inSentence(label)} yet.`;
+  const url = `/consensus?${new URLSearchParams({ c: category })}`;
+  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
 }
 
 export default async function ConsensusPage({
@@ -102,10 +105,9 @@ export default async function ConsensusPage({
         )}
       </p>
       <p className="cmp-note">
-        An engine is an AI assistant accessed through its API or command-line
-        tool. Its pick is the brand it names first most often across repeated
-        answers. Agreement means every engine has the same pick; it does not
-        establish which product is best.
+        An assistant's pick is the brand it names first most often across repeated
+        answers. Agreement means every assistant has the same pick, not that the
+        product is best. Failed calls and refusals are left out of percentages.
       </p>
 
       <div style={{ marginTop: 20 }}>
@@ -122,11 +124,11 @@ export default async function ConsensusPage({
           <div className="kpi-row">
             <Kpi value={Math.round(score.share * 100)} unit="%" label="Full agreement" meter={score.share} note={`${score.settled} of ${score.total} questions.`} />
             <Kpi i={1} value={contested.length} label="Without full agreement" note="Different picks, ties, or missing picks." />
-            <Kpi i={2} value={engines.length} label="Engines compared" note="Each engine contributes one pick per question." />
+            <Kpi i={2} value={engines.length} label="Assistants compared" note="Each assistant contributes one pick per question." />
           </div>
           <div className="panel cns-agreement reveal">
             <h2 className="sub-h" id="agreement">Agreement at a glance</h2>
-            <p className="cmp-note">One square per question. Filled squares mean every engine picked the same brand.</p>
+            <p className="cmp-note">One square per question. Filled squares mean every assistant picked the same brand.</p>
             <div className="cns-strip" role="img" aria-label={`${score.settled} of ${score.total} questions have full agreement.`}>
               {rows.map(row => <span key={row.questionId} data-agreed={row.settled} title={`${row.text}: ${row.settled ? 'all agree' : 'no full agreement'}`} />)}
             </div>
@@ -136,7 +138,7 @@ export default async function ConsensusPage({
           {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
             The percentage shows how often the leading brand was named first
-            among usable answers to that question. A dash means a tie or no
+            among answers to that question. A dash means a tie or no
             pick. Bold marks picks outside the majority, or all picks when
             there is no majority. Missing picks also prevent full agreement.
           </p>
@@ -162,10 +164,10 @@ export default async function ConsensusPage({
             ))}
           </div>
 
-          <h2 className="sub-h" id="differences">How often each engine differs from the majority <SectionLink id="differences" label="How often each engine differs from the majority" /></h2>
+          <h2 className="sub-h" id="differences">How often each assistant differs from the majority <SectionLink id="differences" label="How often each assistant differs from the majority" /></h2>
           <p className="cmp-note">
             The count is questions where a majority chose a brand and this
-            engine chose another brand or had no pick, out of all questions
+            assistant chose another brand or had no pick, out of all questions
             shown. Questions without a majority add no differences.
           </p>
           <div className="panel cns-div reveal">

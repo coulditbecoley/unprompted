@@ -19,7 +19,8 @@ const SITE = "https://unprompted.report";
  * teaches one to stop believing its dates.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const fixed = ["", "/chart", "/categories", "/compare", "/consensus", "/questions", "/methodology"];
+  // Final addresses only: /chart redirects to the flagship board, listed below.
+  const fixed = ["", "/categories", "/compare", "/consensus", "/questions", "/methodology"];
 
   const entries: MetadataRoute.Sitemap = fixed.map((path) => ({
     url: `${SITE}${path}`,

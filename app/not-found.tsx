@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Page not found",
+  robots: { index: false, follow: true },
   description: "This address does not match a page. Browse Unprompted’s public AI brand charts to find the results you need.",
   openGraph: { title: "Page not found · Unprompted", description: "Find a public AI brand chart or browse the categories." },
 };
@@ -30,7 +31,7 @@ export default function NotFound() {
         categories to find a chart and its published history.
       </p>
       <div className="btn-row rise">
-        <Link className="btn btn-go" href="/">See the current board <span className="arr" aria-hidden="true">→</span></Link>
+        <Link className="btn btn-go" href="/">See the latest published board <span className="arr" aria-hidden="true">→</span></Link>
         <Link className="btn" href="/categories">Browse categories</Link>
       </div>
     </section>

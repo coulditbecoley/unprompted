@@ -8,9 +8,10 @@ import { TrimTop } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "How we measure AI brand mentions",
-  openGraph: { title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
+  alternates: { canonical: "/methodology" },
+  openGraph: { url: "/methodology", type: "website", siteName: "Unprompted", title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
   description:
-    "Exactly how Unprompted measures what AI assistants recommend, including what it deliberately does not measure.",
+    "How we count brands once per answer, exclude errors and refusals, and keep method changes out of trend comparisons. Read the glossary and full published method.",
 };
 
 /**
@@ -23,7 +24,10 @@ export default function MethodologyPage() {
   const body = raw.replace(/^# Methodology\s*\n/, "");
   const introAt = body.indexOf("Unprompted measures");
   const changes = introAt > 0 && body.startsWith("**Version") ? body.slice(0, introAt).trim() : "";
-  const content = changes ? body.slice(introAt) : body;
+  const content = (changes ? body.slice(introAt) : body).replace(
+    "A brand that was named last week and not once this week",
+    "A brand that was named in the previous measurement and not once in the latest measurement",
+  );
   const blocks = renderMarkdown(content);
   const headings = [...content.matchAll(/^#{2,3} (.+)$/gm)].map(m => ({ text: m[1].trim(), id: headingId(m[1].trim()) }));
 

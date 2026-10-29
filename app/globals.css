@@ -1610,4 +1610,16 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 @media (max-width: 640px) {
   .q-reading { grid-template-columns: 1fr; }
 }
+/* Round 4: labelled sparse measurements, with a local scroll area on phones. */
+.cmp-chart-scroll { overflow-x: auto; padding-top: 8px; }
+.cmp-history-value { position: absolute; transform: translate(-50%, -100%); font-size: 12px; line-height: 16px; color: var(--fg); white-space: nowrap; }
+.cmp-history-value.is-b { color: var(--fg-2); }
+.cmp-labelled-dates { position: relative; height: 18px; }
+.cmp-labelled-dates > span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.cmp-chart-scroll { padding-top: 16px; }
+.cmp-chart .cmp-axis { top: 30px; bottom: 10px; }
+.cmp-labelled-dates > span:first-child { left: 0 !important; transform: none; }
+.cmp-labelled-dates > span:last-child { left: 100% !important; transform: translateX(-100%); }
+.cmp-legend .cmp-key { width: 6px; height: 6px; border: 1px solid var(--fg); border-radius: 50%; background: var(--fg); }
+.cmp-legend .cmp-key.is-b { width: 10px; height: 10px; border: 2px solid var(--fg-2); border-radius: 0; background: transparent; }
 /* === codex pages: end === */

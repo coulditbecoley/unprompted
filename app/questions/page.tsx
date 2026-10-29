@@ -22,15 +22,23 @@ export async function generateMetadata({
 }: {
   searchParams: Promise<Params>;
 }): Promise<Metadata> {
-  const category = resolve(await searchParams);
+  const params = await searchParams;
+  const category = resolve(params);
   const label = categoryLabel(category);
-  return {
-    title: `Every question, every answer: ${label}`,
-    openGraph: { title: `Recorded AI answers: ${label}`, description: "Read the questions, brand mentions, and source evidence behind the chart." },
-    description:
-      `The exact questions asked about ${inSentence(label)}, and which brands ` +
-      "each AI assistant named for each one. Show your work.",
-  };
+  const history = loadHistory(category, true);
+  const run = params.date ? history.find(r => r.run_date === params.date) : history.at(-1);
+  if (params.date && !run) notFound();
+  const engine = run && coverage(run).some(c => c.engine === params.engine) ? params.engine : undefined;
+  const brand = params.brand || undefined;
+  if (brand && !history.some(r => answered(r).some(e => e.brands.some(b => b.name === brand)))) notFound();
+  const count = run ? answered(run).filter(e => (!engine || e.engine === engine) && (!brand || e.brands.some(b => b.name === brand))).length : 0;
+  const assistant = engine ? loadProviders().find(p => p.id === engine)?.label ?? engine : "all assistants";
+  const title = `${brand ? `Answers naming ${brand}` : "Recorded AI answers"}: ${label}${params.question ? `: ${params.question}` : ""}`;
+  const description = run
+    ? `${count} answers${brand ? ` name ${brand}` : " recorded"} across the reading's questions for ${assistant}. Measured ${run.measured_on || run.run_date}; reading ${run.run_date}. Errors and refusals excluded. Inspect the evidence.`
+    : `Read the questions about ${inSentence(label)}. No answers have been published yet.`;
+  const url = `/questions?${new URLSearchParams({ c: category, ...(params.date && run ? { date: run.run_date } : {}), ...(engine ? { engine } : {}), ...(brand ? { brand } : {}), ...(params.question ? { question: params.question } : {}) })}`;
+  return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
 }
 
 type Spec = { questions: { id: string; text: string }[] };
@@ -154,12 +162,12 @@ export default async function QuestionsPage({
       {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
       <div className="kpi-row">
         <Kpi label="Questions in reading" value={spec.questions.length} note="The question list for this reading." />
-        <Kpi i={1} label="Usable answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
+        <Kpi i={1} label="Answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
         <Kpi i={2} label="Errors or refusals" value={run.extractions.length - usable} note="Excluded from brand mention percentages." />
       </div>
       <div className="panel q-coverage reveal">
         <h2 className="sub-h" id="coverage">Answer coverage by assistant</h2>
-        <p className="cmp-note">Coverage is for the full reading. Bar length is the share of recorded attempts that produced a usable answer.</p>
+        <p className="cmp-note">Coverage is for the full reading. Bar length is the share of recorded attempts that produced an answer, excluding errors and refusals.</p>
         {counts.map(c => <div className="q-coverage-row" key={c.engine}>
           <span>{labels.get(c.engine) ?? c.engine}</span>
           <span className="meter" aria-hidden="true"><i style={{ "--v": c.answered / Math.max(c.attempted, 1) } as React.CSSProperties} /></span>

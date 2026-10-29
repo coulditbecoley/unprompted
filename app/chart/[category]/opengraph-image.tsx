@@ -1,7 +1,7 @@
 import { boardCard } from "@/app/opengraph-image";
 import { CATEGORIES } from "@/lib/categories";
 
-export const alt = "This week's board on Unprompted";
+export const alt = "The latest board on Unprompted";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
