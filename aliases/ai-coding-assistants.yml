@@ -59,6 +59,11 @@ canonical:
   JetBrains AI:
     - jetbrains ai
     - jetbrains ai assistant
+    # JetBrains' coding agent, named as part of the same offering
+    # ("JetBrains AI / Junie").
+    - junie
+    - jetbrains junie
+    - jetbrains ai / junie
     - intellij ai
   Amazon Q:
     - amazon q
@@ -131,6 +136,21 @@ canonical:
   Playcode AI:
     - playcode
     - playcode ai
+  # Same kind of browser app builder, named beside Replit Agent ("Lovable,
+  # Bolt, or Replit Agent"); held 09-28, 10-12 and 10-19 until decided.
+  Lovable:
+    - lovable
+    - lovable.dev
+  Bolt.new:
+    - bolt
+    - bolt.new
+    - stackblitz bolt
+  Supermaven:
+    - supermaven
+  # Google's agentic IDE: a product, unlike bare "gemini" (the model).
+  Google Antigravity:
+    - google antigravity
+    - antigravity
 
 # Which engine's own house each product belongs to.
 #
@@ -149,6 +169,7 @@ affiliations:
   Claude Code: [claude, claude-code]
   Codex: [chatgpt, codex]
   Gemini Code Assist: [gemini]
+  Google Antigravity: [gemini]
 
 # Known, and deliberately not charted. Real things the engines name while
 # answering, but not coding assistants, so charting them would be wrong.
@@ -166,6 +187,7 @@ exclude:
   - claude
   - anthropic claude
   - gemini
+  - google gemini
   - gemini 2.5 pro
   - llama
   - deepseek

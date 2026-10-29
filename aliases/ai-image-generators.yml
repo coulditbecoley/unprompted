@@ -164,6 +164,9 @@ exclude:
   - fooocus
   - automatic1111
   - a1111
+  # Stable Diffusion WebUI Forge: always "ComfyUI or Forge", a way to run a model
+  - forge
+  - sd webui forge
   - controlnet
   - ip-adapter
   - ipadapter
