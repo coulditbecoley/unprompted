@@ -62,6 +62,26 @@ change the budget ceiling, start a measurement, or certify publication. A
 combined estimate above the ceiling means a later category may refuse after
 earlier categories spend; it does not change the existing per-category policy.
 
+Add `--qualify` to also run what the weekly run checks first, still without
+measuring: each local engine's isolation canary, the model every engine
+reports, and the full method-change comparison against the last published
+week. It makes a few real calls (two per local harness on the subscription,
+and Gemini's tiny model probe).
+
+```powershell
+python -m unprompted.run --preflight --qualify
+```
+
+Two recovery commands make no new paid calls:
+
+```powershell
+python -m unprompted.run --collect-only            # download batches already paid for
+python -m unprompted.reextract 2026-11-02 --category ai-writing-tools --renormalize
+```
+
+The second re-applies today's `aliases/` to a held reading's stored raw brand
+names (readings from November 2026 on) and writes a new dated reading.
+
 Use a project virtual environment. On Windows:
 
 ```powershell
@@ -85,8 +105,9 @@ export PERPLEXITY_API_KEY=...           # and will hold the week
 python -m unprompted.run --category ai-coding-assistants --dry-run
 ```
 
-`--dry-run` executes the full pipeline and reports the checks without writing
-anything. Drop the flag to write a real run record.
+`--dry-run` executes the full pipeline, paid calls included, and reports the
+checks; it keeps its checkpoints in `.unprompted/` but writes no run record.
+Drop the flag to write a real run record.
 
 ### The web app's own keys
 
