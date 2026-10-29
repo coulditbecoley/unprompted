@@ -2417,3 +2417,13 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
         return SimpleNamespace(stdout="", stderr="", returncode=0)
     monkeypatch.setattr(sv.subprocess, "run", git)
     sv.pull()
+
+
+@pytest.mark.parametrize("damaged", ["[1, 2]", '"text"', '{"views": "many", "_agents": []}'])
+def test_a_damaged_analytics_day_is_replaced_not_fatal(tmp_path, damaged):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data/2026-10-20.json").write_text(damaged, encoding="utf-8")
+    assert sa.write_raw(tmp_path, "2026-10-20", {"views": 3}, {}) is True
+    assert json.loads((tmp_path / "data/2026-10-20.json").read_text())["views"] == 3

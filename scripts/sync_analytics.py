@@ -165,12 +165,15 @@ def write_raw(
             existing = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             existing = {}
-        previous = {k: v for k, v in existing.items() if not k.startswith("_")}
+        if not isinstance(existing, dict):
+            existing = {}  # a damaged file is replaced, not allowed to stop every later sync
+        previous = {k: v for k, v in existing.items() if not k.startswith("_") and isinstance(v, (int, float))}
         if any(counted.get(k, 0) < v for k, v in previous.items()) or previous == counted:
             return False
 
     payload = dict(counted)
-    payload["_agents"] = {**snapshot(counted, meta), **existing.get("_agents", {})}
+    kept = existing.get("_agents")
+    payload["_agents"] = {**snapshot(counted, meta), **(kept if isinstance(kept, dict) else {})}
 
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
