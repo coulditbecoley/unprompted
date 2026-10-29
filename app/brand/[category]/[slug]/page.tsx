@@ -11,6 +11,7 @@ import {
   brandHistory,
   answeredPerQuestion,
   brandByEngine,
+  brandCompanions,
   brandPositions,
   brandTone,
   latestRun,
@@ -83,6 +84,7 @@ export default async function BrandPage({
   const tone = run ? brandTone(run, brand) : null;
   const perEngine = run && row ? brandByEngine(run, brand) : [];
   const positions = run && row ? brandPositions(run, brand) : null;
+  const companions = run && row ? brandCompanions(run, brand) : null;
   // Question by question, strongest first: which buying questions bring this
   // brand up, and which never do.
   const qText = run ? loadQuestionText(category, run) : {};
@@ -261,6 +263,28 @@ export default async function BrandPage({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {companions && companions.rows.length > 0 && (
+        <div className="reveal">
+          <h2 className="sub-h">Usually named alongside</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            When an answer named {brand}, these brands often came up in the same answer.
+          </p>
+          <div className="seq-board">
+            <TrimTop />
+            {companions.rows.map((c) => (
+              <div className="seq-row bq-row" key={c.brand}>
+                <Link className="bq-text" href={brandHref(category, c.brand)}>{c.brand}</Link>
+                <span className="meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": c.together / companions.of } as React.CSSProperties} /></span>
+                <span className="mono bq-num">{Math.round((c.together / companions.of) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+          <p className="kpi-note" style={{ marginTop: 10 }}>
+            Share of the {companions.of} answers that named {brand}.
+          </p>
         </div>
       )}
 

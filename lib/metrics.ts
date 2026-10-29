@@ -645,6 +645,31 @@ export function brandPositions(run: RunRecord, brand: string): [number, number, 
   return out;
 }
 
+/**
+ * The brands most often named in the same answer as this one, out of the
+ * answered runs that named it. Ties order by name so the list is stable.
+ */
+export function brandCompanions(
+  run: RunRecord,
+  brand: string,
+  limit = 5,
+): { of: number; rows: Array<{ brand: string; together: number }> } {
+  const counts = new Map<string, number>();
+  let of = 0;
+  for (const ex of answered(run)) {
+    if (!ex.brands.some((b) => b.name === brand)) continue;
+    of += 1;
+    for (const name of new Set(ex.brands.map((b) => b.name))) {
+      if (name !== brand) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const rows = [...counts.entries()]
+    .map(([name, together]) => ({ brand: name, together }))
+    .sort((a, b) => b.together - a.together || a.brand.localeCompare(b.brand))
+    .slice(0, limit);
+  return { of, rows };
+}
+
 /* -- tone ----------------------------------------------------------------- */
 
 export type Tone = { positive: number; neutral: number; negative: number; total: number };
