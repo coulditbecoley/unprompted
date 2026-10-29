@@ -53,14 +53,15 @@ export function SequencerRow({
   return (
     <div
       className="seq-row"
+      role="row"
       style={transitionName ? ({ viewTransitionName: transitionName, viewTransitionClass: "board-row" } as React.CSSProperties) : undefined}
     >
-      <span className="mono seq-rank" data-lead={rank === 1}>
+      <span className="mono seq-rank" role="cell" data-lead={rank === 1}>
         {String(rank).padStart(2, "0")}
       </span>
       {/* The rotation bar makes the ordering readable without reading a number.
           Deliberately neutral: colour on this board means movement. */}
-      <span className="seq-brand">
+      <span className="seq-brand" role="rowheader">
         {name}
         <i
           className="seq-bar"
@@ -82,7 +83,7 @@ export function SequencerRow({
       */}
       <span
         className="seq-cells"
-        role="img"
+        role="cell"
         aria-label={`Named in ${standing.named} of ${standing.totalRuns} answers, across ${standing.steps.length} questions`}
         data-focus={activeStep !== null}
         onMouseMove={
@@ -106,10 +107,10 @@ export function SequencerRow({
         ))}
       </span>
 
-      <span className="mono seq-rot">
+      <span className="mono seq-rot" role="cell">
         {standing.named}/{standing.totalRuns}
       </span>
-      <span className="mono seq-first" data-lead={rank === 1}>
+      <span className="mono seq-first" role="cell" data-lead={rank === 1}>
         {Math.round(standing.firstShare * 100)}%
       </span>
       <Delta move={move} />
@@ -123,9 +124,9 @@ export function SequencerRow({
  * anyone who cannot distinguish the two hues.
  */
 export function Delta({ move }: { move?: Movement }) {
-  if (!move) return <span className="mono seq-delta" />;
-  if (move.isNew) return <span className="mono seq-delta is-new">NEW</span>;
-  if (move.rotationDelta === 0) return <span className="mono seq-delta">—</span>;
+  if (!move) return <span role="cell" className="mono seq-delta" />;
+  if (move.isNew) return <span role="cell" className="mono seq-delta is-new">NEW</span>;
+  if (move.rotationDelta === 0) return <span role="cell" className="mono seq-delta">—</span>;
 
   const up = move.rotationDelta > 0;
 
@@ -136,7 +137,7 @@ export function Delta({ move }: { move?: Movement }) {
   if (!move.significant) {
     return (
       <span
-        className="mono seq-delta is-noise"
+        role="cell" className="mono seq-delta is-noise"
         title="Within the noise of this sample. Reported, not called a move."
       >
         {up ? "+" : "−"}
@@ -146,7 +147,7 @@ export function Delta({ move }: { move?: Movement }) {
   }
 
   return (
-    <span className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
+    <span role="cell" className={`mono seq-delta ${up ? "is-up" : "is-down"}`}>
       {up ? "▲" : "▼"}
       {Math.abs(move.rotationDelta)}
     </span>

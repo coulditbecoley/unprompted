@@ -69,17 +69,21 @@ function SortHead({
   onSort: (k: SortKey) => void;
 }) {
   const on = sort === k;
+  // The header cell carries the table semantics; the button inside sorts.
   return (
-    <button
-      type="button"
-      className={`label seq-sort ${className}`}
-      data-on={on}
-      aria-pressed={on}
-      title={hint}
-      onClick={() => onSort(k)}
-    >
-      {label}
-    </button>
+    <span role="columnheader" aria-sort={on ? "descending" : "none"} className={className}>
+      <button
+        type="button"
+        className="label seq-sort"
+        data-on={on}
+        aria-pressed={on}
+        aria-label={label === "Δ" ? "Change" : undefined}
+        title={hint}
+        onClick={() => onSort(k)}
+      >
+        {label}
+      </button>
+    </span>
   );
 }
 
@@ -193,14 +197,15 @@ export function LiveBoard({
         )}
       </div>
 
-      <div className="seq-board" onMouseLeave={() => setHover(null)}>
+      {/* A real table to assistive technology: rows, column headers, cells. */}
+      <div className="seq-board" role="table" aria-label="Brands, ranked by how often each was named first" onMouseLeave={() => setHover(null)}>
         <TrimTop />
-        <div className="seq-row seq-head">
-          <span className="label seq-rank" aria-hidden="true">
+        <div className="seq-row seq-head" role="row">
+          <span className="label seq-rank" role="columnheader" aria-label="Rank">
             #
           </span>
-          <span className="label seq-brand">Brand</span>
-          <span className="label seq-cells" aria-hidden="true">
+          <span className="label seq-brand" role="columnheader">Brand</span>
+          <span className="label seq-cells" role="columnheader">
             By question
           </span>
           <SortHead

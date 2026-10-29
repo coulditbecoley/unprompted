@@ -55,6 +55,7 @@ export async function GET() {
     "  (how often each assistant names it, question by question, and its history)",
     "- Two brands side by side: https://unprompted.report/compare?c=<category-slug>&a=<brand-slug>&b=<brand-slug>",
     "- Where the assistants agree: https://unprompted.report/consensus",
+    "- The latest board as CSV: https://unprompted.report/chart/<category-slug>/board.csv",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",

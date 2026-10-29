@@ -181,6 +181,12 @@ export function ChartBoard({
           Read the answers <span className="arr" aria-hidden="true">→</span>
         </Link>
         <Link className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/${run.run_date}`}>Permanent link</Link>
+        {/* The file is the latest board, so it is offered only beside the latest board. */}
+        {history.at(-1)?.run_date === run.run_date && (
+          <a className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/board.csv`} download>
+            Download the numbers (CSV)
+          </a>
+        )}
         {history.length > 1 && (
           <details className="readings">
             <summary className="btn btn-sm btn-ghost">Past readings ({history.length})</summary>
