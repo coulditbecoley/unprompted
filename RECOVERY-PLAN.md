@@ -34,6 +34,15 @@ Root causes:
 - `collect_outstanding()` at the top of `run.main` downloads every uncollected batch with an id.
 - Regression test added. Verified: `.venv/Scripts/python.exe -m pytest -q` → 218 passed on 556d4ef + diff (Codex independently ran the 48 batch/recovery tests).
 
+## Status (2026-10-28, branch `recovery-weekly-analytics`)
+
+Implemented and reviewed by Codex: step 1 (batch recovery), step 3 B0–B3 (Gemini
+evidence and per-query billing), step 6 minimum (watchdog alarms on held-but-unpublished
+weeks; early-abort failures already stay local in `notify.py`), and gate F (next 16.4.3,
+sharp 0.35.5, source-map-js 1.2.2). Verified: 230 Python tests, 35 web tests, typecheck,
+build, `npm audit --omit=dev` 0. Recovery against the real `.unprompted` finds nothing
+outstanding. Waiting on the decisions below: aliases, Gemini method, B4 sample, G-min.
+
 ## Plan (in implementation order)
 
 ### P1 — before Monday 11-02
