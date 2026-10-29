@@ -252,12 +252,17 @@ def _run_category(
 
     answers = []
     pending = []
+    retried: set[str] = set()
     for engine, qid, text, run_index in tasks:
         saved = checkpoint / f"{engine.name}-{qid}-{run_index}.json"
         if saved.exists():
             answer = EngineAnswer(**json.loads(saved.read_text(encoding="utf-8")))
             if (answer.engine, answer.question_id, answer.question, answer.run_index) != (engine.name, qid, text, run_index):
                 raise ValueError(f"checkpoint answer identity differs: {saved.name}")
+            if retryable_on_resume(answer, engine, extraction_state):
+                retried.add(saved.name)
+                pending.append((engine, qid, text, run_index))
+                continue
             answers.append(answer)
         else:
             pending.append((engine, qid, text, run_index))
@@ -293,7 +298,8 @@ def _run_category(
         refuse_new_paid_work(f"{engine.name} {qid}#{run_index}")  # queued past the run's end
         answer = engine.ask_one(qid, text, run_index)
         answer.measurement_git_sha = measurement_commit
-        write_json(checkpoint / f"{answer.engine}-{answer.question_id}-{answer.run_index}.json", answer.to_dict())
+        name = f"{answer.engine}-{answer.question_id}-{answer.run_index}.json"
+        write_json(checkpoint / name, answer.to_dict(), replace=name in retried)
         return answer
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
@@ -449,6 +455,18 @@ def all_categories() -> list[str]:
     a stale entry that quietly bills for a category nobody publishes.
     """
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
+
+
+def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
+    """Ask again on a restart: a synchronous call that failed without being billed.
+
+    An answer with usage cost money and stays as recorded (its spend is in the
+    ledger); a batch answer belongs to its batch; once extraction has been
+    submitted the answers are fixed. Anything else is a free second chance at
+    coverage that the first attempt lost to an outage.
+    """
+    return (bool(answer.error) and not answer.usage and not extraction_state.exists()
+            and getattr(engine, "transport", None) != "messages-batch")
 
 
 def qualify(categories: list[str]) -> tuple[dict, list[str]]:

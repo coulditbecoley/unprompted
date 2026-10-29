@@ -905,3 +905,34 @@ def test_qualify_reports_what_the_weekly_run_would_refuse(tmp_path, monkeypatch)
     assert any("canary" in i for i in issues) and any("would refuse" in i for i in issues)
     spec["method_version"] = 4  # bumped: a new model is allowed
     assert not any("would refuse" in i for i in run.qualify(["alpha"])[1])
+
+
+def test_a_restart_reasks_only_unbilled_failures(tmp_path, monkeypatch):
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "git_sha", lambda: "sha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 3, "questions": [{"id": "q1", "text": "Which brand?"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: spec)
+    calls = []
+    first = {0: dict(error="URLError: outage"), 1: dict(error="engine failed: incomplete response", usage={"input_tokens": 9}), 2: {}}
+
+    class Engine:
+        name, grounds, is_configured = "hosted", False, True
+        def ask_one(self, qid, text, index):
+            calls.append(index)
+            outcome = first[index] if len(calls) <= 3 else {}
+            return EngineAnswer(self.name, qid, text, index, text="Alpha", **outcome)
+    monkeypatch.setattr(run, "all_engines", lambda: {"hosted": Engine()})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
+    monkeypatch.setattr(run, "check_budget", lambda *a, **k: SimpleNamespace(ok=True, message="offline"))
+    seen = []
+    def stop(answers, *a, **k):
+        seen.append({a.run_index: a.error for a in answers})
+        raise RuntimeError("stop")
+    monkeypatch.setattr(run, "extract_run", stop)
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="stop"):
+            run.run_category("alpha", "2026-09-07")
+    assert sorted(calls) == [0, 0, 1, 2]  # only the unbilled failure was asked again
+    assert seen[1] == {0: None, 1: "engine failed: incomplete response", 2: None}
