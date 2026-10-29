@@ -75,8 +75,9 @@ export async function GET() {
         `of ${leader.totalRuns} answered runs, week of ${week}`
       : `no brand was named, week of ${week}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
-    // The full record, for readers that would rather count than quote.
-    lines.push(`  Data: https://raw.githubusercontent.com/coulditbecoley/unprompted/main/data/runs/${run.run_date}/${category.slug}.json`);
+    // For readers that would rather count than quote: the board, then the full record.
+    lines.push(`  Standings (JSON): https://unprompted.report/standings/${category.slug}.json`);
+    lines.push(`  Every answer (JSON): https://raw.githubusercontent.com/coulditbecoley/unprompted/main/data/runs/${run.run_date}/${category.slug}.json`);
   }
 
   lines.push(

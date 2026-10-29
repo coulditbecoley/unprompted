@@ -403,3 +403,17 @@ test("login throttle falls back locally and a flood of addresses cannot lock the
   for (let i = 0; i < 1000; i += 1) await allowLogin(from(`10.0.${i >> 8}.${i & 255}`));
   assert.equal(await allowLogin(from("203.0.113.9")), true);
 });
+
+test("the standings JSON carries each share with its denominator and refuses unknown files", async () => {
+  const { GET, generateStaticParams } = await import("../app/standings/[file]/route.ts");
+  const { latestRun, standings } = await import("../lib/data.ts");
+  const files = generateStaticParams().map(p => p.file);
+  assert.ok(files.includes("ai-coding-assistants.json"));
+  assert.equal((await GET(new Request("http://localhost/x"), { params: Promise.resolve({ file: "../admin.json" }) })).status, 404);
+  const run = latestRun("ai-coding-assistants");
+  if (!run) return;
+  const body = await (await GET(new Request("http://localhost/x"), { params: Promise.resolve({ file: "ai-coding-assistants.json" }) })).json();
+  const top = standings(run)[0];
+  assert.deepEqual([body.brands[0].brand, body.brands[0].named, body.brands[0].of], [top.brand, top.named, top.totalRuns]);
+  assert.equal(body.week, run.measured_on || run.run_date);
+});

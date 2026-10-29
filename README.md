@@ -411,6 +411,10 @@ them. The counts they come from are compared exactly.
 
 ## Reading the data
 
+The latest board per category, small enough for an assistant to read whole:
+`https://unprompted.report/standings/<category>.json` (rank, brand, named and
+named first, each with its denominator). The full record is below.
+
 One file per category per reading: `data/runs/<run_date>/<category>.json`.
 `measured_on` is the week the answers were collected; `run_date` differs from it
 only for a re-reading of stored answers. `method_version` and `methodology` (the
