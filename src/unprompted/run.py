@@ -209,32 +209,13 @@ def _run_category(
     # as_completed rather than map: a twenty-minute run that prints nothing until
     # it finishes looks identical to a hung one, both here and in CI logs.
     checkpoint = ROOT / ".unprompted" / run_date / category
-    methodology = {
-        "questions": spec,
-        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {}),
-                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {}),
-                           **({"prompt_suffix": e.prompt_suffix} if getattr(e, "prompt_suffix", "") else {})}
-                    for name, e in engines.items()},
-        "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
-        "system_prompt": SYSTEM_PROMPT,
-        "extraction_prompt": EXTRACT_PROMPT,
-        "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
-    }
+    methodology = build_methodology(spec, engines, identities, category, extractor)
     alias_data = methodology["aliases"] or {}
     aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
     measurement_commit = git_sha()
-    prior = load_history(ROOT / "data" / "runs", category)
-    if prior and prior[-1].get("method_version") == spec["method_version"]:
-        before = prior[-1].get("methodology", {})
-        changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
-                   if before and before.get(k) != methodology[k]]
-        if changed:
-            models = [f"{n}: {before['engines'].get(n, {}).get('model')} -> {c['model']}"
-                      for n, c in methodology["engines"].items()
-                      if "engines" in changed and before.get("engines", {}).get(n, {}).get("model") != c["model"]]
-            raise ValueError("methodology changed without a version bump; refusing before paid calls. "
-                             f"Changed: {', '.join(changed)}" + (f" ({'; '.join(models)})" if models else "")
-                             + ". If a local harness switched model, bump method_version in the question bank.")
+    refusal = unversioned_change(category, spec, methodology)
+    if refusal:
+        raise ValueError(refusal)
     manifest = checkpoint / "methodology.json"
     if manifest.exists():
         if json.loads(manifest.read_text(encoding="utf-8")) != methodology:
@@ -457,6 +438,41 @@ def all_categories() -> list[str]:
     return sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
 
 
+def build_methodology(spec: dict, engines: dict, identities: dict, category: str, extractor) -> dict:
+    """The frozen description of what this week measures, compared week to week."""
+    hosted = isinstance(extractor, ApiExtractor)
+    return {
+        "questions": spec,
+        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {}),
+                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {}),
+                           **({"prompt_suffix": e.prompt_suffix} if getattr(e, "prompt_suffix", "") else {})}
+                    for name, e in engines.items()},
+        "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
+        "system_prompt": SYSTEM_PROMPT,
+        "extraction_prompt": EXTRACT_PROMPT,
+        "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
+    }
+
+
+def unversioned_change(category: str, spec: dict, methodology: dict) -> str | None:
+    """Why the run must refuse: the method changed since the last published week
+    without a version bump. None when it may go ahead."""
+    prior = load_history(ROOT / "data" / "runs", category)
+    if not prior or prior[-1].get("method_version") != spec["method_version"]:
+        return None
+    before = prior[-1].get("methodology", {})
+    changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
+               if before and before.get(k) != methodology[k]]
+    if not changed:
+        return None
+    models = [f"{n}: {before['engines'].get(n, {}).get('model')} -> {c['model']}"
+              for n, c in methodology["engines"].items()
+              if "engines" in changed and before.get("engines", {}).get(n, {}).get("model") != c["model"]]
+    return ("methodology changed without a version bump; refusing before paid calls. "
+            f"Changed: {', '.join(changed)}" + (f" ({'; '.join(models)})" if models else "")
+            + ". If a local harness switched model, bump method_version in the question bank.")
+
+
 def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) -> bool:
     """Ask again on a restart: a synchronous call that failed without being billed.
 
@@ -472,29 +488,31 @@ def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) ->
 def qualify(categories: list[str]) -> tuple[dict, list[str]]:
     """What the weekly run's own first steps would say, without measuring anything.
 
-    The CLI canaries, the model each engine reports, and whether that model
-    would trip the unversioned-change guard against the last published week.
+    The CLI canaries, the model each engine reports, and the run's complete
+    unversioned-change comparison against the last published week, built the
+    same way the run builds it. Makes real calls: each local harness twice
+    (canary, model), and Gemini's model probe (up to three tiny attempts).
     """
     identified, issues = {}, []
-    for name, engine in sorted(all_engines().items()):
-        if not (hasattr(engine, "identify") and engine.is_configured):
-            continue
-        try:
-            identified[name] = engine.identify()
-        except (ProviderError, TimeoutError) as exc:
-            issues.append(f"{name}: {exc}")
+    try:
+        engines = {name: e for name, e in all_engines().items() if e.is_configured}
+        extractor = resolve_extractor()
+    except (ProviderError, OSError, ValueError) as exc:
+        return identified, [f"cannot qualify: {exc}"]  # preflight reports the detail
+    for name, engine in sorted(engines.items()):
+        if hasattr(engine, "identify"):
+            try:
+                identified[name] = engine.identify()
+            except (ProviderError, TimeoutError, OSError, subprocess.SubprocessError) as exc:
+                issues.append(f"{name}: {exc}")
     for category in categories:
         try:
             spec = load_questions(category)
+            refusal = unversioned_change(category, spec, build_methodology(spec, engines, identified, category, extractor))
         except (OSError, ValueError, KeyError, yaml.YAMLError):
             continue  # already reported by preflight
-        prior = load_history(ROOT / "data" / "runs", category)
-        before = (prior[-1].get("methodology") or {}).get("engines", {}) if prior else {}
-        if not prior or prior[-1].get("method_version") != spec["method_version"]:
-            continue  # a version bump: a different model is allowed
-        issues += [f"{category}: {name} now reports {i['model']}, last published {before[name].get('model')}; "
-                   "the run would refuse without a method version bump"
-                   for name, i in identified.items() if name in before and before[name].get("model") != i["model"]]
+        if refusal:
+            issues.append(f"{category}: {refusal}")
     return identified, issues
 
 
@@ -564,7 +582,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="still makes PAID provider calls and keeps their checkpoints in .unprompted/; only the final run record is not written")
     parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
-    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers (a few subscription calls and one tiny Gemini call, no measurement)")
+    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers (real calls: two per local harness on the subscription and Gemini's model probe, up to three tiny attempts; no measurement)")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
@@ -573,6 +591,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.qualify and not args.preflight:
         parser.error("--qualify is an addition to --preflight")
+    if args.collect_only and (args.preflight or args.dry_run or args.ignore_budget):
+        parser.error("--collect-only runs alone")
     if args.preflight and (args.dry_run or args.ignore_budget):
         parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
@@ -600,6 +620,9 @@ def main() -> int:
             result["engines_identified"], found = qualify(categories)
             result["issues"] += found
             result["status"] = "issues_found" if result["issues"] else "checks_passed"
+            result["scope"] = ("Preflight plus the weekly run's first steps: real calls to each local harness "
+                               "(isolation canary, model) and Gemini's model probe, and the full method-change "
+                               "comparison. No measurement, extraction, Git or publication is tested.")
         print(json.dumps(result, indent=2))
         return 2 if result["issues"] else 0
 

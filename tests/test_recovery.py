@@ -891,20 +891,39 @@ def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_p
         reextract.main()
 
 
-def test_qualify_reports_what_the_weekly_run_would_refuse(tmp_path, monkeypatch):
+def test_qualify_uses_the_runs_full_comparison_and_reports_failures_as_issues(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "ROOT", tmp_path)
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical: {}")
     spec = {"category": "alpha", "method_version": 3, "runs_per_question": 1, "questions": [{"id": "q1", "text": "Q"}]}
-    monkeypatch.setattr(run, "load_questions", lambda category: spec)
-    harness = SimpleNamespace(is_configured=True, identify=lambda: {"model": "model-b", "version": "1"})
-    broken = SimpleNamespace(is_configured=True, identify=lambda: (_ for _ in ()).throw(run.ProviderError("canary: wrote a file")))
-    monkeypatch.setattr(run, "all_engines", lambda: {"harness": harness, "broken": broken, "hosted": SimpleNamespace(is_configured=True)})
-    write_json(tmp_path / "data/runs/2026-10-26/alpha.json", {"category": "alpha", "run_date": "2026-10-26", "method_version": 3,
-               "methodology": {"engines": {"harness": {"model": "model-a"}}}})
-    identified, issues = run.qualify(["alpha"])
-    assert identified == {"harness": {"model": "model-b", "version": "1"}}
-    assert any("canary" in i for i in issues) and any("would refuse" in i for i in issues)
-    spec["method_version"] = 4  # bumped: a new model is allowed
-    assert not any("would refuse" in i for i in run.qualify(["alpha"])[1])
+    monkeypatch.setattr(run, "load_questions", lambda category: dict(spec))
+    extractor = SimpleNamespace(id="fake", label="fake")
+    monkeypatch.setattr(run, "resolve_extractor", lambda: extractor)
+    harness = SimpleNamespace(is_configured=True, grounds=False, identify=lambda: {"model": "model-a", "version": "1"})
+    engines = {"harness": harness}
+    monkeypatch.setattr(run, "all_engines", lambda: engines)
+    published = run.build_methodology(spec, engines, {"harness": {"model": "model-a"}}, "alpha", extractor)
+    write_json(tmp_path / "data/runs/2026-10-26/alpha.json", {"category": "alpha", "run_date": "2026-10-26",
+               "method_version": 3, "methodology": published})
+    assert run.qualify(["alpha"]) == ({"harness": {"model": "model-a", "version": "1"}}, [])
+    # Not only the model: a new engine is a change the run would refuse.
+    engines["added"] = SimpleNamespace(is_configured=True, grounds=True)
+    assert any("would" not in i and "Changed: engines" in i for i in run.qualify(["alpha"])[1])
+    del engines["added"]
+    harness.identify = lambda: (_ for _ in ()).throw(run.ProviderError("canary: wrote a file"))
+    assert any("canary" in i for i in run.qualify(["alpha"])[1])
+    spec["method_version"] = 4  # bumped: changes are allowed
+    harness.identify = lambda: {"model": "model-b", "version": "1"}
+    assert run.qualify(["alpha"])[1] == []
+    monkeypatch.setattr(run, "all_engines", lambda: (_ for _ in ()).throw(run.ProviderError("bad registry")))
+    assert run.qualify(["alpha"]) == ({}, ["cannot qualify: bad registry"])  # an issue, not a traceback
+
+
+def test_collect_only_refuses_to_be_combined(monkeypatch):
+    monkeypatch.setattr(run.sys, "argv", ["run", "--preflight", "--qualify", "--collect-only"])
+    with pytest.raises(SystemExit) as stop:
+        run.main()
+    assert stop.value.code == 2
 
 
 def test_a_restart_reasks_only_unbilled_failures(tmp_path, monkeypatch):

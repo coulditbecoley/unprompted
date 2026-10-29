@@ -29,8 +29,9 @@ command to fill a gap; report the gap.
 
 **Before a Monday.** `python -m unprompted.run --preflight --qualify` runs what
 the weekly run checks first: each local engine's isolation canary, the model
-every engine reports, and whether that would trip the method-change guard (a
-few subscription calls and one tiny Gemini call; nothing is measured).
+every engine reports, and the run's full method-change comparison (real
+calls: two per local harness on the subscription, and Gemini's model probe,
+up to three tiny attempts; nothing is measured).
 
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in
