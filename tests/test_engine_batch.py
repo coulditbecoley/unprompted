@@ -641,6 +641,16 @@ def test_a_gemini_probe_that_searches_is_reported(monkeypatch, capsys):
 def test_the_run_clock_is_never_a_faked_clock():
     # Under tests/future_date.py only the calendar may move: freezegun's fake
     # monotonic differs between threads, so the run clock must stay real.
+    import subprocess
+    import sys
     import time
-    assert "freezegun" not in (getattr(time.monotonic, "__module__", "") or "")
-    assert "freezegun" not in (getattr(time.perf_counter, "__module__", "") or "")
+    from concurrent.futures import ThreadPoolExecutor
+    fake = lambda f: "freezegun" in (getattr(f, "__module__", "") or "")
+    assert not fake(time.monotonic) and not fake(time.perf_counter)
+    # Aliases imported by name before any freezing, as subprocess does.
+    assert not fake(getattr(subprocess, "_time", time.monotonic))
+    clocks = {"fake_monotonic", "fake_monotonic_ns", "fake_perf_counter", "fake_perf_counter_ns"}
+    assert not [f"{name}.{attr}" for name, m in list(sys.modules.items()) if m and not name.startswith("freezegun")
+                for attr, v in list(vars(m).items()) if callable(v) and getattr(v, "__name__", "") in clocks]
+    with ThreadPoolExecutor(1) as pool:  # and a worker reads the same clock
+        assert abs(pool.submit(time.monotonic).result() - time.monotonic()) < 5

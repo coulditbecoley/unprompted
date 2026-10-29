@@ -20,10 +20,16 @@ def pytest_configure(config):
     # Only the calendar moves. freezegun also fakes the duration clocks, and
     # worker threads can see the real ones, so a run-clock check could pass on
     # one thread and refuse on another; the real ones are put back.
+    # That includes aliases other modules imported by name (subprocess._time),
+    # which freezegun records in undo_changes as (module, name, original).
     import time
     import freezegun.api as api
+    real = {api.real_monotonic, api.real_monotonic_ns, api.real_perf_counter, api.real_perf_counter_ns}
     time.monotonic, time.monotonic_ns = api.real_monotonic, api.real_monotonic_ns
     time.perf_counter, time.perf_counter_ns = api.real_perf_counter, api.real_perf_counter_ns
+    for module, name, original in _freezer.undo_changes:
+        if original in real:
+            setattr(module, name, original)
 
 
 def pytest_unconfigure(config):
