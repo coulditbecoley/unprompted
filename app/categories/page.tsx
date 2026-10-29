@@ -12,7 +12,11 @@ export function generateMetadata(): Metadata {
   return { title, description, alternates: { canonical: "/categories" }, openGraph: { title, description, url: "/categories", type: "website", siteName: "Unprompted" } };
 }
 
-export default function CategoriesPage() {
+export default async function CategoriesPage({ searchParams }: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
+  const { q } = await searchParams;
+  const initialQuery = (Array.isArray(q) ? q[0] : q) ?? "";
   const groups = categoriesBySector().map(group => ({
     ...group,
     categories: group.categories.map(category => ({
@@ -44,7 +48,7 @@ export default function CategoriesPage() {
         Choose a category to see which brands AI assistants name first.
         Check the measurement date: the latest published answers may be weeks old.
       </p>
-      <CategoryBrowser groups={groups} counts={counts} />
+      <CategoryBrowser key={initialQuery} groups={groups} counts={counts} initialQuery={initialQuery} />
     </section>
   );
 }

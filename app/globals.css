@@ -1590,8 +1590,9 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .cat-status { font-size: 12px; }
 .cat-question { font-size: 14px; line-height: 1.55; }
 .cat-stat, .cat-empty { overflow-wrap: anywhere; }
-.cat-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 24px 0 32px; }
+.cat-search { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; margin: 24px 0 32px; }
 .cat-search-input { min-width: 0; }
+.categories-page > .cmp-note, .categories-page .cat-empty p { overflow-wrap: anywhere; }
 .method-changes summary { cursor: pointer; }
 .method-changes[open] summary { margin-bottom: 20px; }
 .method-table { overflow-x: auto; margin: 24px 0; }

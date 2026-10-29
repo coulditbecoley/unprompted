@@ -13,7 +13,7 @@ import {
 /**
  * Browse and search the categories.
  *
- * Search is a plain client-side substring filter. With a handful of categories
+ * Search uses the same substring filter during server rendering and live edits. With a handful of categories
  * anything cleverer is machinery in search of a problem, and this stays useful
  * up to a few dozen. The moment it stops being enough, that is a real signal
  * the publication has grown, not a reason to build a search index today.
@@ -21,11 +21,13 @@ import {
 export function CategoryBrowser({
   groups,
   counts,
+  initialQuery = "",
 }: {
+  initialQuery?: string;
   groups: Array<{ sector: Sector; categories: Category[] }>;
   counts: Record<string, { leader: string | null; share: number; measured: string; agreement: { settled: number; total: number } | null } | undefined>;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const searchInput = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
@@ -43,13 +45,14 @@ export function CategoryBrowser({
 
   return (
     <>
-      <noscript><style>{".categories-page .cat-search { display: none; }"}</style></noscript>
-      <div className="cat-search">
+      <noscript><style>{".categories-page .cat-empty button { display: none; }"}</style></noscript>
+      <form action="/categories" method="get" className="cat-search" role="search">
         <label htmlFor="cat-q" className="sr-only">
           Search categories or brands
         </label>
         <input
           id="cat-q"
+          name="q"
           ref={searchInput}
           type="search"
           value={query}
@@ -58,15 +61,17 @@ export function CategoryBrowser({
           className="cat-search-input mono"
           autoComplete="off"
         />
+        <button type="submit" className="btn">Search categories</button>
         <span className="cat-search-count mono" aria-live="polite">
           {total} {total === 1 ? "category" : "categories"}
         </span>
-      </div>
+      </form>
+      {query.trim() && <p className="cmp-note">Categories matching &ldquo;{query}&rdquo;. <a href="/categories">Show all categories</a></p>}
 
       {filtered.length === 0 && (
         <div className="panel cat-empty">
           <p style={{ margin: 0, color: "var(--fg-2)" }}>
-            No categories match &ldquo;{query}&rdquo;. Try a broader term or clear
+            No brands or categories match &ldquo;{query}&rdquo;. Try a broader term or clear
             the search to see all categories.
           </p>
           <button type="button" className="btn" onClick={() => { setQuery(""); searchInput.current?.focus(); }}>Clear search</button>

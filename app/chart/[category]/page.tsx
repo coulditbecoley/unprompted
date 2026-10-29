@@ -24,7 +24,7 @@ export async function generateMetadata({
   const top = run ? standings(run)[0] : undefined;
   const title = top ? `${meta.label}: ${top.brand} named first in ${Math.round(top.firstShare * 100)}% of AI answers` : meta.label;
   const description = top && run
-    ? `${meta.question} We asked ${run.engines.length} AI assistants and counted every brand they named. ${top.brand} leads, measured ${run.measured_on || run.run_date}. Method and raw answers are public.`
+    ? `${meta.question} We asked ${run.engines.length} AI assistants and counted every brand they named. ${top.brand} was named first most often, in ${Math.round(top.firstShare * 100)}% of answers measured ${run.measured_on || run.run_date}. Method and raw answers are public.`
     : `${meta.question} Which brands AI assistants actually name, measured weekly and published in full.`;
   const url = `https://unprompted.report/chart/${category}`;
   return {

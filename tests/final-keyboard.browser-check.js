@@ -38,7 +38,7 @@
      check(await p.locator('.method-changes[open]').count()===1,'No-JS version notes');
     }
     if(route==='/categories'){
-     check(!await p.locator('.cat-search').isVisible(),'No-JS must not offer inert search');
+     check(await p.locator('.cat-search').getAttribute('method')==='get','No-JS category search must submit a GET form');
      await tabTo(p,'a.cat-card');await p.keyboard.press('Enter');await p.waitForURL(u=>u.pathname.startsWith('/chart/'));
     }
     if(route.includes('missing')){

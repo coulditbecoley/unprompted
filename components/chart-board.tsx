@@ -21,6 +21,7 @@ import {
   shortfall,
   sourceCounts,
   standings,
+  exceedsNoise,
   topPickByEngine,
   theSnub,
 } from "@/lib/data";
@@ -307,8 +308,18 @@ export function ChartBoard({
                 </span>
                 <span
                   className="sp-gap"
-                  data-sign={p.gap > 0 ? "up" : p.gap < 0 ? "down" : "flat"}
-                  title="Percentage points by which the owner out-names everyone else"
+                  // Coloured only when the gap beats the noise: the two groups
+                  // are separate answers, so the independent-samples test fits.
+                  data-sign={
+                    !exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
+                      ? "flat"
+                      : p.gap > 0 ? "up" : "down"
+                  }
+                  title={
+                    exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
+                      ? "Percentage points by which the owner out-names everyone else"
+                      : "Percentage points by which the owner out-names everyone else; within the noise at this sample size"
+                  }
                 >
                   {p.gap > 0 ? "+" : ""}
                   {p.gap}
@@ -316,6 +327,9 @@ export function ChartBoard({
               </div>
             ))}
           </div>
+          <p className="kpi-note" style={{ marginTop: 10 }}>
+            Gaps in grey are within the noise at this sample size.
+          </p>
         </>
       )}
 
