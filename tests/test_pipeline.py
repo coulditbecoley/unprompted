@@ -2504,3 +2504,19 @@ def test_readiness_turns_a_hung_or_unstartable_check_into_an_issue(monkeypatch):
         assert rd.main() == 1
         create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
         assert "readiness check itself failed" in create[-1]
+
+
+def test_readiness_holds_the_week_for_the_whole_check(monkeypatch, tmp_path):
+    from unprompted.storage import run_lock
+    rd, calls = _readiness(monkeypatch, lambda a: SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    monkeypatch.setattr(rd, "REPO", tmp_path)
+    inside = []
+    def qualify(monday):
+        try:
+            with run_lock(tmp_path / ".unprompted", "week.lock"):
+                inside.append("a run could start")
+        except OSError:
+            inside.append("held")
+        return {"issues": []}, ""
+    monkeypatch.setattr(rd, "qualify", qualify)
+    assert rd.main() == 0 and inside == ["held"]

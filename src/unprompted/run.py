@@ -661,9 +661,10 @@ def main() -> int:
         print(json.dumps(result, indent=2))
         return 2 if result["issues"] else 0
 
-    # Held for the whole week: the daily sync's pull waits on it, so aliases and
-    # code cannot change between categories. A short wait covers a pull in flight.
-    with run_lock(ROOT / ".unprompted", "week.lock", wait=120):
+    # Held for the whole week: the daily sync's pull and the readiness check
+    # wait on it, so inputs cannot change between categories. The wait covers a
+    # pull, or a readiness check (30-minute limit), already in flight.
+    with run_lock(ROOT / ".unprompted", "week.lock", wait=35 * 60):
         return _measure(args, categories)
 
 

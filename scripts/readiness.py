@@ -105,13 +105,16 @@ def main() -> int:
     if monday is None:
         print("Monday's run is due or under way; not checking now.")
         return 0
+    # Held for the whole check, so no measurement can start inside it. A weekly
+    # run that arrives meanwhile waits (run.py allows 35 minutes, more than this
+    # check's 30-minute limit); the noon cut-off keeps that from ever reaching
+    # a scheduled Monday start.
     try:
         with run_lock(REPO / ".unprompted", "week.lock"):
-            pass  # released at once: holding it would make Monday's run wait on this
+            result, failure = qualify(monday.isoformat())
     except OSError:
         print("a weekly run is in progress; not checking now.")
         return 0
-    result, failure = qualify(monday.isoformat())
     issues = (result or {}).get("issues") or ([f"the readiness check itself failed ({failure})"] if result is None else [])
     print(json.dumps({"monday": monday.isoformat(), "issues": issues,
                       "engines": (result or {}).get("engines_identified", {})}, indent=2))
