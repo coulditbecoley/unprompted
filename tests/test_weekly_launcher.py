@@ -62,7 +62,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     def launch(expected):
         result = subprocess.run(["cmd.exe", "/d", "/c", "scripts\\weekly-run.cmd"],
                                 cwd=repo, env=env, capture_output=True, text=True, timeout=60)
-        log = (Path(env["TEMP"]) / "unprompted-weekly.log").read_text(errors="replace")
+        log = (repo / ".unprompted/logs/weekly.log").read_text(errors="replace")
         assert result.returncode == expected, result.stdout + result.stderr + log
     launch(0)
     assert git("status", "--porcelain") == ""

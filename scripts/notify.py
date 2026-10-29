@@ -101,7 +101,7 @@ def open_issue(status: str, detail: str, exit_code: int) -> None:
             detail.strip() or "(no detail recorded)",
             "```",
             "",
-            "The log is at `%TEMP%\\unprompted-weekly.log` on the machine that runs it.",
+            "The log is at `.unprompted\\logs\\weekly.log` in the checkout on the machine that runs it.",
             "",
             "Categories can have different outcomes. Passed readings are in `data/runs/`;",
             "held readings are in `data/held/`. A failed or refused category may have",

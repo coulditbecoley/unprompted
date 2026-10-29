@@ -35,7 +35,8 @@ up to three tiny attempts; nothing is measured).
 
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in
-there). Outcome per category: `data/last-run.json` → `categories`. Exit codes:
+there). Outcome per category: `data/last-run.json` → `categories`; the full log is
+`.unprompted/logs/weekly.log` on that machine. Exit codes:
 0 all passed · 1 the launcher or `--collect-only` stopped before measuring ·
 2 at least one category held, failed or not started (passed ones still
 publish; argparse usage errors also exit 2) · 3 measured but commit/push failed.
