@@ -257,7 +257,14 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
 
 /* Stat tiles. The number is the headline; the label says what it counts and
    the note says what it is out of. */
-.kpi-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 18px 0; }
+/* One row of equal tiles whatever the count; two by two below 900px, so four
+   tiles never break three and an orphan. The board key follows the same rule. */
+.kpi-row { display: grid; gap: 12px; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin: 18px 0; }
+@media (max-width: 900px) {
+  .kpi-row { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-row > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .howto { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .kpi {
   position: relative; overflow: hidden;
   background: var(--surface); border: var(--rule-w) solid var(--rule);

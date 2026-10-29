@@ -128,8 +128,7 @@ export default async function ComparePage({
         {L.brand} <span className="cmp-vs-title">vs</span> {R.brand}
       </h1>
       <p className="section-lead cmp-lead">
-        Compare how often AI assistants mention these two brands, so you can see
-        which gets more visibility in their answers.
+        See how often AI assistants mention each brand and name it first.
       </p>
       <p className="cmp-note cmp-verdict">
         <Verdict left={L.row} right={R.row} leftName={L.brand} rightName={R.brand} total={total} />{" "}
@@ -138,21 +137,20 @@ export default async function ComparePage({
 
       <Picker category={category} brands={brands} left={L.brand} right={R.brand} />
       <nav className="cmp-presets" aria-label="Suggested comparisons">
-        <p className="cmp-note">Try a comparison. Each link keeps the selected pair in the URL.</p>
+        <p className="cmp-note">Choose a suggested comparison.</p>
         <div>{presets.map(p => <a className="btn btn-sm" key={p.label} href={`/compare?${new URLSearchParams({ c: p.category, a: slugify(p.a), b: slugify(p.b) })}`}>{p.label}</a>)}</div>
-        <p className="cmp-note">The gap is the number of answers naming a brand anywhere minus those naming it first, on this board.</p>
+        <p className="cmp-note">The gap counts answers that mention a brand without naming it first.</p>
       </nav>
       <div className="kpi-row">
         <Kpi label="Answers" value={total} note="The same answers are used for both brands." />
         <Kpi i={1} label="Questions answered" value={order.length} note="Compare mentions for each question below." />
-        <Kpi i={2} label="Measurements" value={weeks} note="History retains breaks where methods differ." />
+        <Kpi i={2} label="Measurements" value={weeks} note="Lines stop where methods differ." />
       </div>
       <p className="cmp-note">
         Named means mentioned anywhere in an answer; named first means the first
         brand mentioned. Percentages exclude failed calls and refusals. They
         measure visibility, not product quality. Typical place in the list is the middle
-        position among answers that mention the brand. The first-pick lead check
-        is a minimum sampling check, not proof of a lasting preference.
+        position among answers that mention the brand. Repeated answers are related. A clear lead here does not prove a lasting preference.
       </p>
 
       <nav className="evidence-links" aria-label="Check this comparison">
@@ -187,7 +185,7 @@ export default async function ComparePage({
                   <span>{row.medianPosition ?? "—"}</span>
                 </div>
                 <div className="cmp-stat">
-                  <span>Questions mentioned more often</span>
+                  <span>Questions with more mentions</span>
                   <span>{questionsLed(row, sides[index === 0 ? 1 : 0].row)}</span>
                 </div>
                 <div className="cmp-stat">
@@ -200,7 +198,7 @@ export default async function ComparePage({
                     <div className="cmp-tone">
                       <span className="label">Tone of mentions</span>
                       <ToneBar tone={tone} />
-                      <p className="cmp-note">Tone is the extraction model&rsquo;s interpretation of the wording.</p>
+                      <p className="cmp-note">An AI model judges the tone of each mention.</p>
                     </div>
                   ) : null;
                 })()}
@@ -217,10 +215,10 @@ export default async function ComparePage({
       <p className="label codex-section-label">Assistants</p>
       <h2 className="sub-h" id="assistants">Assistant by assistant <SectionLink id="assistants" label="Assistant by assistant" /></h2>
       <p className="cmp-note" id="assistant-counting">
-        Each assistant’s count and share of answers mentioning either brand.
+        Each assistant’s count and share of answers mentioning each brand.
       </p>
       <p className="cmp-note">
-        Both brands use the same answers; errors and refusals are excluded. An assistant with no answers after those exclusions is omitted.
+        Both brands use the same answers, excluding errors and refusals. Assistants with no remaining answers are left out.
       </p>
       {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in this reading.</p> : (
         <div className="panel cmp-assistants">
@@ -246,7 +244,7 @@ export default async function ComparePage({
         <>
           <p className="label codex-section-label">Questions</p>
       <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
-          {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
+          {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list.</p>}
           <p className="cmp-note">
             The share of answers mentioning each brand, question by question.
           </p>
@@ -372,7 +370,7 @@ function Picker({
         ))}
       </select>
       <button className="btn btn-go" type="submit">
-        Compare
+        Compare brands
       </button>
     </form>
   );
@@ -396,7 +394,7 @@ function Verdict({ left, right, leftName, rightName, total }: {
   if (!leadIsClear(Math.max(a, b), Math.min(a, b), total)) {
     return <>{leftName} was named first in {aShare}% of answers; {rightName} in {bShare}%. This sample does not establish a clear first-pick lead.</>;
   }
-  return <>{a > b ? leftName : rightName} has a clear first-pick lead in this sample: {Math.max(aShare, bShare)}% versus {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
+  return <>{a > b ? leftName : rightName} has a clear first-pick lead in this sample. {Math.max(aShare, bShare)}% versus {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
 }
 
 function QuestionRow({
@@ -504,7 +502,7 @@ function TwoLines({
         : <div className="cmp-history-dates mono"><span>{dates[0]}</span><span>{dates.at(-1)}</span></div>}
       </div></div>
       <div className="cmp-legend"><span><i className="cmp-key" aria-hidden="true" /> {a.brand} (solid dot)</span><span><i className="cmp-key is-b" aria-hidden="true" /> {b.brand} (open square)</span></div>
-      {hasBreak && <p className="kpi-note">{allMethodChanges ? "The method changed between every measurement shown, so these separate points cannot be read as a trend." : allBreaks ? "None of these measurements can be compared as a trend; focus a point to read why." : "Gaps in the lines mark measurements that cannot be compared; focus a point to read why."}</p>}
+      {hasBreak && <p className="kpi-note">{allMethodChanges ? "The method changed between every measurement shown. These points cannot be read as a trend." : allBreaks ? "None of these measurements can be compared as a trend; focus a point to read why." : "Gaps in the lines mark measurements that cannot be compared; focus a point to read why."}</p>}
     </div>
   );
 }

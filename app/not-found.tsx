@@ -27,8 +27,7 @@ export default function NotFound() {
         That page is not here.
       </h1>
       <p className="section-lead">
-        We could not find a page at this address. Check the link, or browse the
-        categories to find a chart and its published history.
+        Check the address, or browse the categories to find a published chart.
       </p>
       <div className="btn-row rise">
         <Link className="btn btn-go" href="/">See the latest published board <span className="arr" aria-hidden="true">→</span></Link>

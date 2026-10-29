@@ -147,8 +147,7 @@ export default async function QuestionsPage({
         Check the answers behind the chart.
       </h1>
       <p className="section-lead">
-        Read the buying questions and the recorded AI answers to check where
-        each brand mention came from. Each question is scheduled for
+        Read the original AI answers behind each brand mention. Each question is scheduled for
         {" "}{run.runs_per_question} attempts per assistant.
         Errors and refusals are shown but excluded
         from mention percentages.
@@ -186,7 +185,7 @@ export default async function QuestionsPage({
         </div>
         <button type="submit" className="btn btn-go">Show answers</button>
       </form>
-      {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
+      {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list. Answers remain as recorded.</p>}
       {selectedBrand && <p className="cmp-note q-filter-result">
         {matching.length} {matching.length === 1 ? "answer names" : "answers name"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
         {" "}<a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedEngine ? { engine: selectedEngine } : {}), ...(params.question ? { question: params.question } : {}) })}${params.question ? `#${params.question}` : ""}`}>Show all brands</a>
@@ -260,11 +259,11 @@ export default async function QuestionsPage({
                         ) : r.brands.length ? (
                           r.brands.map((b) => b.name).join(" · ")
                         ) : (
-                          <em>No recognized brand found</em>
+                          <em>No recognized brand was found</em>
                         )}
                         {params.question === q.id && <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
-                          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "Raw text was not recorded for this answer."}</p>
-                          <p>Source evidence: {r.source_kind || "type not recorded"}</p>
+                          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "The original text was not saved for this answer."}</p>
+                          <p>Source type: {r.source_kind || "type not recorded"}</p>
                           <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
                         </details>}
                       </div>

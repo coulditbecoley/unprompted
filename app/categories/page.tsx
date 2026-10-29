@@ -41,9 +41,8 @@ export default function CategoriesPage() {
         What we measure.
       </h1>
       <p className="section-lead">
-        Choose a category to see its latest published reading of AI answers
-        to buying questions. Check the measurement date on each board; readings
-        may be several weeks old. Only results that pass our checks are published.
+        Choose a category to see which brands AI assistants name first.
+        Check the measurement date: the latest published answers may be weeks old.
       </p>
       <CategoryBrowser groups={groups} counts={counts} />
     </section>

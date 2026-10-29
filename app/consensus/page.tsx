@@ -97,17 +97,15 @@ export default async function ConsensusPage({
           </>
         ) : (
           <>
-            See whether different AI assistants name the same brand first, or
-            whether your choice of assistant could change the answer.
+            See whether your choice of assistant changes which brand comes first.
             {" "}{categoryLabel(category)}, measured on{" "}
             {run.measured_on || run.run_date}.
           </>
         )}
       </p>
       <p className="cmp-note">
-        An assistant's pick is the brand it names first most often across repeated
-        answers. Agreement means every assistant has the same pick, not that the
-        product is best. Failed calls and refusals are left out of percentages.
+        An assistant's pick is the brand it names first most often. Agreement means every assistant has the same pick.
+        It does not mean that product is best. Percentages exclude failed calls and refusals.
       </p>
 
       <div style={{ marginTop: 20 }}>
@@ -124,7 +122,7 @@ export default async function ConsensusPage({
           <div className="kpi-row">
             <Kpi value={Math.round(score.share * 100)} unit="%" label="Full agreement" meter={score.share} note={`${score.settled} of ${score.total} questions.`} />
             <Kpi i={1} value={contested.length} label="Without full agreement" note="Different picks, ties, or missing picks." />
-            <Kpi i={2} value={engines.length} label="Assistants compared" note="Each assistant contributes one pick per question." />
+            <Kpi i={2} value={engines.length} label="Assistants compared" note="Ties and missing picks are shown too." />
           </div>
           <p className="label codex-section-label">Overview</p>
             <h2 className="sub-h" id="agreement">Agreement at a glance</h2>
@@ -137,18 +135,17 @@ export default async function ConsensusPage({
 
           <p className="label codex-section-label">Questions</p>
           <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
-          {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
+          {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list.</p>}
           <p className="cmp-note">
             Each assistant’s most frequent first pick for every question.
           </p>
           <p className="cmp-note">
-            Percentages show how often the leading brand was named first. "No unique pick" means tied leaders or no
-            first pick; follow that link to inspect the assistant’s answers. Bold marks picks outside the majority, or all picks when
-            there is no majority. Missing picks also prevent full agreement.
-            Open a question to read the recorded answers.
+            Percentages show how often the leading brand was named first. "No unique pick" means tied leaders or no first pick.
+            Follow a "No unique pick" or question link to read its answers. Bold marks picks outside the majority, or all picks when there is no majority.
+            A majority means more than half the assistants chose the same brand. Missing picks prevent full agreement.
           </p>
 
-          <p className="table-scroll-note">Scroll horizontally to compare all assistants. The question stays in view.</p>
+          <p className="table-scroll-note">Scroll sideways to compare assistants. The question stays in view.</p>
           <div className="panel cns reveal" role="table" aria-label="Assistant picks by question" tabIndex={0}>
             <div
               className="cns-row cns-head"
