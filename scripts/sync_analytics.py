@@ -141,6 +141,13 @@ def snapshot(counters: dict[str, int], meta: dict[str, dict[str, str]]) -> dict:
     }
 
 
+def well_formed(record) -> bool:
+    """An archived day: a mapping of numeric counters plus an optional `_agents` mapping."""
+    return (isinstance(record, dict)
+            and all(isinstance(v, (int, float)) for k, v in record.items() if not k.startswith("_"))
+            and isinstance(record.get("_agents", {}), dict))
+
+
 def write_raw(
     out_dir: Path, day: str, counters: dict[str, int], meta: dict[str, dict[str, str]]
 ) -> bool:
@@ -165,10 +172,13 @@ def write_raw(
             existing = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
             existing = {}
+        damaged = not well_formed(existing)
         if not isinstance(existing, dict):
             existing = {}  # a damaged file is replaced, not allowed to stop every later sync
         previous = {k: v for k, v in existing.items() if not k.startswith("_") and isinstance(v, (int, float))}
-        if any(counted.get(k, 0) < v for k, v in previous.items()) or previous == counted:
+        # The archive only grows: a smaller day never replaces a larger one, and
+        # an identical one is skipped unless the file needs repairing.
+        if any(counted.get(k, 0) < v for k, v in previous.items()) or (previous == counted and not damaged):
             return False
 
     payload = dict(counted)
@@ -308,14 +318,20 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     """Every archived day, plus all-time totals derived from the raw files."""
     files = sorted((out_dir / "data").glob("*.json"))
     life: Counter[str] = Counter()
+    damaged = 0
     for path in files:
         try:
-            for field, count in json.loads(path.read_text(encoding="utf-8")).items():
-                if field.startswith("_"): continue
-                try: life[field] += int(count)
-                except (ValueError, TypeError): continue
-        except (ValueError, TypeError):
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            record = None
+        if not well_formed(record):
+            damaged += 1
             continue
+        for field, count in record.items():
+            if not field.startswith("_"):
+                life[field] += int(count)
+    if damaged:
+        print(f"  all-time totals exclude {damaged} damaged archive file(s)", file=sys.stderr)
 
     def of(kind: str) -> dict[str, int]:
         return {k[len(kind) + 1:]: v for k, v in life.items() if k.startswith(f"{kind}:")}
@@ -361,6 +377,8 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     else:
         lines += ["_Nothing archived yet._", ""]
 
+    if damaged:
+        lines += [f"_All-time figures below exclude {damaged} damaged archive file(s) in `data/`; they are incomplete._", ""]
     lines += ["## Brands looked up, all time", ""] + table(of("b"), ("Brand", "Views"))
     by_agents = of("ba")
     if by_agents:
@@ -447,6 +465,10 @@ def main() -> int:
         try:
             counters = json.loads(path.read_text(encoding="utf-8"))
         except ValueError:
+            counters = None
+        if not well_formed(counters):
+            # Kept as evidence (it may hold a day Redis no longer has), not rendered.
+            print(f"  skip damaged archive file: {path.name}", file=sys.stderr)
             continue
         dest = out_dir / f"Audience {day}.md"
         # The day's own snapshot, so a later edit to agents.json cannot relabel
