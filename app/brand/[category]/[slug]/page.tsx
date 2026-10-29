@@ -223,7 +223,7 @@ export default async function BrandPage({
             <TrimTop />
             {perQuestion.map((q) => (
               <div className="seq-row bq-row" key={q.id}>
-                <Link className="bq-text" href={`/questions?${new URLSearchParams({ c: category, date: run!.run_date, question: q.id })}#${q.id}`}>
+                <Link className="bq-text" href={`/questions?${new URLSearchParams({ c: category, date: run!.run_date, brand, question: q.id })}#${q.id}`}>
                   {q.text}
                 </Link>
                 <span className="meter" aria-hidden="true"><i style={{ "--v": q.named / q.of } as React.CSSProperties} /></span>
@@ -271,8 +271,8 @@ export default async function BrandPage({
           Back to the {inSentence(label)} board <span className="arr" aria-hidden="true">→</span>
         </Link>
         {run && (
-          <Link className="btn btn-ghost" href={`/questions?c=${category}&date=${run.run_date}`}>
-            Read the answers
+          <Link className="btn btn-ghost" href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, brand })}`}>
+            Read the answers that named {brand}
           </Link>
         )}
       </div>

@@ -291,6 +291,7 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
   font-size: 13px; color: var(--fg-2); line-height: 1.5;
 }
 .howto b { color: var(--fg); font-weight: 600; display: block; font-size: 12.5px; }
+.howto-more { grid-column: 1 / -1; font-size: 12.5px; }
 .howto-swatch { display: inline-flex; gap: 2px; vertical-align: -1px; margin-right: 6px; }
 .howto-swatch i { width: 9px; height: 11px; border-radius: 2px; display: block; }
 
@@ -1167,7 +1168,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .buffer-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--rule-2); display: block; }
 .buffer-head .label + .label { margin-left: 10px; }
 .buffer-line { animation: rise 520ms var(--ease) both; animation-delay: calc(300ms + var(--i, 0) * 55ms); }
-.buffer-q a { color: var(--fg-2); }
+.buffer-q a { color: var(--fg-2); text-decoration: none; }
+.buffer-q a:hover, .buffer-q a:focus-visible { color: var(--fg); text-decoration: underline; text-decoration-color: var(--fg-3); }
 
 .hero .kpi-row { margin-top: 40px; margin-bottom: 8px; }
 
@@ -1339,7 +1341,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 
 /* Print: a chart is a document. Drop chrome and motion, keep every number. */
 @media print {
-  .site-head, .theme-toggle, .share-row, .subscribe, .board-tools, .btn-row, .hero-bg, .readings { display: none !important; }
+  .site-head, .theme-toggle, .share-row, .subscribe, .board-tools, .board-read, .btn-row, .hero-bg, .readings { display: none !important; }
   *, *::before, *::after { animation: none !important; box-shadow: none !important; }
   body { background: #fff; color: #000; }
 }
@@ -1390,6 +1392,16 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 }
 /* The header wraps to two rows below 620px, so anything sticky clears more. */
 @media (max-width: 620px) { :root { --header-h: 110px; } }
+
+/* High-contrast (forced colours) mode strips every background, which erased
+   each bar, meter and square: the data itself. Charts opt out so their marks
+   survive; text and controls still follow the user's system colours. */
+@media (forced-colors: active) {
+  .meter, .seq-cells, .seq-bar, .answer-grid, .lb-bar, .tone, .tone-key i,
+  .spark-dots, .live-dot, .cmp-bar, .seq-key-swatch, .howto i {
+    forced-color-adjust: none;
+  }
+}
 
 /* === codex pages: start === */
 .cmp-form .select { flex: 1 1 180px; max-width: 300px; min-width: 0; }
@@ -1584,5 +1596,18 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .method-changes { padding: 16px; }
   .contact-polished .contact-submit { width: 100%; }
   [data-not-found] .btn-row { align-items: stretch; flex-direction: column; }
+}
+/* Round 3: native filters, shareable presets and plain-language definitions. */
+.q-reading { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; }
+.q-empty { padding: 20px; }
+.q-filter-result { overflow-wrap: anywhere; }
+.cmp-presets { margin: 24px 0; }
+.cmp-presets > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmp-presets .btn { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.cat-agreement { font-size: 14px; line-height: 1.5; color: var(--fg-2); margin: 12px 0; }
+.method-glossary dt { font-weight: 600; margin-top: 16px; scroll-margin-top: 100px; }
+.method-glossary dd { margin: 4px 0 0; color: var(--fg-2); }
+@media (max-width: 640px) {
+  .q-reading { grid-template-columns: 1fr; }
 }
 /* === codex pages: end === */

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { CategoryBrowser } from "@/components/category-browser";
 import { categoriesBySector } from "@/lib/categories";
-import { latestRun, standings } from "@/lib/data";
+import { latestRun, standings, consensus, consensusScore } from "@/lib/data";
 
 export const metadata: Metadata = {
   title: "Categories",
@@ -16,13 +16,13 @@ export default function CategoriesPage() {
 
   // Counts come from the data itself, so a category cannot advertise a chart
   // that does not exist.
-  const counts: Record<string, { leader: string | null; share: number; measured: string } | undefined> = {};
+  const counts: Record<string, { leader: string | null; share: number; measured: string; agreement: { settled: number; total: number } | null } | undefined> = {};
   for (const group of groups) {
     for (const category of group.categories) {
       const run = latestRun(category.slug);
       const leader = run ? standings(run)[0] : undefined;
       counts[category.slug] = run
-        ? { leader: leader?.brand ?? null, share: leader?.firstShare ?? 0, measured: run.measured_on || run.run_date }
+        ? { leader: leader?.brand ?? null, share: leader?.firstShare ?? 0, measured: run.measured_on || run.run_date, agreement: run.engines.length > 1 ? consensusScore(consensus(run, {})) : null }
         : undefined;
     }
   }

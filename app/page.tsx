@@ -125,7 +125,15 @@ export default function Home() {
               {questions.slice(0, 9).map((q, i) => (
                 <div className="buffer-line" key={q.id} style={{ "--i": i } as React.CSSProperties}>
                   <span className="buffer-n">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="buffer-q">ask(&ldquo;{q.text}&rdquo;)</span>
+                  <span className="buffer-q">
+                    {run ? (
+                      <Link href={`/questions?${new URLSearchParams({ c: CATEGORY, date: run.run_date, question: q.id })}#${q.id}`}>
+                        ask(&ldquo;{q.text}&rdquo;)
+                      </Link>
+                    ) : (
+                      <>ask(&ldquo;{q.text}&rdquo;)</>
+                    )}
+                  </span>
                 </div>
               ))}
               <div className="buffer-line" style={{ "--i": 9 } as React.CSSProperties}>

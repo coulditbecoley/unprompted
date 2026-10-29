@@ -301,8 +301,11 @@ question buffer types itself line by line, board steps fade up and share bars
 (`.meter`, the rotation bar) grow from their left edge. Below the fold,
 sections enter as they scroll in (`.reveal`, a CSS scroll timeline, so there is
 no JavaScript and no observer). The trend line on a brand page draws left to
-right. Two things move on their own: the buffer caret and the green live dot
-beside the measurement date.
+right. Two things move on their own, briefly: the buffer caret blinks four
+times and the neutral dot beside the measurement date pings twice, then both
+rest. Nothing loops forever: an endless blink and ping cost the homepage 19
+points of mobile Lighthouse by keeping the main thread busy. The dot is not
+green, because green means movement and the reading on show can be weeks old.
 
 The board's column dimming is a state, not an animation: it transitions at
 `--fast` and holds.
@@ -325,6 +328,11 @@ global 0.01ms rule below and would otherwise leave sections invisible.
   row of coloured divs is meaningless to a screen reader.
 - Body text sits at or above 4.5:1 on both themes; `--fg-3` is reserved for
   labels and metadata that repeat information available elsewhere.
+- Nothing a reader needs is set below 12px.
+- In forced-colours (high-contrast) mode the chart marks opt out with
+  `forced-color-adjust: none`; without it every bar, meter and square vanished.
+- Content that can sit in the first viewport does not use `.reveal`: a section
+  half in view at load stays faded until scrolled, which reads as broken.
 
 ---
 
@@ -386,3 +394,18 @@ project in five seconds, and every page is built to the homepage's standard.
   freshness, subscribe and the theme toggle.
 - **Sharing.** Every board, dated board and brand page has its own social card
   or share row with live figures; chart pages also emit a schema.org `Dataset`.
+
+## Polish pass 2, 2026-10-29
+
+- **"Answers", not "runs".** One run is one answer; readers only know the
+  second word. Status lines are sentence case ("Each question asked 5× per
+  assistant"), not `5 RUNS/Q`.
+- **The board pools; these split it.** `TopPicks` shows each assistant's own
+  first choice (home and boards). Brand pages add "Which assistants name it"
+  (`brandByEngine`) and "Question by question", which links each question to its
+  recorded answers. Same denominators as the board: answered runs only.
+- **A short trend is labelled.** With eight or fewer points the brand trend
+  prints each value and date, and says plainly when a method change separates
+  every point.
+- **Questions loads answer text one question at a time** (`?question=`), which
+  took the page from 4 MB to 215 KB of HTML.

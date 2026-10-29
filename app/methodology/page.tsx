@@ -64,9 +64,19 @@ export default function MethodologyPage() {
       <div className="method-layout">
         <details className="method-toc panel" open>
           <summary>On this page</summary>
-          <nav aria-label="Methodology sections">{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
+          <nav aria-label="Methodology sections"><a href="#glossary">Quick glossary</a>{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
         </details>
-        <div className="prose methodology-copy">{blocks}</div>
+        <div className="prose methodology-copy">
+          <h2 id="glossary">Quick glossary <SectionLink id="glossary" label="Quick glossary" /></h2>
+          <dl className="method-glossary">
+            <dt id="glossary-answer">Answer</dt><dd>One recorded response to one question from one assistant. Errors and refusals are excluded from mention percentages.</dd>
+            <dt id="glossary-named">Named</dt><dd>A brand appears anywhere in an answer. Naming it repeatedly still counts as one answer naming it.</dd>
+            <dt id="glossary-first">First</dt><dd>The first brand named in an answer. This measures visibility, not product quality.</dd>
+            <dt id="glossary-reading">Reading</dt><dd>A published interpretation of recorded answers. A later reading can recheck the same answers without asking the assistants again.</dd>
+            <dt id="glossary-method-version">Method version</dt><dd>The recorded version of the rules used to collect and count answers. Method changes can prevent fair comparisons between measurements.</dd>
+          </dl>
+          {blocks}
+        </div>
       </div>
     </section>
   );

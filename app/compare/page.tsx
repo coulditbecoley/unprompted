@@ -91,6 +91,17 @@ export default async function ComparePage({
   }
 
   const board = standings(run);
+  const presets = CATEGORIES.flatMap(c => {
+    const reading = c.slug === category ? run : latestRun(c.slug);
+    const leaders = reading ? standings(reading) : [];
+    return leaders.length < 2 ? [] : [{ label: `${c.label}: top two`, category: c.slug, a: leaders[0].brand, b: leaders[1].brand }];
+  });
+  const gap = [...board].sort((a, b) => (b.named - b.firstNamed) - (a.named - a.firstNamed))[0];
+  const rival = board.find(row => row.brand !== gap?.brand);
+  if (gap && rival && gap.named > gap.firstNamed) presets.push({
+    label: `Largest mention/first-pick gap: ${gap.brand} vs ${rival.brand}`,
+    category, a: gap.brand, b: rival.brand,
+  });
   const rowFor = (brand: string) => board.find((s) => s.brand === brand) ?? null;
   const sides = [left, right].map((brand) => ({
     brand,
@@ -120,6 +131,11 @@ export default async function ComparePage({
       </p>
 
       <Picker category={category} brands={brands} left={L.brand} right={R.brand} />
+      <nav className="cmp-presets" aria-label="Suggested comparisons">
+        <p className="cmp-note">Try a comparison. Each link keeps the selected pair in the URL.</p>
+        <div>{presets.map(p => <a className="btn btn-sm" key={p.label} href={`/compare?${new URLSearchParams({ c: p.category, a: slugify(p.a), b: slugify(p.b) })}`}>{p.label}</a>)}</div>
+        <p className="cmp-note">The gap is the number of answers naming a brand anywhere minus those naming it first, on this board.</p>
+      </nav>
       <div className="kpi-row">
         <Kpi label="Usable answers" value={board[0]?.totalRuns ?? 0} note="The same answers are used for both brands." />
         <Kpi i={1} label="Questions answered" value={order.length} note="Compare mentions for each question below." />

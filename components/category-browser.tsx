@@ -23,7 +23,7 @@ export function CategoryBrowser({
   counts,
 }: {
   groups: Array<{ sector: Sector; categories: Category[] }>;
-  counts: Record<string, { leader: string | null; share: number; measured: string } | undefined>;
+  counts: Record<string, { leader: string | null; share: number; measured: string; agreement: { settled: number; total: number } | null } | undefined>;
 }) {
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -101,6 +101,9 @@ export function CategoryBrowser({
                         {stat.leader ? <><strong>{stat.leader}</strong> · {Math.round(stat.share * 100)}% named first</> : "No brand named in this reading"}
                       </p>
                       <span className="meter cat-count-meter" aria-hidden="true"><i style={{ "--v": stat.share } as React.CSSProperties} /></span>
+                      <p className="cat-agreement">{stat.agreement
+                        ? `Assistants agree on the first pick for ${stat.agreement.settled} of ${stat.agreement.total} questions.`
+                        : "Not enough assistants to compare agreement."}</p>
                       <p className="cat-scale">Measured {stat.measured}</p>
                       <span className="cat-open">Open board <span className="arr" aria-hidden="true">→</span></span>
                       </div>

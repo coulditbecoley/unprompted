@@ -5,13 +5,13 @@ import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
-import { categoryLabel, REPO_ROOT, loadHistory, coverage } from "@/lib/data";
+import { categoryLabel, REPO_ROOT, loadHistory, coverage, answered } from "@/lib/data";
 import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
 import { notFound } from "next/navigation";
 import { AwaitingFirstRun, Kpi } from "@/components/ui";
 
-type Params = { c?: string; date?: string; engine?: string; question?: string };
+type Params = { c?: string; date?: string; engine?: string; question?: string; brand?: string };
 
 function resolve(params: Params): string {
   return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
@@ -94,16 +94,24 @@ export default async function QuestionsPage({
     );
   }
 
+  const brands = [...new Set(history.flatMap(r => answered(r).flatMap(e => e.brands.map(b => b.name))))].sort();
+  const selectedBrand = params.brand || undefined;
+  if (selectedBrand && !brands.includes(selectedBrand)) notFound();
   const byQuestion = new Map<string, typeof run.extractions>();
   const labels = new Map(loadProviders().map(p => [p.id, p.label]));
   const counts = coverage(run);
   const selectedEngine = counts.some(c => c.engine === params.engine) ? params.engine : undefined;
   const usable = counts.reduce((sum, c) => sum + c.answered, 0);
-  for (const ex of run.extractions) {
+  const matching = (selectedBrand ? answered(run) : run.extractions).filter(e =>
+    (!selectedEngine || e.engine === selectedEngine) &&
+    (!selectedBrand || e.brands.some(b => b.name === selectedBrand)));
+  for (const ex of matching) {
     const list = byQuestion.get(ex.question_id) ?? [];
     list.push(ex);
     byQuestion.set(ex.question_id, list);
   }
+
+  const visibleQuestions = spec.questions.filter(q => !selectedBrand || byQuestion.has(q.id));
 
   return (
     <section className="shell section q-page">
@@ -115,8 +123,8 @@ export default async function QuestionsPage({
       <p className="section-lead">
         Read the buying questions and the recorded AI answers to check where
         each brand mention came from. Each question is scheduled for
-        {" "}{run.runs_per_question} attempts per engine (an AI assistant).
-        Each attempt is one run; errors and refusals are shown but excluded
+        {" "}{run.runs_per_question} attempts per assistant.
+        Errors and refusals are shown but excluded
         from mention percentages.
       </p>
       <form action="/questions" className="q-reading">
@@ -134,12 +142,19 @@ export default async function QuestionsPage({
             {counts.map(c => <option key={c.engine} value={c.engine}>{labels.get(c.engine) ?? c.engine}</option>)}
           </select>
         </div>
+        <div className="q-filter">
+          <label htmlFor="evidence-brand">Brand named</label>
+          <select className="select" id="evidence-brand" name="brand" defaultValue={selectedBrand ?? ""}>
+            <option value="">All brands</option>
+            {brands.map(brand => <option key={brand}>{brand}</option>)}
+          </select>
+        </div>
         <button type="submit" className="btn btn-go">Show answers</button>
       </form>
       {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
       <div className="kpi-row">
-        <Kpi label="Questions listed" value={spec.questions.length} note="The question list for this reading." />
-        <Kpi i={1} label="Usable answers" value={usable} note={`Of ${run.extractions.length} recorded attempts.`} meter={usable / Math.max(run.extractions.length, 1)} />
+        <Kpi label="Questions in reading" value={spec.questions.length} note="The question list for this reading." />
+        <Kpi i={1} label="Usable answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
         <Kpi i={2} label="Errors or refusals" value={run.extractions.length - usable} note="Excluded from brand mention percentages." />
       </div>
       <div className="panel q-coverage reveal">
@@ -157,12 +172,17 @@ export default async function QuestionsPage({
         search results; a link alone does not show which brand it supports.
       </p>
 
+      {selectedBrand && <p className="cmp-note q-filter-result">
+        {matching.length} {matching.length === 1 ? "answer names" : "answers name"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
+        {" "}<a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedEngine ? { engine: selectedEngine } : {}) })}`}>Show all brands</a>
+      </p>}
+      {selectedBrand && matching.length === 0 && <p className="panel q-empty">No answers name this brand with these filters. Try another assistant or reading, or show all brands.</p>}
       <nav className="q-jump" aria-label="Jump to a question">
-        {spec.questions.map((q, i) => <a className="btn btn-sm" key={q.id} href={`#${q.id}`} title={q.text}>Q{String(i + 1).padStart(2, "0")}</a>)}
+        {visibleQuestions.map((q) => <a className="btn btn-sm" key={q.id} href={`#${q.id}`} title={q.text}>Q{String(spec.questions.indexOf(q) + 1).padStart(2, "0")}</a>)}
       </nav>
-      {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?c=${category}&date=${run.run_date}`}>Show all assistants</a></p>}
-      {spec.questions.map((q) => {
-        const rows = (byQuestion.get(q.id) ?? []).filter(r => !selectedEngine || r.engine === selectedEngine);
+      {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedBrand ? { brand: selectedBrand } : {}) })}`}>Show all assistants</a></p>}
+      {visibleQuestions.map((q) => {
+        const rows = (byQuestion.get(q.id) ?? []);
         const engines = [...new Set(rows.map((r) => r.engine))].sort();
 
         return (
@@ -172,6 +192,7 @@ export default async function QuestionsPage({
             {rows.length > 0 && <p className="q-load-answers">
               <a className="btn btn-sm" href={`/questions?${new URLSearchParams({
                 c: category, date: run.run_date,
+                ...(selectedBrand ? { brand: selectedBrand } : {}),
                 ...(selectedEngine ? { engine: selectedEngine } : {}),
                 ...(params.question === q.id ? {} : { question: q.id }),
               })}#${q.id}`}>

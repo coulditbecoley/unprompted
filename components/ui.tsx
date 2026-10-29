@@ -360,6 +360,9 @@ export function HowToRead({ runsPerQuestion }: { runsPerQuestion: number }) {
         Points up or down since the last comparable week. Small moves are shown
         without an arrow because the sample cannot back them.
       </p>
+      <p className="howto-more" style={{ margin: 0 }}>
+        <Link href="/methodology#glossary">Every term explained →</Link>
+      </p>
     </div>
   );
 }
