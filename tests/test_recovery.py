@@ -856,3 +856,33 @@ def test_hold_reasons_cannot_end_the_github_output_block(tmp_path, monkeypatch):
     text = output.read_text()
     marker = text.split("reasons<<", 1)[1].split("\n", 1)[0]
     assert marker.startswith("EOF_") and text.rstrip().endswith(marker)
+
+
+def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_path, monkeypatch):
+    from unprompted import reextract
+    from unprompted.models import BrandMention, Extraction
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "git_sha", lambda: "sha")
+    for paid in ("extract_run", "check_budget", "resolve_extractor"):
+        monkeypatch.setattr(reextract, paid, lambda *a, **k: pytest.fail("free mode touched paid machinery"))
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "questions/alpha.yml").write_text("category: alpha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical:\n  Acme: [Acme Inc]\n")
+    held = Extraction("offline", "q1", 0, answer="Acme Inc", extracted=[{"name": "Acme Inc", "position": 1, "sentiment": "neutral"}])
+    write_json(tmp_path / "data/held/2026-09-01/alpha.json", RunRecord("alpha", "2026-09-01", 1, 1, ["offline"],
+               extractor="claude-api-extract", extractions=[held], quarantined=["Acme Inc"]).to_dict())
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha", "--out-date", "2026-09-14", "--renormalize"])
+    reextract.main()
+    written = [p for p in (tmp_path / "data").rglob("2026-09-14/alpha.json")]
+    assert len(written) == 1
+    fresh = json.loads(written[0].read_text())
+    assert fresh["extractions"][0]["brands"][0]["name"] == "Acme" and fresh["quarantined"] == []
+    assert fresh["extractions"][0]["extracted"][0]["name"] == "Acme Inc" and fresh["extractor"] == "claude-api-extract"
+    old = RunRecord("alpha", "2026-09-02", 1, 1, ["offline"], extractions=[Extraction("offline", "q1", 0, answer="x")])
+    write_json(tmp_path / "data/held/2026-09-02/alpha.json", old.to_dict())
+    monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-02", "--category", "alpha", "--out-date", "2026-09-15", "--renormalize"])
+    with pytest.raises(SystemExit, match="predates stored raw brand names"):
+        reextract.main()

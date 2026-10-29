@@ -27,7 +27,7 @@ from .budget import check as check_budget
 from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
 from .engines import all_engines
 from .extract import EXTRACT_PROMPT, extract_run
-from .models import EngineAnswer, RunRecord
+from .models import BrandMention, EngineAnswer, Extraction, RunRecord
 from .normalize import AliasMap, normalize
 from .run import MAX_WORKERS, ROOT, git_sha, load_local_env, persist
 from .storage import run_lock
@@ -50,6 +50,12 @@ def _main() -> int:
         "--in-place",
         action="store_true",
         help="retired: use --out-date to preserve earlier readings and usage",
+    )
+    parser.add_argument(
+        "--renormalize",
+        action="store_true",
+        help="re-apply today's aliases to the stored raw brand names: FREE, no extraction calls "
+             "(readings from 2026-11 on; older ones need the paid re-read)",
     )
     args = parser.parse_args()
 
@@ -137,6 +143,35 @@ def _main() -> int:
         )
         for e in record["extractions"]
     ]
+    if args.renormalize:
+        extractions, extractor_id, extractor_model = _renormalized(record), record.get("extractor", ""), record.get("extractor_model", "")
+        prompt = record.get("methodology", {}).get("extraction_prompt", EXTRACT_PROMPT)
+    else:
+        extractions, extractor_id, extractor_model = _reread(answers, out_date, args.category)
+        prompt = EXTRACT_PROMPT
+    extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
+    extractions, quarantined = normalize(extractions, aliases)
+
+    methodology = {**record.get("methodology", {}),
+                   "extraction_prompt": prompt,
+                   "extractor": {"id": extractor_id, "model": extractor_model},
+                   "aliases": alias_data}
+    return _finish(args, record, out_date, methodology, extractions, quarantined, extractor_id, extractor_model,
+                   reading_commit, max_brands, grounding_engines)
+
+
+def _renormalized(record: dict) -> list[Extraction]:
+    """The stored reading with today's aliases applied to its raw brand names. Free."""
+    if any(e.get("extracted") is None for e in record["extractions"]):
+        raise SystemExit("This reading predates stored raw brand names (2026-11), so its aliases can only be "
+                         "re-applied by a paid re-read: run without --renormalize.")
+    fields = set(Extraction.__dataclass_fields__)
+    return [Extraction(**{**{k: v for k, v in e.items() if k in fields},
+                          "brands": [BrandMention(**b) for b in e["extracted"]]})
+            for e in record["extractions"]]
+
+
+def _reread(answers: list[EngineAnswer], out_date: str, category: str):
     # Same reader the live pipeline would use, resolved once. Previously this
     # always took the hosted API path regardless of the registry, so a re-read
     # could silently use a different extractor from the run it was correcting.
@@ -145,14 +180,14 @@ def _main() -> int:
     except ProviderError as exc:
         raise SystemExit(str(exc)) from exc
     hosted = isinstance(extractor, ApiExtractor)
-    checkpoint = ROOT / ".unprompted" / "reextract" / out_date / args.category / "batch.json"
+    checkpoint = ROOT / ".unprompted" / "reextract" / out_date / category / "batch.json"
     if checkpoint.exists() and json.loads(checkpoint.read_text(encoding="utf-8")).get("result_checkpoint_version") == 1:
         from .extract import collect_batch
         collect_batch(checkpoint)
     from .extract import _base_for
     cached_extraction = hosted and checkpoint.exists() and json.loads(checkpoint.read_text(encoding="utf-8")).get("id")
     remaining = 0 if cached_extraction else sum(_base_for(a)[1] for a in answers)
-    verdict = check_budget(args.category, remaining, extraction_only=True)
+    verdict = check_budget(category, remaining, extraction_only=True)
     if not verdict.ok:
         raise SystemExit(f"Refusing re-extraction.\n{verdict.message}")
     print(
@@ -167,23 +202,19 @@ def _main() -> int:
         model=extractor.model if hosted else None,
         checkpoint=checkpoint,
     )
+    return extractions, extractor.id, extractor.model if hosted else ""
 
-    extractions.sort(key=lambda e: (e.question_id, e.engine, e.run_index))
-    extractions, quarantined = normalize(extractions, aliases)
 
-    methodology = {**record.get("methodology", {}),
-                   "extraction_prompt": EXTRACT_PROMPT,
-                   "extractor": {"id": extractor.id, "model": extractor.model if hosted else ""},
-                   "aliases": alias_data}
-
+def _finish(args, record, out_date, methodology, extractions, quarantined, extractor_id, extractor_model,
+            reading_commit, max_brands, grounding_engines) -> int:
     fresh = RunRecord(
         category=record["category"],
         run_date=out_date,
         method_version=record["method_version"],
         runs_per_question=record["runs_per_question"],
         engines=record["engines"],
-        extractor=extractor.id,
-        extractor_model=extractor.model if hosted else "",
+        extractor=extractor_id,
+        extractor_model=extractor_model,
         # The answers were fetched when the source run fetched them. Dating a
         # re-read as if the engines were queried today put a day in the archive
         # on which nothing was asked, and made week-over-week movement compare a

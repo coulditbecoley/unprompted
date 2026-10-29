@@ -19,9 +19,11 @@ questions. Python pipeline in `src/unprompted/` and `scripts/`; Next.js site in
 (the web tests also check Python and TypeScript agree on every published file).
 
 **What costs money.** Free: `python -m unprompted.run --preflight`,
-`--collect-only` (downloads batches already paid for), `unprompted.report`,
+`--collect-only` (downloads batches already paid for), `unprompted.reextract
+--renormalize` (re-applies aliases to stored raw names), `unprompted.report`,
 `scripts/watchdog.py`, the tests. Paid: `python -m unprompted.run` *including*
-`--dry-run` (it still asks every engine), `unprompted.reextract`,
+`--dry-run` (it still asks every engine), `unprompted.reextract` without
+`--renormalize`,
 `unprompted.jev_reader`, `scripts/compare_jev.py --read`. Never start a paid
 command to fill a gap; report the gap.
 

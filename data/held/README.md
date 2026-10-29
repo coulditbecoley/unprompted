@@ -12,6 +12,10 @@ re-read itself is a paid extraction pass, about $2 per category):
 
     python -m unprompted.reextract <date> --category <slug>
 
+If it was held only on brand names and the reading is from November 2026 or
+later, decide the names in `aliases/` and add `--renormalize`: that re-applies
+the aliases to the stored raw names with no paid calls.
+
 If the re-read passes its checks it is written to `data/runs/` under today's
 date, and publishes normally.
 
