@@ -1,5 +1,6 @@
 """Offline batch acceptance: paid identity, recovery, accounting, and orchestration."""
 import json
+from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
@@ -406,10 +407,37 @@ def test_gemini_is_told_to_search_and_reports_the_model_google_serves(monkeypatc
     assert sent[0]["system_instruction"]["parts"][0]["text"].endswith("Search the web for current information before answering.")
     engine.identify()
     assert len(sent) == 1  # once per process
+    # Re-routed mid-run: the text and usage stay, the answer does not count.
+    body["modelVersion"] = "gemini-3.8-flash"
+    moved = engine.ask_one("q1", "Which?", 0)
+    assert moved.error and "different model" in moved.error and moved.text == "OK"
     monkeypatch.setattr(gemini_engine, "_SERVED", {})
     del body["modelVersion"]
     with pytest.raises(ProviderError, match="did not say"):
         engine.identify()
+    probes = len(sent)
+    with pytest.raises(ProviderError, match="did not say"):
+        engine.identify()  # a failed probe is not repeated for each category
+    assert len(sent) == probes
+
+
+def test_retries_stop_when_the_run_clock_is_spent(monkeypatch):
+    from unprompted.engines import base
+    calls = []
+
+    class Flaky(base.Engine):
+        name, key_names = "flaky", ()
+        def is_retryable(self, exc):
+            return True
+        def _one_call(self, question):
+            calls.append(1)
+            monkeypatch.setattr(base, "run_time_left", lambda: -1)
+            raise ConnectionError("reset")
+    monkeypatch.setattr(base.time, "sleep", lambda s: None)
+    engine = Flaky()
+    engine.api_key = "x"
+    answer = engine.ask_one("q1", "Which?", 0)
+    assert len(calls) == 1 and "reset" in answer.error
 
 
 def test_nothing_new_is_paid_for_once_the_run_clock_is_spent(tmp_path, monkeypatch):
@@ -431,4 +459,29 @@ def test_a_category_is_not_started_without_time_to_finish_it(tmp_path, monkeypat
     monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
     monkeypatch.setattr(run.sys, "argv", ["run", "--summary-file", str(tmp_path / "s.json")])
     assert run.main() == run.HELD_EXIT_CODE and not started
-    assert "not started" in json.loads((tmp_path / "s.json").read_text())["detail"]
+    summary = json.loads((tmp_path / "s.json").read_text())
+    assert "not started" in summary["detail"] and summary["categories"]["alpha"]["outcome"] == "not_started"
+
+
+def test_the_status_file_says_each_categorys_outcome_without_parsing_prose(tmp_path, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("notify", Path(__file__).resolve().parents[1] / "scripts/notify.py")
+    notify = importlib.util.module_from_spec(spec); spec.loader.exec_module(notify)
+    monkeypatch.setattr(notify, "REPO", tmp_path)
+    monkeypatch.setattr(notify, "STATUS_FILE", tmp_path / "last-run.json")
+    notify.write_status("held", "alpha: held", 2, {"run_date": "2026-11-02", "detail": "x",
+                        "categories": {"alpha": {"outcome": "held", "reasons": ["Gemini cited on 9 of 75"]}}})
+    status = json.loads((tmp_path / "last-run.json").read_text())
+    assert status["run_date"] == "2026-11-02" and status["categories"]["alpha"]["outcome"] == "held"
+    assert status["detail"] == "alpha: held"
+
+
+def test_collect_only_downloads_and_spends_nothing(tmp_path, monkeypatch):
+    from unprompted import run
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: pytest.fail("measured"))
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding",
+                        lambda *a: ([tmp_path / "job"], ["could not collect other"]))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--collect-only"])
+    assert run.main() == 1

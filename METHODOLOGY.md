@@ -140,7 +140,8 @@ made it search for 8 of 8. From the November 2 week Gemini carries that
 sentence; the other engines already search without being told, so it moves
 Gemini onto the question the chart asks rather than away from the shared
 prompt's intent. Each run also asks Gemini which model answers and records
-that, so a later re-route stops the run before any paid call. The grounding
+that, so a later re-route stops the run before the measured calls, and an
+answer from any other model mid-run is recorded as a failed call. The grounding
 check still holds any week in which Gemini stops searching.
 
 ## How much of a change is real

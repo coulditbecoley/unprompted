@@ -164,11 +164,15 @@ class Engine:
 
         text, sources, usage, error, metadata = "", [], {}, None, None
         for attempt in range(MAX_ATTEMPTS):
+            if attempt and run_time_left() <= 0:
+                break  # a retry is new paid work too; keep the last error
             try:
                 # An adapter may add a fourth item: provider metadata for this call.
                 text, sources, usage, *rest = self._one_call(question)
                 metadata = rest[0] if rest else None
-                error = "engine failed: incomplete response" if usage.get("incomplete_response") else None
+                error = ("engine failed: incomplete response" if usage.get("incomplete_response")
+                         else "engine failed: answered by a different model than the run qualified"
+                         if usage.get("served_model_mismatch") else None)
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
                 error = f"{type(exc).__name__}: {exc}"

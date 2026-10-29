@@ -33,7 +33,7 @@ if not "%RUN_BRANCH%"=="main" (
   echo ABORT: checkout must be on main before scheduled measurement. >> "%TEMP%\unprompted-weekly.log"
   exit /b 1
 )
-git pull --ff-only origin main >> "%TEMP%\unprompted-weekly.log" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\timed.py 600 git pull --ff-only origin main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 (
   echo ABORT: git pull failed, working tree may have local changes >> "%TEMP%\unprompted-weekly.log"
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "git pull --ff-only failed before the run started, so nothing was measured." >> "%TEMP%\unprompted-weekly.log" 2>&1
@@ -81,7 +81,7 @@ if not "%METHOD_SIZE%"=="0" (
 REM A public clone can pull even when publishing credentials have expired.
 REM Check the push transport before paid work; dry-run changes no remote refs.
 REM This cannot guarantee later network availability or server-side hooks.
-git push --dry-run origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\timed.py 300 git push --dry-run origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 (
   echo ABORT: publication preflight failed before measurement. >> "%TEMP%\unprompted-weekly.log"
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Publication preflight failed before any provider calls. Check GitHub authentication and the origin push URL; git push --dry-run origin HEAD:main must succeed." >> "%TEMP%\unprompted-weekly.log" 2>&1
@@ -126,6 +126,10 @@ REM Checked, because a failed stage is indistinguishable from a clean week
 REM once it has happened: `git diff --staged --quiet` then finds nothing staged,
 REM the branch below logs "No new data to commit", and the task exits zero
 REM having published nothing at all. Same class as the PUSHED line above.
+REM The message says what happened: a held week committed as "published"
+REM misled anyone reading git log (2026-10-26).
+set "COMMIT_MSG=Run: measured and published"
+if "%RUN_EXIT%"=="2" set "COMMIT_MSG=Run: measured; one or more categories held, see data/last-run.json"
 git add data reports >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :stage_failed
 git diff --staged --quiet
@@ -134,9 +138,9 @@ echo No new data to commit. >> "%TEMP%\unprompted-weekly.log"
 goto :published
 
 :publish
-git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "Run: measured and published" >> "%TEMP%\unprompted-weekly.log" 2>&1
+git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "%COMMIT_MSG%" >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :commit_failed
-git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 push origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\timed.py 900 git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 push origin HEAD:main >> "%TEMP%\unprompted-weekly.log" 2>&1
 if errorlevel 1 goto :push_failed
 
 REM Confirm the remote actually has it. Neither commit nor push returns non-zero
@@ -146,7 +150,7 @@ REM log and Task Scheduler's last result.
 set "LOCAL_SHA="
 set "REMOTE_SHA="
 for /f %%H in ('git rev-parse HEAD') do set "LOCAL_SHA=%%H"
-for /f %%H in ('git ls-remote origin refs/heads/main') do set "REMOTE_SHA=%%H"
+for /f %%H in ('git -c http.lowSpeedLimit^=1000 -c http.lowSpeedTime^=120 ls-remote origin refs/heads/main') do set "REMOTE_SHA=%%H"
 if "%LOCAL_SHA%"=="" goto :sha_mismatch
 if "%REMOTE_SHA%"=="" goto :sha_mismatch
 if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch

@@ -51,6 +51,8 @@ export async function GET() {
     "- Every question and answer: https://unprompted.report/questions",
     "  (add ?c=<category-slug> for a specific one; the slugs are below)",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
+    "- Every published week as JSON: https://github.com/coulditbecoley/unprompted/tree/main/data/runs",
+    "  (one file per category per week; fields under 'Reading the data' in the README)",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",
     "## Current categories",
@@ -71,6 +73,8 @@ export async function GET() {
         `of ${leader.totalRuns} answered runs, week of ${run.run_date}`
       : `no brand was named, week of ${run.run_date}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
+    // The full record, for readers that would rather count than quote.
+    lines.push(`  Data: https://raw.githubusercontent.com/coulditbecoley/unprompted/main/data/runs/${run.run_date}/${category.slug}.json`);
   }
 
   lines.push(

@@ -92,8 +92,9 @@ def git_sha() -> str:
 
 
 def load_questions(category: str) -> dict:
-    if category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
-        raise ValueError("unknown category")
+    known = sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
+    if category not in known:
+        raise ValueError(f"unknown category {category!r}; known: {', '.join(known)}")
     path = ROOT / "questions" / f"{category}.yml"
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(spec, dict) or spec.get("category") != category:
@@ -512,7 +513,8 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--summary-file", type=Path, help="write category outcomes for the scheduler notification")
-    parser.add_argument("--dry-run", action="store_true", help="do not write files")
+    parser.add_argument("--dry-run", action="store_true", help="write no files, but still make PAID provider calls")
+    parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
     parser.add_argument(
         "--ignore-budget",
@@ -524,6 +526,18 @@ def main() -> int:
         parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 
     load_local_env()
+    if args.collect_only:
+        # The one recovery command, for any batch kind the budget guard names.
+        from .engines.anthropic_batch import collect_outstanding
+        from .engines.anthropic_engine import AnthropicEngine
+        with run_lock(ROOT / ".unprompted"):
+            collected, failed = collect_outstanding(ROOT / ".unprompted", AnthropicEngine().api_key)
+        for job in collected:
+            print(f"collected {job}")
+        for reason in failed:
+            print(reason, file=sys.stderr)
+        print(f"{len(collected)} collected, {len(failed)} failed")
+        return 1 if failed else 0
 
     categories = all_categories() if args.category == "all" else [args.category]
     if not categories:
@@ -536,6 +550,8 @@ def main() -> int:
 
     held: dict[str, list[str]] = {}
     outcomes: list[str] = []
+    # Machine-readable twin of `outcomes`, committed in data/last-run.json.
+    results: dict[str, dict] = {}
     total = 0.0
 
     if not args.dry_run:
@@ -557,14 +573,16 @@ def main() -> int:
             # not the budget reader recognises that checkpoint's format.
             for category in categories:
                 held[category] = ["not run: an outstanding paid batch could not be collected"]
+                results[category] = {"outcome": "not_run", "reasons": held[category] + failed}
                 outcomes.append(f"{category}: not run — outstanding batch recovery failed")
             categories = []
 
     for category in categories:
-        if not args.dry_run and run_time_left() < CATEGORY_RESERVE_SECONDS:
+        if run_time_left() < CATEGORY_RESERVE_SECONDS:  # --dry-run pays for calls too
             # Asking takes ~20 minutes and its batch typically an hour; one
             # started later would strand paid work the run cannot collect.
             held[category] = ["not started: too little of the weekly run's time was left to finish it"]
+            results[category] = {"outcome": "not_started", "reasons": held[category]}
             outcomes.append(f"{category}: not started — run time budget nearly spent")
             continue
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
@@ -586,6 +604,7 @@ def main() -> int:
             print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc()
             held[category] = [f"the run raised {type(exc).__name__}: {exc}"]
+            results[category] = {"outcome": "failed", "reasons": held[category]}
             outcomes.append(f"{category}: failed or refused — {type(exc).__name__}: {exc}")
             continue
 
@@ -595,19 +614,21 @@ def main() -> int:
 
         if reasons:
             held[category] = reasons
+            results[category] = {"outcome": "held", "reasons": reasons}
             outcomes.append(f"{category}: held — {'; '.join(reasons)}")
             print(f"\nHELD: {category} will not publish:", file=sys.stderr)
             for reason in reasons:
                 print(f"  - {reason}", file=sys.stderr)
         else:
             outcomes.append(f"{category}: passed local publication checks")
+            results[category] = {"outcome": "passed", "reasons": []}
             print(f"\n{category}: all checks passed.", file=sys.stderr)
 
     if len(categories) > 1:
         print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)
 
     if args.summary_file and not args.dry_run:
-        write_json(args.summary_file, {"run_date": args.date,
+        write_json(args.summary_file, {"run_date": args.date, "categories": results,
                    "detail": "\n".join(outcomes) + "\nCommit and push follow; deployment is not verified."}, replace=True)
 
     # One held category must not suppress the others. Everything that passed is

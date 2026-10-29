@@ -34,6 +34,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     (repo / "unprompted/__init__.py").write_text("")
     (repo / ".gitignore").write_text(".venv/\n.unprompted/\n__pycache__/\n")
     shutil.copyfile(ROOT / "scripts/weekly-run.cmd", repo / "scripts/weekly-run.cmd")
+    shutil.copyfile(ROOT / "scripts/timed.py", repo / "scripts/timed.py")
     # All external work is replaced in the disposable checkout only.
     (repo / "unprompted/run.py").write_text(
         "from pathlib import Path\nimport os\n"

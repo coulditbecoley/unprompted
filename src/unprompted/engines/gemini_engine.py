@@ -27,7 +27,7 @@ import urllib.request
 from urllib.parse import urlparse
 
 from ..cli_provider import ProviderError
-from .base import SYSTEM_PROMPT, Engine
+from .base import SYSTEM_PROMPT, Engine, refuse_new_paid_work
 
 ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -89,7 +89,7 @@ def _sources(grounding: dict) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-_SERVED: dict[str, str] = {}
+_SERVED: dict[str, str | ProviderError] = {}
 
 
 class GeminiEngine(Engine):
@@ -101,17 +101,25 @@ class GeminiEngine(Engine):
         """The model Google actually serves for MODEL, from one short call.
 
         Recorded as this engine's model in the methodology snapshot, so a silent
-        re-route (3.5 to 3.6 in October 2026) stops the run before paid calls
-        like any other unversioned model change. Once per process.
+        re-route (3.5 to 3.6 in October 2026) stops the run before the measured
+        calls like any other unversioned model change. Every measured answer is
+        then checked against it (`_one_call`). Once per process, failures
+        included, so a bad probe is not repeated for every category.
+        ponytail: the probe's own usage (a few hundred tokens, no search) is not
+        added to the budget; record it if probes ever grow.
         """
         if MODEL not in _SERVED:
+            refuse_new_paid_work("Gemini model probe")
             try:
                 _, _, _, metadata = self._one_call("Reply with just the word OK.")
+                if not metadata.get("modelVersion"):
+                    raise ProviderError("gemini: the response did not say which model answered")
+                _SERVED[MODEL] = metadata["modelVersion"]
             except Exception as exc:  # noqa: BLE001 - reported by the caller as a refusal
-                raise ProviderError(f"gemini: could not tell which model answers: {type(exc).__name__}: {exc}") from exc
-            if not metadata.get("modelVersion"):
-                raise ProviderError("gemini: the response did not say which model answered")
-            _SERVED[MODEL] = metadata["modelVersion"]
+                _SERVED[MODEL] = exc if isinstance(exc, ProviderError) else ProviderError(
+                    f"gemini: could not tell which model answers: {type(exc).__name__}: {exc}")
+        if isinstance(_SERVED[MODEL], ProviderError):
+            raise _SERVED[MODEL]
         return {"model": _SERVED[MODEL], "version": f"requested {MODEL}"}
 
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
@@ -171,6 +179,10 @@ class GeminiEngine(Engine):
         # on something other than STOP. Either is a failed answer, usage kept.
         if not candidates or candidate.get("finishReason", "STOP") != "STOP":
             usage["incomplete_response"] = 1
+        # The probe qualified one model; an answer from another is not this row.
+        qualified = _SERVED.get(MODEL)
+        if isinstance(qualified, str) and body.get("modelVersion") != qualified:
+            usage["served_model_mismatch"] = 1
 
         # Kept verbatim so the 2026-10 drop in search coverage (and the next
         # one) can be diagnosed: absent, null and {} grounding stay distinct.

@@ -7,7 +7,8 @@ read by the site.
 It is committed rather than discarded because a failure is a measurement too:
 the reason a week did not publish should be as auditable as the weeks that did.
 
-To re-read a held run's stored answers without re-querying any engine:
+To re-read a held run's stored answers without re-querying any engine (the
+re-read itself is a paid extraction pass, about $2 per category):
 
     python -m unprompted.reextract <date> --category <slug>
 

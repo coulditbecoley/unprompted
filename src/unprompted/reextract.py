@@ -58,8 +58,9 @@ def _main() -> int:
 
     load_local_env()
     source_date = date.fromisoformat(args.date)
-    if args.category not in {p.stem for p in (ROOT / "questions").glob("*.yml")}:
-        raise SystemExit("unknown category")
+    known = sorted(p.stem for p in (ROOT / "questions").glob("*.yml"))
+    if args.category not in known:
+        raise SystemExit(f"unknown category {args.category!r}; known: {', '.join(known)}")
     out_date = args.out_date or date.today().isoformat()
     reading_date = date.fromisoformat(out_date)
     if source_date.isoformat() != args.date or reading_date.isoformat() != out_date:

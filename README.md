@@ -38,7 +38,8 @@ rotation = times_named / total_runs
 ```
 
 Brand names are normalised against [`aliases/`](aliases/). Anything unrecognised
-is quarantined and never reaches the chart. Five sanity checks then run, and if
+is quarantined and never reaches the chart. The publication checks in
+[`checks.py`](src/unprompted/checks.py) then run, and if
 any of them trips, the week is held for a human instead of published.
 
 Full detail, including what we deliberately do *not* measure, is in
@@ -128,7 +129,7 @@ one category was held, and the reasons are printed.
 A run that passes its checks is written to `data/runs/`, which the site reads. A
 run that is held is written to `data/held/` instead, where it is kept for review
 and never published. Re-read a held run's stored answers, without re-querying
-any engine, with:
+any engine (the re-read is a paid extraction pass, about $2 per category), with:
 
 ```bash
 python -m unprompted.reextract 2026-08-23 --category ai-image-generators
@@ -386,6 +387,19 @@ in it ever imported that module. Both audits flagged the three implementations.
 
 Ratios are compared at four decimal places, because that is where Python stores
 them. The counts they come from are compared exactly.
+
+## Reading the data
+
+One file per category per reading: `data/runs/<run_date>/<category>.json`.
+`measured_on` is the week the answers were collected; `run_date` differs from it
+only for a re-reading of stored answers. `method_version` and `methodology` (the
+frozen questions, engines, prompts and extractor) say what was measured; compare
+weeks only within one version. Each item in `extractions` is one answer:
+`engine`, `question_id`, `run_index`, the verbatim `answer`, its `sources`,
+`error` and `refused`, and `brands` as `{name, position, sentiment}` after
+normalisation. An answer counts toward a share only when `error` is null and
+`refused` is false. `publication_checks` records why the week was allowed to
+publish; held weeks have the same shape under `data/held/`.
 
 ## Audits
 
