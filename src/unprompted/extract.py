@@ -272,8 +272,10 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
 
     The CLI path has no schema enforcement at all, and the batch path returns
     schema-shaped text that still has to be json.loads'd, so both arrive here as
-    a plain dict. A malformed entry is dropped rather than raised: one unreadable
-    brand should cost that brand, not the whole answer.
+    a plain dict. A malformed brand entry (no name, a bad or repeated position,
+    an unknown sentiment) fails the whole answer as an extraction error rather
+    than being dropped: a reply that got one entry wrong cannot be trusted for
+    the positions of the rest. Names absent from the answer text are dropped.
     """
     if not isinstance(parsed, dict) or type(parsed.get("refused")) is not bool or not isinstance(parsed.get("brands"), list):
         base.error = "extract failed: expected boolean refused and a brands list"
@@ -296,16 +298,8 @@ def _apply(base: Extraction, parsed: dict) -> Extraction:
             base.brands = []
             return base
         positions.add(item["position"])
-        name = str(item.get("name", "")).strip()
-        if not name:
-            continue
-        try:
-            position = int(item.get("position", len(mentions) + 1))
-        except (TypeError, ValueError):
-            position = len(mentions) + 1
-        sentiment = str(item.get("sentiment", "neutral")).strip().lower()
-        if sentiment not in {"positive", "neutral", "negative"}:
-            sentiment = "neutral"
+        # Validated above, so these are exactly what was sent.
+        name, position, sentiment = item["name"].strip(), item["position"], item.get("sentiment", "neutral")
         # A name the answer does not contain was not read out of it. Dropped
         # rather than quarantined: quarantine is the list of real names awaiting
         # a human decision, and an invented one is not awaiting anything. Counted
