@@ -21,3 +21,6 @@ tsconfig.tsbuildinfo
 # Shadow Jev readings: large local evidence. Ignored so they never make a
 # measurement's git_sha read "-dirty" or ride along in a weekly commit.
 audit/jev-shadow/
+
+# Paid reports and newsletter drafts (see MONETIZATION-PLAN.md): never committed.
+/private/

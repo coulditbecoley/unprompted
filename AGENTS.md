@@ -21,8 +21,9 @@ questions. Python pipeline in `src/unprompted/` and `scripts/`; Next.js site in
 **What costs money.** Free: `python -m unprompted.run --preflight` (run it
 where the API keys are, or it reports them missing), `--collect-only`
 (downloads batches already paid for), `unprompted.reextract --renormalize`
-(re-applies aliases to stored raw names; readings from November 2026 on only,
-older held weeks need the paid re-read), `unprompted.report`,
+(re-applies aliases to stored raw names; works only when every answer in the
+reading stored them, which readings from November 2026 do; older held weeks
+need the paid re-read), `unprompted.report`,
 `scripts/watchdog.py`, the tests. Small real calls: `run --preflight --qualify`
 and `scripts/readiness.py` (subscription calls and a tiny Gemini probe). Paid:
 `python -m unprompted.run` *including* `--dry-run` (it still asks every
@@ -42,15 +43,19 @@ finds anything (registered by `scripts/install-weekly-task.ps1`).
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in
 there). Outcome per category: `data/last-run.json` → `categories` (runs from
-November 2026 on; older status files have only the prose `detail`). A run
-that failed before measuring (exit 1 or 3) writes `.unprompted/last-attempt.json`
-instead, so `last-run.json` can describe an earlier week: check its `at`. The
-full log is `.unprompted/logs/weekly.log` on that machine (rotated to
-`weekly.log.1` past 20 MB; `%TEMP%\unprompted-weekly.log` only if that folder
-cannot be made). Exit codes:
+November 2026 on; older status files have only the prose `detail`). When the
+launcher reports a failure (a refused pull, dirty data, failed publication) it
+writes `.unprompted/last-attempt.json` instead, and some early stops (no
+.venv, wrong branch, staged changes) write no status at all, so
+`last-run.json` can describe an earlier week: check its `at`. The full log is
+`.unprompted/logs/weekly.log` on that machine (rotated to `weekly.log.1` past
+20 MB); the old `%TEMP%\unprompted-weekly.log` is used when .venv is missing
+or the log folder cannot be set up. Exit codes:
 0 all passed · 1 the launcher or `--collect-only` stopped before measuring ·
 2 at least one category held, failed or not started (passed ones still
-publish; argparse usage errors also exit 2) · 3 measured but commit/push failed.
+publish; argparse usage errors also exit 2) · 3 measured but commit/push failed
+· 4 published, but the vault or analytics sync afterwards failed (do not
+re-run the week).
 
 **Where state lives.** `data/runs/<date>/<category>.json` published (never edit
 by hand) · `data/held/` held readings, kept as evidence · `data/quarantine/`
@@ -65,8 +70,9 @@ and newsletter drafts (gitignored).
   refuses an uncommitted method, and the runner refuses a changed method
   without a version bump (nothing checks the METHODOLOGY section; that is on
   you).
-- Every run first downloads any stranded batch itself, so an "unaccounted
-  batch" refusal means that download failed: read its error in the log, then
+- A normal (not --dry-run) run first downloads any stranded batch itself, so
+  an "unaccounted batch" refusal from one means that download failed: read
+  its error in the log, then
   run `python -m unprompted.run --collect-only` on the run machine. Never
   delete the checkpoint. If it reports a
   submission with no batch id, the owner reconciles it in the provider
