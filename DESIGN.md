@@ -425,6 +425,9 @@ project in five seconds, and every page is built to the homepage's standard.
   blank on white.
 - **The homepage brand finder** is a GET form to `/find`, which redirects an
   exact name to its brand page and anything else to `/categories?q=`.
+- **Only the newest reading may say nothing newer exists.** `Freshness` takes
+  `latestHref` on older dated boards and says "An older reading" with a link to
+  the latest board, instead of the staleness line.
 
 ### Codex's pages (Compare, Consensus, Questions, Methodology, Categories)
 
