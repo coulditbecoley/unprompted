@@ -116,3 +116,32 @@ def test_counts_agree_with_the_pipeline_on_the_real_archive():
     top = brand_week(latest)[0]
     d = br.analyse("ai-coding-assistants", top.brand)
     assert (d["latest"]["named"], d["latest"]["n"], d["latest"]["first"]) == (top.named, top.total_runs, top.first_named)
+
+
+def test_cutoff_must_be_canonical_and_is_kept_as_requested(archive):
+    archive(run("2026-09-07", [ex("one", "q1", 0, ["Acme"])]))
+    archive(run("2026-09-28", [ex("one", "q1", 0, ["Acme"])]))
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        br.analyse("alpha", "Acme", through="20260914")
+    d = br.analyse("alpha", "Acme", through="2026-09-14")
+    assert d["through"] == "2026-09-14" and d["latest"]["measured"] == "2026-09-07"
+
+
+def test_legacy_weeks_say_they_have_no_snapshot_and_wording_falls_back(archive):
+    legacy = run("2026-09-07", [ex("one", "q1", 0, ["Acme"])])
+    del legacy["methodology"]
+    archive(legacy)
+    current = run("2026-09-14", [ex("one", "q1", 0, ["Acme"]), ex("two", "q1", 0, error="down")])
+    current["methodology"] = {"aliases": {}}
+    archive(current)
+    (br.ROOT / "questions/alpha.yml").write_text("questions:\n  - id: q1\n    text: Best tool now?\n")
+    d = br.analyse("alpha", "Acme")
+    assert not d["weeks"][0]["snapshot"] and "no configuration snapshot" in d["weeks"][1]["comparable"]
+    assert d["questions"][0]["text"] == "Best tool now? (current wording; not recorded in this run)"
+    assert {x["engine"]: x["answer"] for x in d["examples"]}["two"] is None   # all failed, still listed
+
+
+def test_private_writes_refuse_to_land_where_git_or_the_vault_collect(archive, monkeypatch):
+    monkeypatch.setattr(br, "PRIVATE", br.ROOT / "reports")   # as if private/ were a junction to reports/
+    with pytest.raises(ValueError, match="outside private"):
+        br.private_path("newsletter", "2026-11-02.md")

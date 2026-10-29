@@ -13,13 +13,14 @@ boundary case differently from the website (MONETIZATION-PLAN.md section 6).
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import date, timedelta
 from pathlib import Path
 
 import yaml
 
 from .aggregate import brand_week, comparison_reason, load_history, movement
-from .brand_report import categories, measured
+from .brand_report import bucket, categories, measured, private_path
 from .storage import write_text
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,9 @@ def section(category: str, monday: date) -> dict:
         return {"category": category, "status": NO_MEASUREMENT, "movers": []}
     i = eligible[-1]
     run, previous = runs[i], (runs[i - 1] if i else None)
+    for r in filter(None, (run, previous)):
+        for e in r.get("extractions", []):
+            bucket(e)  # malformed flags stop the draft, as they stop a report
     now = brand_week(run)
     out = {"category": category, "measured": measured(run), "read": run["run_date"],
            "leader": now[0] if now else None, "top": now[:5], "movers": []}
@@ -52,6 +56,11 @@ def section(category: str, monday: date) -> dict:
     return out
 
 
+def md(text) -> str:
+    """Archived names are untrusted: keep them literal text in Markdown and HTML."""
+    return re.sub(r"([\\`*_\[\]()!#|<>~{}+.-])", r"\\\1", str(text))
+
+
 def label(category: str) -> str:
     spec = yaml.safe_load((ROOT / "questions" / f"{category}.yml").read_text(encoding="utf-8")) or {}
     return spec.get("label") or category
@@ -61,23 +70,24 @@ def render(monday: date, sections: list[dict]) -> str:
     lines = [f"# Unprompted: week of {monday.isoformat()}", "",
              "_Draft for review. Every number below comes from the published archive; edit wording, not figures._", ""]
     for s in sections:
-        lines += [f"## {label(s['category'])}", ""]
+        lines += [f"## {md(label(s['category']))}", ""]
         if "measured" in s:
             lines.append(f"Measured {s['measured']}" + (f" (read {s['read']})" if s["read"] != s["measured"] else "")
                          + (f", compared with {s['previous']}" if s.get("previous") else "") + ".")
             if s["leader"]:
                 b = s["leader"]
-                lines.append(f"Named first most often: **{b.brand}**, first in {b.first_named} of {b.total_runs} answers.")
+                lines.append(f"Named first most often: **{md(b.brand)}**, first in {b.first_named} of {b.total_runs} answers.")
             lines += ["", "Top five, ranked by how often each was named first (as on the chart):"]
-            lines += [f"{n}. {b.brand}: first in {b.first_named}, named at all in {b.named} of {b.total_runs}"
+            lines += [f"{n}. {md(b.brand)}: first in {b.first_named}, named at all in {b.named} of {b.total_runs}"
                       for n, b in enumerate(s["top"], 1)]
             lines.append("")
         if s["status"]:
             lines.append(s["status"])
         for m in sorted(s["movers"], key=lambda m: -abs(m.rotation_delta)):
             what = "dropped out" if m.is_dropout else f"{m.rotation_delta:+.1f} points"
-            lines.append(f"- {m.brand}: {what} in how often it was named")
+            lines.append(f"- {md(m.brand)}: {what} in how often it was named")
         lines += ["", f"Full chart: {SITE}/chart/{s['category']}", ""]
+    lines += ["---", "_Movement here follows the pipeline's rounding; a borderline case can be classed differently on the website._"]
     return "\n".join(lines)
 
 
@@ -88,7 +98,7 @@ def main() -> int:
     monday = date.fromisoformat(args.week)
     if monday.weekday() != 0:
         raise SystemExit("--week must be a Monday")
-    path = PRIVATE / "newsletter" / f"{monday.isoformat()}.md"
+    path = private_path("newsletter", f"{monday.isoformat()}.md")
     write_text(path, render(monday, [section(c, monday) for c in sorted(categories())]))
     print(path)
     return 0

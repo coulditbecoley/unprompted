@@ -73,3 +73,16 @@ def test_the_latest_measurement_in_the_week_is_compared_with_its_predecessor(arc
     archive(run("2026-11-04", 80))
     s = nl.section("alpha", MONDAY)
     assert s["measured"] == "2026-11-04" and s["previous"] == "2026-11-02"
+
+
+def test_malformed_flags_stop_the_draft(archive):
+    bad = run("2026-11-02", 50)
+    bad["extractions"][0]["refused"] = "false"
+    archive(bad)
+    with pytest.raises(ValueError, match="malformed"):
+        nl.section("alpha", MONDAY)
+
+
+def test_archived_names_stay_literal_text():
+    assert nl.md("![Acme](https://x.org/p)") == r"\!\[Acme\]\(https://x\.org/p\)"
+    assert nl.md("<img src=x>") == r"\<img src=x\>"

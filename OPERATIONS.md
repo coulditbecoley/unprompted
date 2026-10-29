@@ -14,7 +14,7 @@ what is published and when. Paid reports are private analyses of public data.
 
 | Agent | Does | Never |
 |---|---|---|
-| Odin | Triages requests from the form inbox into Paperclip tasks; tracks due dates | Quotes a price, promises a date, approves anything |
+| Odin | Triages the minimized requests Coley puts into Paperclip; tracks due dates | Reads the inbox; quotes a price, promises a date, approves anything |
 | Thor | Runs the generators in its isolated runner (below); proposes code changes to `brand_report.py`, `newsletter.py` and their tests as patches | Pushes to this repo; runs `unprompted.run`, `reextract` or anything that calls a provider |
 | Loki | Edits newsletter wording and drafts replies | Changes a number; sends anything |
 | Mimir | Reconciles the order ledger against a Stripe CSV export Coley provides | Holds a Stripe key; issues refunds |
@@ -50,13 +50,14 @@ Output goes to `private/` (gitignored). Nothing there is committed or synced.
 
 ## Order flow
 
-1. Request arrives (form inbox) → Odin opens a task with only: order ref, brand,
-   category, buyer's stated relationship (brand / competitor / agency / investor /
-   other), whether they asked for help.
+1. Request arrives in Coley's form inbox → Coley opens a Paperclip task with only:
+   order ref, brand, category, buyer's stated relationship (brand / competitor /
+   agency / investor / other), whether they asked for help. Odin triages from there;
+   agents never see the inbox or the buyer's contact details.
 2. Coley confirms scope and price and sends a Stripe Payment Link. The five
    working days start when he confirms scope **and** payment.
-3. Thor generates the report with `--through` set to the latest measured date and
-   records the archive commit printed in the report.
+3. Thor generates the report with `--through` set to the through-date agreed for
+   the order (from the ledger) and records the archive commit printed in the report.
 4. Heimdall checks: right brand and category, no causal claims, disclosure needed?
 5. Coley reviews and sends. Mimir updates the ledger.
 

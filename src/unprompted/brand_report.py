@@ -22,6 +22,8 @@ from pathlib import Path
 from statistics import median
 from urllib.parse import urlsplit
 
+import yaml
+
 from .aggregate import brand_week, comparison_reason, load_affiliations, load_history, self_preference, source_counts
 from .storage import write_text
 
@@ -64,7 +66,8 @@ def history(category: str, through: str | None = None) -> list[dict]:
         raise ValueError(f"unknown category: {category}")
     runs = load_history(ROOT / "data" / "runs", category)
     if through:
-        date.fromisoformat(through)
+        if date.fromisoformat(through).isoformat() != through:
+            raise ValueError("--through must be YYYY-MM-DD")
         runs = [r for r in runs if measured(r) <= through]
     if not runs:
         raise ValueError(f"no published measurements for {category}" + (f" through {through}" if through else ""))
@@ -88,7 +91,10 @@ def analyse(category: str, brand: str, through: str | None = None) -> dict:
                                                   if e.get("measurement_git_sha")}),
                       "n": len(answered), "named": row.named if row else 0, "first": row.first_named if row else 0,
                       "rank": next((i for i, b in enumerate(brand_week(r), 1) if b.brand == brand), None),
-                      "comparable": comparison_reason(r, previous) if previous else "first measurement in range"})
+                      "snapshot": bool(r.get("methodology")),
+                      "comparable": (comparison_reason(r, previous) if previous else "first measurement in range")
+                      or (None if r.get("methodology") and previous.get("methodology")
+                          else "comparable on recorded fields; one side has no configuration snapshot")})
         previous = r
 
     latest = runs[-1]
@@ -96,13 +102,15 @@ def analyse(category: str, brand: str, through: str | None = None) -> dict:
     answered = [e for e in rows if bucket(e) == "answered"]
     order = list(dict.fromkeys(e["question_id"] for e in answered))
     snapshot = {q["id"]: q["text"] for q in (latest.get("methodology", {}).get("questions") or {}).get("questions", [])}
+    bank = yaml.safe_load((ROOT / "questions" / f"{category}.yml").read_text(encoding="utf-8")) or {}
+    current = {q["id"]: q["text"] + " (current wording; not recorded in this run)" for q in bank.get("questions", [])}
 
     questions = []
     for qid in order:
         subset = [e for e in answered if e["question_id"] == qid]
         others = Counter(b["name"] for e in subset if not _hit(e, brand)
                          for b in {b["name"]: b for b in e.get("brands", [])}.values())
-        questions.append({"id": qid, "text": snapshot.get(qid), **tally(subset, brand),
+        questions.append({"id": qid, "text": snapshot.get(qid) or current.get(qid), **tally(subset, brand),
                           "without": sum(1 for e in subset if not _hit(e, brand)),
                           "instead": sorted(others.items(), key=lambda kv: (-kv[1], kv[0]))[:5]})
 
@@ -117,7 +125,7 @@ def analyse(category: str, brand: str, through: str | None = None) -> dict:
     absent = {**latest, "extractions": [e for e in answered if not _hit(e, brand)]}
 
     examples = []
-    for name in sorted({e["engine"] for e in answered}):
+    for name in sorted({e["engine"] for e in rows}):
         pick = next((e for qid in order for e in sorted(answered, key=lambda e: e["run_index"])
                      if e["engine"] == name and e["question_id"] == qid and (e.get("answer") or "").strip()), None)
         examples.append({"engine": name, "question_id": pick and pick["question_id"],
@@ -125,7 +133,7 @@ def analyse(category: str, brand: str, through: str | None = None) -> dict:
                          "names_brand": bool(pick and _hit(pick, brand))})
 
     affiliations = load_affiliations(ROOT / "aliases" / f"{category}.yml", run=latest)
-    return {"category": category, "brand": brand, "through": measured(latest), "weeks": weeks,
+    return {"category": category, "brand": brand, "through": through or measured(latest), "weeks": weeks,
             "latest": {"measured": measured(latest), "read": latest["run_date"], "attempted": len(rows),
                        "answered": len(answered), **tally(answered, brand)},
             "questions": questions, "engines": engines,
@@ -133,7 +141,6 @@ def analyse(category: str, brand: str, through: str | None = None) -> dict:
                         "absent": (len(absent["extractions"]), source_counts(absent)[:15])},
             "self_preference": [s.to_dict() if hasattr(s, "to_dict") else vars(s)
                                 for s in self_preference(latest, affiliations) if s.brand == brand],
-            "aliases_frozen": "aliases" in latest.get("methodology", {}),
             "examples": examples, "archive_commit": _archive_commit()}
 
 
@@ -172,7 +179,9 @@ def render(d: dict) -> str:
     week_rows = "".join(
         f"<tr><td>{esc(w['measured'])}</td><td>{esc(w['read'])}</td><td>{esc(w['rank'] or 'not named')}</td>"
         f"<td>{pct(w['named'], w['n'])}</td><td>{pct(w['first'], w['n'])}</td>"
-        f"<td>{'comparable with the previous row' if w['comparable'] is None else esc(w['comparable'])}</td></tr>"
+        f"<td>{'comparable with the previous row' if w['comparable'] is None else esc(w['comparable'])}</td>"
+        f"<td><small>reading {esc(w['reading_sha'])}<br>measurement {esc(', '.join(w['measurement_shas']) or None)}"
+        f"<br>{'configuration snapshot recorded' if w['snapshot'] else 'no configuration snapshot (legacy)'}</small></td></tr>"
         for w in d["weeks"])
     q_rows = "".join(
         f"<tr><td>{esc(q['id'])}</td><td>{esc(q['text'] or 'wording not recorded in this run')}</td>"
@@ -198,7 +207,6 @@ def render(d: dict) -> str:
             f"{'names' if x['names_brand'] else 'does not name'} {esc(d['brand'])}. Chosen as the first recorded "
             f"answer, not as representative.</p><pre>{esc(x['answer'])}</pre>" if x["answer"] else "<p>Example not recorded.</p>")
         for x in d["examples"])
-    shas = sorted({s for w in d["weeks"] for s in w["measurement_shas"]})
     questions_to_investigate = "".join(
         f"<li>{esc(q['id'])}: named in {pct(q['named'], q['n'])}. Which pages do the engines cite when they "
         f"name {esc(', '.join(b for b, _ in q['instead'][:3]))} here instead?</li>"
@@ -213,11 +221,11 @@ pre{{white-space:pre-wrap;background:#f6f6f6;padding:12px;font-size:13px}}.meta,
 <p class=meta>Unprompted · private brand report · prepared from the public archive</p>
 <h1>{esc(d['brand'])} in {esc(d['category'])}</h1>
 <p>Measurements through <b>{esc(d['through'])}</b>, as read on the archive commit below. In the latest
-measurement, {esc(d['brand'])} was named in {pct(L['named'], L['n'])} answered asks and named first in
+measurement ({esc(L['measured'])}), {esc(d['brand'])} was named in {pct(L['named'], L['n'])} answered asks and named first in
 {pct(L['first'], L['n'])}. {L['attempted'] - L['answered']} of {L['attempted']} asks were errors or refusals and are excluded.</p>
 
 <h2>Every published week</h2>
-<table><tr><th>Measured</th><th>Read</th><th>Rank</th><th>Named</th><th>Named first</th><th>Comparison</th></tr>{week_rows}</table>
+<table><tr><th>Measured</th><th>Read</th><th>Rank</th><th>Named</th><th>Named first</th><th>Comparison</th><th>Provenance</th></tr>{week_rows}</table>
 
 <h2>By question (latest week)</h2>
 <table><tr><th>ID</th><th>Question</th><th>Named</th><th>First</th><th>Named instead</th></tr>{q_rows}</table>
@@ -248,20 +256,27 @@ independent, so no confidence intervals are given.</li>
 <li>Usable answer = no error and not a recorded refusal (the site's definition).</li>
 <li>Some boundary cases of week-over-week significance can be classed differently on the website, which keeps
 full precision where this report follows the pipeline's rounding.</li>
-<li>Brand names follow each run's {'frozen' if d['aliases_frozen'] else 'current (no frozen copy recorded)'} alias map.</li>
+<li>Brand names follow each run's recorded alias map; weeks marked "no configuration snapshot" predate that
+record, and own-house figures for them use the current alias file.</li>
 <li>Archive commit: {esc(d['archive_commit'])}</li>
-<li>Reading commits: {esc(', '.join(sorted({w['reading_sha'] or 'not recorded' for w in d['weeks']})))}</li>
-<li>Measurement commits: {esc(', '.join(shas) or 'not recorded')}</li></ul>
+<li>Reading and measurement commits for each week are in the first table.</li></ul>
 </body></html>
 """
 
 
+def private_path(*parts: str) -> Path:
+    """A path under private/, refused if it resolves (junction, symlink, ..) anywhere
+    the weekly commit or the vault sync would collect it."""
+    path = PRIVATE.joinpath(*parts).resolve()
+    if (not path.is_relative_to(PRIVATE.resolve())
+            or any(path.is_relative_to((ROOT / d).resolve()) for d in ("data", "reports"))):
+        raise ValueError(f"private output would land outside private/: {path}")
+    return path
+
+
 def output_path(category: str, brand: str, through: str) -> Path:
     slug = re.sub(r"[^a-z0-9]+", "-", brand.lower()).strip("-")[:60] or "brand"
-    path = (PRIVATE / "brand" / category / f"{slug}-{through}.html").resolve()
-    if not path.is_relative_to(PRIVATE.resolve()):
-        raise ValueError("output path escapes private/")
-    return path
+    return private_path("brand", category, f"{slug}-{through}.html")
 
 
 def main() -> int:
