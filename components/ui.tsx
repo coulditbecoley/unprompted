@@ -102,7 +102,6 @@ export function SequencerRow({
             data-level={
               v >= 0.999 ? "4" : v >= 0.6 ? "3" : v >= 0.3 ? "2" : v > 0 ? "1" : "0"
             }
-            style={{ animationDelay: `${i * 30}ms` }}
           />
         ))}
       </span>

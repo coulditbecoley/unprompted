@@ -297,7 +297,8 @@ Fast and few. `--fast: 120ms` for state, 380-560ms for entrance, all on
 
 Entrance motion explains order, never decorates. On load the verdict, its
 lead and the stat tiles rise in sequence (`.rise` with a `--i` stagger), the
-question buffer types itself line by line, board steps fade up and share bars
+question buffer types itself line by line, each board row's squares wipe in
+left to right (one animation per row, not per square) and share bars
 (`.meter`, the rotation bar) grow from their left edge. Below the fold,
 sections enter as they scroll in (`.reveal`, a CSS scroll timeline, so there is
 no JavaScript and no observer). The trend line on a brand page draws left to

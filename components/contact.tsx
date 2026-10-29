@@ -114,7 +114,14 @@ export function Contact() {
         Send the page link, brand name and what you noticed. We’ll check the recorded answers.
       </p>
 
-      <form onSubmit={submit} className="contact-form">
+      <noscript>
+        <style>{".contact-polished .contact-form { display: none; }"}</style>
+        <p className="subscribe-lead">
+          Enable JavaScript to send a message, or{" "}
+          <a href="https://github.com/coulditbecoley/unprompted/issues">report a correction publicly on GitHub</a>.
+        </p>
+      </noscript>
+      <form onSubmit={submit} method="post" className="contact-form">
         {/* The provided markup had no labels at all. Placeholders are not
             labels: they vanish on focus and screen readers do not announce
             them as names for the field. */}

@@ -165,7 +165,7 @@ export default async function BrandPage({
             <h2 className="pick-h" style={{ marginTop: 6 }}>Every answer, one square each</h2>
             <div className="answer-grid" role="img" aria-label={`${row.named} of ${row.cells.length} answers named ${brand}.`}>
               {row.cells.map((on, i) => (
-                <i key={i} className="seq-cell" data-on={on} style={{ animationDelay: `${Math.min(i, 120) * 8}ms` }} />
+                <i key={i} className="seq-cell" data-on={on} />
               ))}
             </div>
             <p className="kpi-note" style={{ marginTop: 12 }}>

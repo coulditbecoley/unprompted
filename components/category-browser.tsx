@@ -43,6 +43,7 @@ export function CategoryBrowser({
 
   return (
     <>
+      <noscript><style>{".categories-page .cat-search { display: none; }"}</style></noscript>
       <div className="cat-search">
         <label htmlFor="cat-q" className="sr-only">
           Search categories

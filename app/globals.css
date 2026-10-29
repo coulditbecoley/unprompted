@@ -439,18 +439,21 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
 }
 @keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
-.seq-cells { display: flex; gap: 2px; width: 100%; }
+/* Each row's squares wipe in left to right as one animation. It used to be one
+   animation per square (390 on the flagship board), which kept the main thread
+   busy through load and cost the homepage most of its mobile Lighthouse TBT. */
+.seq-cells { display: flex; gap: 2px; width: 100%; animation: cellsIn 620ms var(--ease) backwards; }
+.answer-grid { animation: cellsIn 900ms var(--ease) backwards; }
+@keyframes cellsIn { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
 .seq-cell {
   flex: 1 1 auto; min-width: 5px; max-width: 30px; height: 22px; border-radius: 1px;
   background: var(--cell-0);
-  animation: cellIn 380ms var(--ease) backwards;
 }
 .seq-cell[data-level="1"] { background: var(--cell-1); }
 .seq-cell[data-level="2"] { background: var(--cell-2); }
 .seq-cell[data-level="3"] { background: var(--cell-3); }
 .seq-cell[data-level="4"] { background: var(--cell-4); }
 .seq-cell[data-on="true"] { background: var(--cell-4); }
-@keyframes cellIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 .seq-rot { font-family: var(--font-mono); font-size: 12px; text-align: right; color: var(--fg-2); }
 .seq-first { font-family: var(--font-mono); font-size: 12.5px; text-align: right; font-weight: 500; }
@@ -873,9 +876,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
    rest recede, so this survives greyscale and takes nothing from the ration
    that keeps green, red and blue meaningful.
 */
-/* filter, not opacity: .seq-cell runs `cellIn` on load, and an animation owns
-   the properties it animates while it runs. `cellIn` fills backwards only, so
-   once it ends transform is free again for the hover lift below. */
+/* filter, not opacity, so the dimming never fights an entrance animation for
+   the same property. */
 .seq-cells[data-focus="true"] .seq-cell:not([data-active="true"]) {
   filter: opacity(0.25);
 }
@@ -1623,7 +1625,6 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .method-table > .table-scroll-note { display: block; }
 }
 @media (max-width: 560px) {
-  :is(.cmp-page, .cns-page, .q-page) .kpi-row > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .q-reading { grid-template-columns: 1fr; gap: 12px; }
   .cat-search { grid-template-columns: 1fr; gap: 8px; }
   .cat-search-count { text-align: right; }
@@ -1687,6 +1688,8 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
   .cmp-chart-scroll > div { min-width: 0 !important; }
   .method-table table { min-width: 0; width: 100%; }
   .cns-strip, .cmp-plot, .q-coverage .meter { print-color-adjust: exact; }
+  /* Loaded answers can span many pages; do not push the whole card to a fresh page. */
+  .q-block:has(.q-answer) { break-inside: auto; }
   .q-engine-group::details-content, .q-answer::details-content { content-visibility: visible; display: block; }
   .q-engine-group > :not(summary), .q-answer > :not(summary) { display: block; }
 
