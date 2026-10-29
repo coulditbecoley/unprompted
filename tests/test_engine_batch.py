@@ -285,8 +285,11 @@ def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures
         raise SystemExit("stub category")
     monkeypatch.setattr(run, "run_category", category)
     if lock_fails:
-        def locked(root):
-            raise RuntimeError("another run holds the lock")
+        real = run.run_lock
+        def locked(root, name="run.lock", wait=0.0):
+            if name == "run.lock":  # the recovery phase's lock; the week lock is real
+                raise RuntimeError("another run holds the lock")
+            return real(root, name, wait)
         monkeypatch.setattr(run, "run_lock", locked)
     summary = tmp_path / "summary.json"
     monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26", "--summary-file", str(summary)])
@@ -602,3 +605,24 @@ def test_openai_queries_are_read_from_both_sdk_shapes(monkeypatch):
     engine = OpenAIEngine()
     engine.api_key = "offline"
     assert engine.ask_one("q1", "Which?", 0).metadata["queries"] == ["one", "two", "three"]
+
+
+def test_the_week_lock_spans_every_category(tmp_path, monkeypatch):
+    from unprompted import run
+    from unprompted.storage import run_lock
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta"])
+    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
+    held_during = []
+    def category(*a, **k):
+        try:
+            with run_lock(tmp_path / ".unprompted", "week.lock"):
+                held_during.append(False)
+        except OSError:
+            held_during.append(True)
+        raise RuntimeError("stop")
+    monkeypatch.setattr(run, "run_category", category)
+    monkeypatch.setattr(run.sys, "argv", ["run"])
+    run.main()
+    assert held_during == [True, True]

@@ -41,21 +41,21 @@ def pretty(slug: str) -> str:
 def pull() -> None:
     """Fast-forward only. A dirty or diverged repo is a human's problem.
 
-    Skipped while a weekly run holds the run lock: a pull then could swap in
-    new aliases or code between two categories of the same week.
+    Holds week.lock for the whole pull and skips it while a weekly run holds
+    that lock: a pull then could swap in new aliases or code between two
+    categories of the same week.
     """
     try:
-        with run_lock(REPO / ".unprompted"):
-            pass
+        with run_lock(REPO / ".unprompted", "week.lock"):
+            result = subprocess.run(
+                ["git", "pull", "--ff-only"],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+            )
     except OSError:
-        print("a run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
+        print("a weekly run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
         return
-    result = subprocess.run(
-        ["git", "pull", "--ff-only"],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-    )
     print(result.stdout.strip() or result.stderr.strip())
     if result.returncode != 0:
         print("pull failed, syncing whatever is already local", file=sys.stderr)

@@ -2,6 +2,7 @@
 import json
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -28,20 +29,34 @@ def write_text(path: Path, value: str, *, replace: bool = False) -> None:
 
 
 @contextmanager
-def run_lock(root: Path):
+def run_lock(root: Path, name: str = "run.lock", wait: float = 0.0):
+    """Exclusive lock on root/name; raises OSError if still held after `wait` seconds.
+
+    run.lock serialises paid jobs. week.lock spans one whole weekly run, all
+    categories included, and the daily sync's git pull, so inputs cannot
+    change between two categories of one week.
+    """
     # ponytail: serialize paid jobs; separate reservations if parallel jobs are needed.
     root.mkdir(parents=True, exist_ok=True)
-    with (root / "run.lock").open("a+b") as stream:
+    with (root / name).open("a+b") as stream:
         stream.seek(0)
         stream.write(b"0")
         stream.flush()
         stream.seek(0)
-        if os.name == "nt":
-            import msvcrt
-            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(1)
         try:
             yield
         finally:

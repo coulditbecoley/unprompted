@@ -2400,5 +2400,13 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
     from unprompted.storage import run_lock
     monkeypatch.setattr(sv, "REPO", tmp_path)
     monkeypatch.setattr(sv.subprocess, "run", lambda *a, **k: pytest.fail("pulled during a run"))
-    with run_lock(tmp_path / ".unprompted"):
+    with run_lock(tmp_path / ".unprompted", "week.lock"):
         sv.pull()
+    # And the pull itself holds the week: a weekly run cannot start inside it.
+    def git(*a, **k):
+        with pytest.raises(OSError):
+            with run_lock(tmp_path / ".unprompted", "week.lock"):
+                pass
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+    monkeypatch.setattr(sv.subprocess, "run", git)
+    sv.pull()
