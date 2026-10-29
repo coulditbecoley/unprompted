@@ -399,15 +399,21 @@ def _local_schema(model: type[BaseModel]) -> dict:
     return walk(model.model_json_schema())
 
 
-def _batch_entries(client, batch):
-    started = time.monotonic()
+def _wait_ended(client, batch, deadline: float | None = None):
+    from .engines.anthropic_batch import read_retrying
+
+    deadline = time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
     while batch.processing_status != "ended":
-        if time.monotonic() - started >= BATCH_MAX_WAIT_SECONDS:
+        if time.monotonic() >= deadline:
             raise TimeoutError(f"batch {batch.id} remains pending; collect it before new paid work")
         print(f"  batch {batch.id}: {batch.processing_status}", file=sys.stderr, flush=True)
-        time.sleep(min(BATCH_POLL_SECONDS, max(0, BATCH_MAX_WAIT_SECONDS - (time.monotonic() - started))))
-        batch = client.messages.batches.retrieve(batch.id)
-    yield from client.messages.batches.results(batch.id)
+        time.sleep(min(BATCH_POLL_SECONDS, max(0, deadline - time.monotonic())))
+        batch = read_retrying(lambda: client.messages.batches.retrieve(batch.id), deadline, f"batch {batch.id}")
+    return batch
+
+
+def _batch_entries(client, batch):
+    yield from client.messages.batches.results(_wait_ended(client, batch).id)
 
 
 def read_batch_results(checkpoint: Path):
@@ -432,16 +438,23 @@ def read_batch_results(checkpoint: Path):
     return entries
 
 
-def collect_batch(checkpoint: Path, api_key: str | None = None):
+def collect_batch(checkpoint: Path, api_key: str | None = None, deadline: float | None = None):
     """Download an existing extraction job only; never submit or re-extract."""
+    from .engines.anthropic_batch import read_retrying
+
     state = json.loads(checkpoint.read_text(encoding="utf-8"))
     if not state.get("id"):
         raise ValueError("ambiguous extraction batch submission; reconcile the provider job before retrying")
     destination = checkpoint.parent / "extraction-batch/results.json"
     if not destination.exists():
         client = _client(api_key)
-        entries = [entry.model_dump(mode="json") for entry in
-                   _batch_entries(client, client.messages.batches.retrieve(state["id"]))]
+        deadline = time.monotonic() + BATCH_MAX_WAIT_SECONDS if deadline is None else deadline
+        label = f"batch {state['id']}"
+        batch = _wait_ended(client, read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label), deadline)
+        # A dropped stream restarts the whole download; nothing partial is written.
+        entries = read_retrying(
+            lambda: [entry.model_dump(mode="json") for entry in client.messages.batches.results(batch.id)],
+            deadline, label)
         # Complete download first: parsing cannot strand the provider's usage.
         write_json(destination, {"id": state["id"], "identity": state["identity"], "entries": entries})
     return read_batch_results(checkpoint)

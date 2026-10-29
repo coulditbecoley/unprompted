@@ -168,3 +168,121 @@ def test_runs_are_priced_at_the_rates_of_their_own_date():
     assert rates_for("2026-09-28") is RATES
     assert cost_of_run(old)[1] == 1.25 and cost_of_run(new)[1] == 2.0
     assert cost_of_run(old, current_rates=True)[1] == 2.0
+
+
+
+def _stale_week(tmp_path, monkeypatch, engine, api):
+    """A paid Claude batch from an earlier week, submitted but never collected."""
+    monkeypatch.setattr(budget, "RUNS_DIR", tmp_path / "data/runs")
+    monkeypatch.setattr(budget, "HELD_DIR", tmp_path / "data/held")
+    monkeypatch.setattr(batch, "POLL_SECONDS", 0)
+    stale = tmp_path / ".unprompted/2026-10-19/alpha"
+    write_json(stale / "methodology.json", {})
+    api.retrieve = lambda identifier: NS(processing_status="in_progress")
+    monkeypatch.setattr(batch, "MAX_WAIT_SECONDS", 0)
+    with pytest.raises(TimeoutError):
+        batch.ask_batch(engine, [(engine, "q1", "Which?", 0)], stale, "sha")
+    monkeypatch.setattr(batch, "MAX_WAIT_SECONDS", 3600)
+    return stale / "claude-batch/state.json"
+
+
+def _week_spend():
+    return sum(cost_of_run(r)[1] for r in budget._archived_runs())
+
+
+def test_dropped_poll_connection_is_retried_and_old_weeks_are_collected_before_spending(tmp_path, monkeypatch):
+    # 2026-10-19: one reset connection while polling killed the category and
+    # left a paid batch uncollected, which then refused every later week.
+    from anthropic import APIConnectionError
+    import httpx
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    with pytest.raises(ValueError, match="unaccounted"):
+        budget._archived_runs()
+    drops = iter([True])
+    def flaky(identifier):
+        if next(drops, False):
+            raise APIConnectionError(request=httpx.Request("GET", "https://api.anthropic.com"))
+        return NS(processing_status="ended")
+    api.retrieve = flaky
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([stale], [])
+    spend = _week_spend()
+    assert spend > 0
+    api.retrieve = lambda identifier: pytest.fail("collected batch contacted provider")
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([], [])
+    assert _week_spend() == spend
+    assert len(submitted) == 1
+
+
+def test_outstanding_extraction_batches_are_collected_in_normal_and_reextract_dirs(tmp_path, monkeypatch):
+    from anthropic.types.messages import MessageBatchIndividualResponse
+    from unprompted import extract
+    reply = {"custom_id": "x0", "result": {"type": "errored", "error": {"type": "error", "error": {"type": "api_error", "message": "x"}}}}
+    jobs = [tmp_path / ".unprompted/2026-10-19/alpha/batch.json", tmp_path / ".unprompted/reextract/2026-10-19/beta/batch.json"]
+    for job in jobs:
+        write_json(job, {"id": "ext", "identity": "i", "answers": 1})
+    batches = NS(create=lambda **kw: pytest.fail("submitted"), retrieve=lambda key: NS(id=key, processing_status="ended"),
+                 results=lambda key: iter([NS(model_dump=lambda mode: reply)]))
+    monkeypatch.setattr(extract, "_client", lambda key: NS(messages=NS(batches=batches)))
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == (sorted(jobs), [])
+    assert all((job.parent / "extraction-batch/results.json").exists() for job in jobs)
+    assert batch.collect_outstanding(tmp_path / ".unprompted", "offline") == ([], [])
+
+
+@pytest.mark.parametrize("failure", ["malformed", "download", "deadline", "idless"])
+def test_recovery_failures_are_reported_and_keep_spending_blocked(tmp_path, monkeypatch, failure):
+    from anthropic import APIConnectionError
+    import httpx
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    state = json.loads(stale.read_text())
+    if failure == "malformed":
+        stale.write_text("{not json")
+    elif failure == "idless":
+        write_json(stale, {**state, "id": None}, replace=True)
+    else:
+        monkeypatch.setattr(batch, "RECOVERY_SECONDS", 0)
+        if failure == "download":
+            api.retrieve = lambda identifier: NS(processing_status="ended")
+            def dropped(identifier):
+                raise APIConnectionError(request=httpx.Request("GET", "https://api.anthropic.com"))
+            api.results = dropped
+    collected, failed = batch.collect_outstanding(tmp_path / ".unprompted", "offline")
+    assert collected == []
+    assert (failed == []) if failure == "idless" else (len(failed) == 1 and str(stale) in failed[0])
+    assert not stale.with_name("results.json").exists()
+    with pytest.raises(ValueError):
+        budget._archived_runs()
+    assert len(submitted) == 1
+
+
+@pytest.mark.parametrize("lock_fails", [False, True])
+def test_weekly_main_recovers_old_batches_before_categories_and_reports_failures(tmp_path, monkeypatch, lock_fails):
+    engine, api, submitted = install_provider(monkeypatch, ("end_turn",))
+    stale = _stale_week(tmp_path, monkeypatch, engine, api)
+    api.retrieve = lambda identifier: NS(processing_status="ended")
+    api.create = lambda **kwargs: pytest.fail("weekly start submitted paid work")
+    broken = tmp_path / ".unprompted/2026-10-12/beta/claude-batch/state.json"
+    broken.parent.mkdir(parents=True)
+    broken.write_text("{not json")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
+    seen = []
+    def category(name, date, **kwargs):
+        seen.append(json.loads(stale.read_text()).get("collected"))
+        raise SystemExit("stub category")
+    monkeypatch.setattr(run, "run_category", category)
+    if lock_fails:
+        def locked(root):
+            raise RuntimeError("another run holds the lock")
+        monkeypatch.setattr(run, "run_lock", locked)
+    summary = tmp_path / "summary.json"
+    monkeypatch.setattr("sys.argv", ["run", "--date", "2026-10-26", "--summary-file", str(summary)])
+    assert run.main() == run.HELD_EXIT_CODE
+    detail = json.loads(summary.read_text())["detail"]
+    if lock_fails:
+        assert seen == [False] and "recovery: outstanding-batch recovery raised RuntimeError" in detail
+    else:
+        assert seen == [True] and f"recovery: could not collect {broken}" in detail
+    assert len(submitted) == 1
