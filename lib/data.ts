@@ -6,6 +6,7 @@
  * what makes the archive publicly verifiable.
  */
 
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { cache } from "react";
 import path from "node:path";
@@ -61,11 +62,13 @@ function isRunRecord(v: unknown): v is RunRecord {
  * ponytail: holds every parsed published week in memory; a precomputed
  * standings file per week is the upgrade if that ever matters.
  */
-const parsedFiles = new Map<string, { text: string; value: unknown }>();
+const parsedFiles = new Map<string, { digest: string; value: unknown }>();
 function parseArchived(file: string): unknown {
   const text = fs.readFileSync(file, "utf-8");
+  // A digest rather than the text itself, so the cache holds one copy per week.
+  const digest = createHash("sha256").update(text).digest("hex");
   const hit = parsedFiles.get(file);
-  if (hit && hit.text === text) return hit.value;
+  if (hit && hit.digest === digest) return hit.value;
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -74,7 +77,7 @@ function parseArchived(file: string): unknown {
   }
   // Shared across requests now, so frozen: a page that sorted a cached week in
   // place would otherwise change it for every later reader.
-  parsedFiles.set(file, { text, value: deepFreeze(value) });
+  parsedFiles.set(file, { digest, value: deepFreeze(value) });
   return value;
 }
 
