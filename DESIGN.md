@@ -416,6 +416,16 @@ project in five seconds, and every page is built to the homepage's standard.
   headers that carry `aria-sort`, a row header per brand, and the step row's
   counts as the cell's accessible name.
 
+- **Colour only past the noise, everywhere.** Self-preference gaps are coloured
+  only when `exceedsNoise` holds (own and rival answers are separate samples);
+  otherwise they are grey, with a note saying so. The lead call on boards uses
+  `leadIsClear`, because first picks share one sample.
+- **Light ramp step 1 is `#bfcbe0`**, evenly between empty and step 2 (about
+  1.4:1 each way); the old `#cfd8e6` sat 1.23:1 from an empty square and read as
+  blank on white.
+- **The homepage brand finder** is a GET form to `/find`, which redirects an
+  exact name to its brand page and anything else to `/categories?q=`.
+
 ### Codex's pages (Compare, Consensus, Questions, Methodology, Categories)
 
 - **Questions: summaries first, original answers on demand.** The default page includes every recorded attempt's brand summary, including errors and refusals. Full answer text and source links load only for the selected `question=` through a native GET link. Selecting a question opens its assistant groups; individual answers remain native disclosures. Hide/load links preserve the filters. This flow works without JavaScript, and printing includes summaries plus any original answers already loaded, without fetching more.

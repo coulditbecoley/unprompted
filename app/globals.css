@@ -43,7 +43,7 @@
   --warn: #9a6200;
   /* Board cells: a four-level ramp from empty to full. */
   --cell-0: #ededed;
-  --cell-1: #cfd8e6;
+  --cell-1: #bfcbe0; /* evenly between empty (1.40:1) and step 2 (1.42:1); #cfd8e6 was 1.23:1 from empty */
   --cell-2: #9aabc7;
   --cell-3: #5c74a3;
   --cell-4: #1f3a6b;
@@ -1428,6 +1428,9 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 }
 
 /* === codex pages: start === */
+@media (forced-colors: none) {
+  :is(.cmp-page, .cns-page) .meter[data-tone="soft"] > i { background: var(--cell-3); }
+}
 .cmp-form .select { flex: 1 1 180px; max-width: 300px; min-width: 0; }
 .cmp-question-meter { width: clamp(24px, 7vw, 90px); }
 .cmp-key { background: var(--fg); }
@@ -1435,7 +1438,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cns-agreement, .q-coverage { padding: 20px; margin: 24px 0; }
 .cns-agreement .sub-h, .q-coverage .sub-h { margin-top: 0; }
 .cns-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-.cns-strip > span { width: 28px; height: 28px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--surface-2); }
+.cns-strip > span { width: 28px; height: 28px; border: 1px solid var(--fg-3); border-radius: 4px; background: var(--surface-2); }
 .cns-strip > span[data-agreed="true"] { background: var(--fg); border-color: var(--fg); }
 .cns-pick-meter { width: 100%; max-width: 90px; margin-top: 6px; }
 .cns-engine, .cns-pick, .cns-div-name { overflow-wrap: anywhere; min-width: 0; }
