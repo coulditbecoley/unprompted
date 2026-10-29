@@ -17,7 +17,6 @@ import {
   questionOrder,
   standings,
   topPickByEngine,
-  leadIsClear,
   theSnub,
 } from "@/lib/data";
 import { LiveBoard } from "@/components/board-live";
@@ -226,10 +225,7 @@ export default function Home() {
             <Freshness runDate={measured!} />
             {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
             <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
-            <Insights
-              board={board}
-              clearLead={board[1] ? leadIsClear(board[0].firstNamed, board[1].firstNamed, board[0].totalRuns) : null}
-            />
+            <Insights board={board} />
             <HowToRead runsPerQuestion={run.runs_per_question} />
             <LiveBoard
               questions={questionsInBoardOrder}

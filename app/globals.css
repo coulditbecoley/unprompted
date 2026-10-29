@@ -1326,6 +1326,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 
 /* Board page: the computed takeaways. */
 .insights { padding: 14px 18px; margin: 4px 0 16px; }
+.insights > .label { margin: 0; }
 .insights ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14.5px; color: var(--fg-2); line-height: 1.5; }
 .insights b { color: var(--fg); font-weight: 600; }
 
@@ -1349,7 +1350,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .eng-bars { display: grid; gap: 5px; }
 .eng-num { text-align: right; font-size: 14px; font-weight: 500; }
 .eng-num small { display: block; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--fg-3); margin-top: 2px; }
-@media (max-width: 560px) { .eng-row { grid-template-columns: 1fr 104px; } .eng-bars { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 560px) { .eng-row { grid-template-columns: 1fr auto; } .eng-bars { grid-column: 1 / -1; grid-row: 2; } }
 .bq-row { grid-template-columns: 1fr minmax(90px, 200px) 56px; align-items: center; gap: 16px; }
 .bq-text { color: var(--fg); text-decoration: none; font-size: 14px; }
 .bq-text:hover { text-decoration: underline; text-decoration-color: var(--fg-3); }

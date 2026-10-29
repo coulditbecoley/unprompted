@@ -295,6 +295,38 @@ export function leadIsClear(first1: number, first2: number, n: number): boolean 
   return (p1 - p2) / se > 1.96;
 }
 
+/**
+ * The two takeaways the board's "What stands out" box prints, decided here so
+ * they can be tested. Ties are decided on counts, never rounded percentages;
+ * the gap threshold (20 points) is compared in whole answers so floating-point
+ * rounding cannot drop an exact boundary.
+ */
+export function boardTakeaways(board: BrandStanding[]): {
+  lead:
+    | null
+    | { kind: "level"; a: BrandStanding; b: BrandStanding }
+    | { kind: "lead"; a: BrandStanding; b: BrandStanding; answers: number; clear: boolean };
+  gap: BrandStanding | null;
+} {
+  const [a, b] = board;
+  const lead = !a || !b
+    ? null
+    : a.firstNamed === b.firstNamed
+      ? ({ kind: "level", a, b } as const)
+      : ({
+          kind: "lead",
+          a,
+          b,
+          answers: a.firstNamed - b.firstNamed,
+          clear: leadIsClear(a.firstNamed, b.firstNamed, a.totalRuns),
+        } as const);
+  // Widest gap between "named at all" and "named first" in the top eight,
+  // leader included, so "widest" is literally true.
+  const top = board.slice(0, 8).sort((x, y) => y.named - y.firstNamed - (x.named - x.firstNamed))[0];
+  const gap = top && (top.named - top.firstNamed) * 5 >= top.totalRuns ? top : null;
+  return { lead, gap };
+}
+
 /** The 95% half-interval on a proportion, in percentage points. */
 export function marginOfError(p: number, n: number): number {
   if (n < 1) return 0;

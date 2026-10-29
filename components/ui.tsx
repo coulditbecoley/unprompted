@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import type { BrandStanding, Movement } from "@/lib/data";
+import { boardTakeaways } from "@/lib/metrics";
 // From lib/shared, not lib/data: this file is imported by a client component,
 // and lib/data reads the repository with node:fs.
 import { DISCLOSURE, OPERATOR, OPERATOR_URL, slugify } from "@/lib/shared";
@@ -512,45 +513,46 @@ export function TopPicks({
 
 /**
  * Two sentences a newcomer would otherwise have to work out from the board:
- * whether the lead is real at this sample size, and which brand is known but
- * not chosen. Computed, never written by hand.
+ * whether the lead is real at this sample size, and which brand is mentioned
+ * far more often than it is picked first. Decided by `boardTakeaways`.
  */
-export function Insights({ board, clearLead }: { board: BrandStanding[]; clearLead: boolean | null }) {
-  const [a, b] = board;
-  if (!a) return null;
-  // From the rounded figures, so the gap always matches the two numbers printed.
-  const pa = Math.round(a.firstShare * 100);
-  const pb = b ? Math.round(b.firstShare * 100) : 0;
-  const pts = pa - pb;
-  // The brand most often mentioned without being the first pick: biggest gap
-  // between "named at all" and "named first" among the top eight.
-  const gap = board
-    .slice(0, 8)
-    .filter((r) => r.brand !== a.brand)
-    .sort((x, y) => y.rotation - y.firstShare - (x.rotation - x.firstShare))[0];
+export function Insights({ board }: { board: BrandStanding[] }) {
+  const { lead, gap } = boardTakeaways(board);
+  const pct = (v: number) => Math.round(v * 100);
   const items: React.ReactNode[] = [];
-  if (b && pts === 0) {
+  if (lead?.kind === "level") {
     items.push(
       <>
-        <b>{a.brand}</b> and <b>{b.brand}</b> are level on first picks, at {pa}% each.
+        <b>{lead.a.brand}</b> and <b>{lead.b.brand}</b> are level on first picks, at {pct(lead.a.firstShare)}% each.
       </>,
     );
-  } else if (b) {
+  } else if (lead) {
+    // Points from the printed (rounded) figures, so the sentence matches them.
+    const pa = pct(lead.a.firstShare);
+    const pb = pct(lead.b.firstShare);
+    const verdict = lead.clear
+      ? "That gap is larger than the noise at this sample size."
+      : "At this sample size that is too close to call: treat them as level.";
     items.push(
-      <>
-        <b>{a.brand}</b> leads <b>{b.brand}</b> by {pts} point{pts === 1 ? "" : "s"} on first picks
-        ({pa}% to {pb}%).{" "}
-        {clearLead
-          ? "That gap is larger than the noise at this sample size."
-          : "At this sample size that is too close to call: treat them as level."}
-      </>,
+      pa === pb ? (
+        <>
+          <b>{lead.a.brand}</b> was named first in {lead.answers} more answer{lead.answers === 1 ? "" : "s"} than{" "}
+          <b>{lead.b.brand}</b>; both round to {pa}%. {verdict}
+        </>
+      ) : (
+        <>
+          <b>{lead.a.brand}</b> leads <b>{lead.b.brand}</b> by {pa - pb} point{pa - pb === 1 ? "" : "s"} on first
+          picks ({pa}% to {pb}%). {verdict}
+        </>
+      ),
     );
   }
-  if (gap && gap.rotation - gap.firstShare >= 0.2) {
+  if (gap) {
     items.push(
       <>
-        <b>{gap.brand}</b> comes up in {Math.round(gap.rotation * 100)}% of answers but is recommended
-        first in only {Math.round(gap.firstShare * 100)}%: well known, rarely the first choice.
+        <b>{gap.brand}</b> comes up in {pct(gap.rotation)}% of answers but is named first in{" "}
+        {pct(gap.firstShare)}%: the widest gap in the top eight between being mentioned and being the
+        first pick.
       </>,
     );
   }

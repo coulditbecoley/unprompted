@@ -22,7 +22,6 @@ import {
   sourceCounts,
   standings,
   topPickByEngine,
-  leadIsClear,
   theSnub,
 } from "@/lib/data";
 
@@ -175,10 +174,7 @@ export function ChartBoard({
         <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
       </div>
 
-      <Insights
-        board={board}
-        clearLead={board[1] ? leadIsClear(board[0].firstNamed, board[1].firstNamed, board[0].totalRuns) : null}
-      />
+      <Insights board={board} />
 
       <div className="btn-row" style={{ margin: "4px 0 6px" }}>
         <Link className="btn btn-sm" href={`/questions?c=${category.slug}&date=${run.run_date}`}>

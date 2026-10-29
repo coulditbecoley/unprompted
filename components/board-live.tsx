@@ -5,7 +5,6 @@ import { flushSync } from "react-dom";
 
 import { SequencerRow, TrimTop } from "@/components/ui";
 import type { BrandStanding, Movement } from "@/lib/data";
-import { slugify } from "@/lib/shared";
 
 /**
  * The board, with its steps made answerable.
@@ -238,7 +237,9 @@ export function LiveBoard({
             href={row.href}
             activeStep={active}
             onStep={setHover}
-            transitionName={`row-${slugify(row.standing.brand)}`}
+            // The board rank, not the slug: unique even if two names slugify
+            // alike, and fixed whatever the sort.
+            transitionName={`row-${row.rank}`}
           />
         ))}
       </div>

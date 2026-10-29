@@ -73,6 +73,7 @@ import {
   movement,
   theSnub,
   leadIsClear,
+  boardTakeaways,
   topPickByEngine,
   brandByEngine,
 } from "../lib/metrics.ts";
@@ -86,6 +87,20 @@ test("a lead is only called clear when it beats the shared-sample noise", () => 
   assert.equal(exceedsNoise(0.30, 300, 0.22, 300), true);
   assert.equal(leadIsClear(90, 66, 300), false);
   assert.equal(leadIsClear(10, 5, 20), false, "too few answers to call anything");
+});
+
+test("board takeaways decide ties on counts and gaps on whole answers", () => {
+  const row = (brand, named, firstNamed, totalRuns = 100) =>
+    ({ brand, named, firstNamed, totalRuns, rotation: named / totalRuns, firstShare: firstNamed / totalRuns });
+  // Equal counts are level; unequal counts that round alike are a lead, not a tie.
+  assert.equal(boardTakeaways([row("A", 50, 30), row("B", 40, 30)]).lead.kind, "level");
+  const near = boardTakeaways([row("A", 50, 30049, 100000), row("B", 40, 29501, 100000)]).lead;
+  assert.equal(near.kind, "lead");
+  assert.equal(near.answers, 548);
+  // Exactly 20 points of gap counts, despite 0.3 - 0.1 being 0.19999999999999998 in floats.
+  assert.equal(boardTakeaways([row("A", 50, 40), row("B", 30, 10)]).gap?.brand, "B");
+  assert.equal(boardTakeaways([row("A", 50, 40), row("B", 29, 10)]).gap, null);
+  assert.equal(boardTakeaways([row("A", 50, 40)]).lead, null, "one brand has no runner-up");
 });
 
 test("per-assistant splits add back up to the pooled board", () => {
