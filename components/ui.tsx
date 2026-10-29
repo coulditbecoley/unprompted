@@ -213,12 +213,32 @@ export function Disclosure() {
 export function SiteFooter() {
   return (
     <footer className="site-foot">
+      <div className="shell foot-grid">
+        <div className="foot-brand">
+          <Link href="/" className="wordmark" aria-label="Unprompted, home">
+            <Logo size={20} />
+          </Link>
+          <p>
+            A free weekly record of which brands AI assistants recommend when
+            nobody&rsquo;s paying. Every question and raw answer is public.
+          </p>
+        </div>
+        <nav className="foot-col" aria-label="Read">
+          <p className="label">Read</p>
+          <Link href="/categories">Categories</Link>
+          <Link href="/compare">Compare</Link>
+          <Link href="/consensus">Consensus</Link>
+          <Link href="/questions">Questions and answers</Link>
+        </nav>
+        <nav className="foot-col" aria-label="Check">
+          <p className="label">Check</p>
+          <Link href="/methodology">How we measure</Link>
+          <a href="https://github.com/coulditbecoley/unprompted">Source and raw data</a>
+          <a href="/feed.xml">RSS feed</a>
+          <a href="/llms.txt">llms.txt</a>
+        </nav>
+      </div>
       <div className="shell">
-        <p className="mono">
-          Unprompted · what AI recommends when nobody&rsquo;s paying ·{" "}
-          <a href="https://github.com/coulditbecoley/unprompted">source and data</a> ·{" "}
-          <a href="/feed.xml">RSS</a>
-        </p>
         <p className="mono foot-dim">
           <Disclosure />
         </p>
@@ -300,5 +320,135 @@ export function ToneBar({
         </span>
       )}
     </>
+  );
+}
+
+/* -- how to read the board ------------------------------------------------- */
+
+/**
+ * The board's key, in plain words. Every page that draws the board carries
+ * it, because a newcomer meets "named", "first" and a row of squares at once
+ * and none of the three explains itself.
+ */
+export function HowToRead({ runsPerQuestion }: { runsPerQuestion: number }) {
+  return (
+    <div className="howto" role="note" aria-label="How to read the board">
+      <p style={{ margin: 0 }}>
+        <b>
+          <span className="howto-swatch" aria-hidden="true">
+            <i style={{ background: "var(--cell-1)" }} />
+            <i style={{ background: "var(--cell-2)" }} />
+            <i style={{ background: "var(--cell-3)" }} />
+            <i style={{ background: "var(--cell-4)" }} />
+          </span>
+          Squares
+        </b>
+        One per question. Darker means more of that question&rsquo;s answers
+        named the brand, pooled across every assistant ({runsPerQuestion} runs each).
+      </p>
+      <p style={{ margin: 0 }}>
+        <b>Named</b>
+        How many answers mentioned the brand at all, out of every answer we got.
+      </p>
+      <p style={{ margin: 0 }}>
+        <b>First</b>
+        How often it was the very first brand recommended. The ranking uses this.
+      </p>
+      <p style={{ margin: 0 }}>
+        <b>Δ change</b>
+        Points up or down since the last comparable week. Small moves are shown
+        without an arrow because the sample cannot back them.
+      </p>
+    </div>
+  );
+}
+
+/* -- stat tiles ------------------------------------------------------------ */
+
+export function Kpi({
+  label,
+  value,
+  unit,
+  note,
+  meter,
+  i = 0,
+}: {
+  label: string;
+  value: React.ReactNode;
+  unit?: string;
+  note?: React.ReactNode;
+  /** 0..1, drawn as a neutral share bar under the figure. */
+  meter?: number;
+  i?: number;
+}) {
+  return (
+    <div className="kpi rise" style={{ "--i": i } as React.CSSProperties}>
+      <p className="kpi-label">{label}</p>
+      <p className="kpi-value">
+        {value}
+        {unit && <small>{unit}</small>}
+      </p>
+      {note && <p className="kpi-note">{note}</p>}
+      {meter !== undefined && (
+        <span className="meter" aria-hidden="true">
+          <i style={{ "--v": meter, "--i": i } as React.CSSProperties} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* -- top of the board as bars --------------------------------------------- */
+
+/**
+ * The leaders as two bars each: how often named at all, and how often first.
+ * Drawn side by side because the gap between them is the finding the mark
+ * encodes -- the brand named most is often not the one recommended first.
+ */
+export function LeaderBars({
+  rows,
+  hrefFor,
+  start = 0,
+  highlight,
+}: {
+  rows: BrandStanding[];
+  hrefFor: (brand: string) => string;
+  /** Board rank of the first row, when showing a slice from the middle. */
+  start?: number;
+  highlight?: string;
+}) {
+  return (
+    <div className="lb panel">
+      <div className="lb-key mono" aria-hidden="true">
+        <span><i className="lb-sw is-named" />Named in any answer</span>
+        <span><i className="lb-sw is-first" />Named first</span>
+      </div>
+      {rows.map((r, i) => (
+        <div className="lb-row reveal" key={r.brand} data-on={r.brand === highlight}>
+          <Link className="lb-brand" href={hrefFor(r.brand)}>
+            <span className="mono lb-rank">{String(start + i + 1).padStart(2, "0")}</span>
+            {r.brand}
+          </Link>
+          <div
+            className="lb-bars"
+            role="img"
+            aria-label={`${r.brand}: named in ${Math.round(r.rotation * 100)}% of answers, named first in ${Math.round(r.firstShare * 100)}%.`}
+          >
+            <span className="lb-bar">
+              <span className="meter" data-tone="soft">
+                <i style={{ "--v": r.rotation, "--i": i } as React.CSSProperties} />
+              </span>
+              <span className="mono">{Math.round(r.rotation * 100)}%</span>
+            </span>
+            <span className="lb-bar">
+              <span className="meter">
+                <i style={{ "--v": r.firstShare, "--i": i + 1 } as React.CSSProperties} />
+              </span>
+              <span className="mono">{Math.round(r.firstShare * 100)}%</span>
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

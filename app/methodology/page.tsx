@@ -1,3 +1,4 @@
+import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
 import fs from "node:fs";
 import path from "node:path";
@@ -6,7 +7,8 @@ import { REPO_ROOT } from "@/lib/data";
 import { TrimTop } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "Method",
+  title: "How we measure AI brand mentions",
+  openGraph: { title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
   description:
     "Exactly how Unprompted measures what AI assistants recommend, including what it deliberately does not measure.",
 };
@@ -18,22 +20,54 @@ export const metadata: Metadata = {
  */
 export default function MethodologyPage() {
   const raw = fs.readFileSync(path.join(REPO_ROOT, "METHODOLOGY.md"), "utf-8");
-  const blocks = renderMarkdown(raw);
+  const body = raw.replace(/^# Methodology\s*\n/, "");
+  const introAt = body.indexOf("Unprompted measures");
+  const changes = introAt > 0 && body.startsWith("**Version") ? body.slice(0, introAt).trim() : "";
+  const content = changes ? body.slice(introAt) : body;
+  const blocks = renderMarkdown(content);
+  const headings = [...content.matchAll(/^#{2,3} (.+)$/gm)].map(m => ({ text: m[1].trim(), id: headingId(m[1].trim()) }));
 
   return (
     <section className="shell section">
-      <div className="panel" style={{ marginBottom: 26, padding: "16px 20px 16px 28px" }}>
+      <h1 className="display page-title rise">How the measurement works.</h1>
+      <p className="section-lead">
+        How we count brand mentions in AI answers, check the results, and decide
+        what we can fairly compare. Use this guide to understand what the charts
+        can and cannot tell you.
+      </p>
+      {changes && <aside className="panel method-changes" aria-labelledby="recent-changes">
+        <h2 id="recent-changes">What changed recently</h2>
+        <div className="prose">{renderMarkdown(changes)}</div>
+      </aside>}
+      <ol className="method-flow" aria-label="From questions to published results">
+        {[
+          ["Ask", "Repeat the category’s buying questions across AI assistants."],
+          ["Count", "Read the answers and record which brands were named."],
+          ["Check", "Hold results that fail the publication checks."],
+          ["Publish", "Keep passing results and their evidence in the public archive."],
+        ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
+          <span className="mono method-step" aria-hidden="true">{i + 1}</span>
+          <h2 id={`process-${title.toLowerCase()}`}>{title}</h2><p>{detail}</p>
+        </li>)}
+      </ol>
+      <div className="panel reveal" style={{ marginBottom: 26, padding: "16px 20px 16px 28px" }}>
         <TrimTop />
         <p style={{ fontSize: 14.5, margin: 0, color: "var(--fg-2)" }}>
-          This page is rendered directly from{" "}
+          The full method below comes from{" "}
           <a href="https://github.com/coulditbecoley/unprompted/blob/main/METHODOLOGY.md">
             METHODOLOGY.md
           </a>{" "}
-          in the public repository, so what you read here is the file the pipeline
-          actually runs under.
+          in the public repository. Each published measurement records the
+          method version used at the time.
         </p>
       </div>
-      <div className="prose">{blocks}</div>
+      <div className="method-layout">
+        <details className="method-toc panel" open>
+          <summary>On this page</summary>
+          <nav aria-label="Methodology sections">{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
+        </details>
+        <div className="prose methodology-copy">{blocks}</div>
+      </div>
     </section>
   );
 }
@@ -44,7 +78,7 @@ export default function MethodologyPage() {
  * render one file we control would be more machinery than the job needs.
  */
 function renderMarkdown(md: string): React.ReactNode[] {
-  const lines = md.split("\n");
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out: React.ReactNode[] = [];
   let i = 0;
   let key = 0;
@@ -66,10 +100,11 @@ function renderMarkdown(md: string): React.ReactNode[] {
     const heading = /^(#{1,4})\s+(.*)$/.exec(line);
     if (heading) {
       const level = heading[1].length;
-      const text = inline(heading[2]);
-      if (level === 1) out.push(<h1 key={key++} style={{ fontSize: "clamp(28px,5vw,44px)", fontWeight: 800, margin: "0 0 14px" }}>{text}</h1>);
-      else if (level === 2) out.push(<h2 key={key++}>{text}</h2>);
-      else out.push(<h3 key={key++}>{text}</h3>);
+      const id = headingId(heading[2]);
+      const text = <>{inline(heading[2])} <SectionLink id={id} label={heading[2]} /></>;
+      if (level === 1) out.push(<h2 className="sub-h" id={id} key={key++}>{text}</h2>);
+      else if (level === 2) out.push(<h2 id={id} key={key++}>{text}</h2>);
+      else out.push(<h3 id={id} key={key++}>{text}</h3>);
       i += 1;
       continue;
     }
@@ -125,36 +160,28 @@ function renderMarkdown(md: string): React.ReactNode[] {
       continue;
     }
 
-    if (/^[-*]\s+/.test(line)) {
+    if (/^(?:[-*]|\d+\.)\s+/.test(line)) {
+      const ordered = /^\d+\./.test(line);
+      const marker = ordered ? /^\d+\.\s+/ : /^[-*]\s+/;
       const items: string[] = [];
-      while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^[-*]\s+/, ""));
+      const start = ordered ? Number.parseInt(line, 10) : undefined;
+      while (i < lines.length && marker.test(lines[i])) {
+        const item = [lines[i].replace(marker, "")];
         i += 1;
+        // Wrapped prose belongs to the preceding item, not a new paragraph/list.
+        while (i < lines.length && lines[i].trim() && !/^\s*(?:#{1,6}\s|[-*]\s|\d+\.\s|```|\||---)/.test(lines[i])) {
+          item.push(lines[i].trim());
+          i += 1;
+        }
+        items.push(item.join(" "));
       }
-      out.push(
-        <ul key={key++}>
-          {items.map((it, n) => <li key={n}>{inline(it)}</li>)}
-        </ul>,
-      );
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\.\s+/, ""));
-        i += 1;
-      }
-      out.push(
-        <ol key={key++}>
-          {items.map((it, n) => <li key={n}>{inline(it)}</li>)}
-        </ol>,
-      );
+      const children = items.map((item, n) => <li key={n}>{inline(item)}</li>);
+      out.push(ordered ? <ol start={start} key={key++}>{children}</ol> : <ul key={key++}>{children}</ul>);
       continue;
     }
 
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^[#|\-*>`]|^\d+\./.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !/^(?:#{1,4}\s|\||[-*]\s|>\s|```|---|\d+\.\s)/.test(lines[i])) {
       para.push(lines[i]);
       i += 1;
     }
@@ -198,4 +225,8 @@ function inline(text: string): React.ReactNode {
 
   if (last < text.length) parts.push(text.slice(last));
   return parts;
+}
+
+function headingId(text: string): string {
+  return `method-${text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 }

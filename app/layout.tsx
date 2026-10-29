@@ -1,10 +1,25 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 
 import { Beacon } from "@/components/beacon";
 import "./globals.css";
 import { SiteFooter, SiteHeader } from "@/components/ui";
 import { ThemeToggle } from "@/components/theme-toggle";
+
+// Self-hosted at build time: no render-blocking stylesheet from a third
+// party, no layout shift while the face swaps in, and no visitor IP sent to
+// Google on every page view.
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#08090a" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
+  colorScheme: "dark light",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://unprompted.report"),
@@ -32,14 +47,8 @@ const NO_FLASH = `(function(){try{var t=localStorage.getItem('unprompted-theme')
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
-        />
         <link
           rel="alternate"
           type="application/atom+xml"
@@ -77,9 +86,10 @@ the finish review, the verdict, and DESIGN.md
 -->`,
           }}
         />
+        <a className="skip-link" href="#main">Skip to content</a>
         <ThemeToggle />
         <SiteHeader />
-        <main>{children}</main>
+        <main id="main">{children}</main>
         <SiteFooter />
         {/*
           Suspense because Beacon reads useSearchParams, which Next requires be

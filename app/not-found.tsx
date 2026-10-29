@@ -1,4 +1,11 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Page not found",
+  description: "This address does not match a page. Browse Unprompted’s public AI brand charts to find the results you need.",
+  openGraph: { title: "Page not found · Unprompted", description: "Find a public AI brand chart or browse the categories." },
+};
 
 /**
  * The page that did not exist.
@@ -15,19 +22,17 @@ export default function NotFound() {
   return (
     <section className="shell section" data-not-found>
       <p className="label">404</p>
-      <h1 className="display" style={{ maxWidth: "18ch" }}>
+      <h1 className="display page-title rise">
         That page is not here.
       </h1>
       <p className="section-lead">
-        Nothing has been deleted: run data is append-only and every week ever
-        published is still where it was. This address just never named anything.
+        We could not find a page at this address. Check the link, or browse the
+        categories to find a chart and its published history.
       </p>
-      <p className="mono" style={{ fontSize: 12.5 }}>
-        <Link href="/">The current board →</Link>
-      </p>
-      <p className="mono" style={{ fontSize: 12.5 }}>
-        <Link href="/categories">Every category →</Link>
-      </p>
+      <div className="btn-row rise">
+        <Link className="btn btn-go" href="/">See the current board <span className="arr" aria-hidden="true">→</span></Link>
+        <Link className="btn" href="/categories">Browse categories</Link>
+      </div>
     </section>
   );
 }
