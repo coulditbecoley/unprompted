@@ -43,7 +43,9 @@ and newsletter drafts (gitignored).
   the extractor is a method change: bump `method_version` in `questions/*.yml`
   and add a dated section to `METHODOLOGY.md`. The runner refuses otherwise.
 - An "unaccounted batch" refusal is fixed with `python -m unprompted.run
-  --collect-only`, never by deleting the checkpoint.
+  --collect-only`, never by deleting the checkpoint. If it reports a
+  submission with no batch id, the owner reconciles it in the provider
+  console; nothing is resubmitted.
 - Alias decisions (`aliases/`) are the owner's; propose, don't commit.
 - The CLI engines' arguments in `src/unprompted/cli_provider.py` are their
   isolation; probe any change against the real binary.

@@ -150,7 +150,9 @@ REM log and Task Scheduler's last result.
 set "LOCAL_SHA="
 set "REMOTE_SHA="
 for /f %%H in ('git rev-parse HEAD') do set "LOCAL_SHA=%%H"
-for /f %%H in ('git -c http.lowSpeedLimit^=1000 -c http.lowSpeedTime^=120 ls-remote origin refs/heads/main') do set "REMOTE_SHA=%%H"
+"%UNPROMPTED_PYTHON%" scripts\timed.py 180 git ls-remote origin refs/heads/main > "%TEMP%\unprompted-remote.txt" 2>> "%TEMP%\unprompted-weekly.log"
+if errorlevel 1 goto :sha_mismatch
+for /f "usebackq" %%H in ("%TEMP%\unprompted-remote.txt") do set "REMOTE_SHA=%%H"
 if "%LOCAL_SHA%"=="" goto :sha_mismatch
 if "%REMOTE_SHA%"=="" goto :sha_mismatch
 if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch

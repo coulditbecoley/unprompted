@@ -51,6 +51,7 @@ def test_batch_reuses_identity_preserves_evidence_and_never_retries_paid_results
     assert by_index[0].text == "Alpha is an option."
     assert by_index[0].usage["batch_billed"] == 1
     assert by_index[0].usage["cache_creation_1h_input_tokens"] == 100
+    assert by_index[0].metadata == {"model": "claude-opus-5", "stop_reason": "end_turn"}
     assert by_index[1].text == "" and by_index[1].error is None
     assert by_index[2].error and by_index[2].usage["output_tokens"] == 100
     assert by_index[3].error.endswith("expired") and not by_index[3].usage
@@ -109,7 +110,7 @@ def test_budget_estimates_discount_without_repricing_history():
 def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch):
     import openai
     from unprompted.engines.openai_engine import OpenAIEngine
-    response = NS(output_text="Alpha", status="completed", output=[NS(type="web_search_call"),
+    response = NS(output_text="Alpha", status="completed", model="gpt-6-sol-2026-09-01", output=[NS(type="web_search_call"),
                   NS(type="message"), NS(type="web_search_call")], usage=NS(
         input_tokens=1000, output_tokens=200, input_tokens_details=NS(cached_tokens=500),
         output_tokens_details=NS(reasoning_tokens=150)))
@@ -120,6 +121,7 @@ def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch)
     assert answer.usage["web_searches"] == 2
     assert answer.usage["cached_input_tokens"] == 500
     assert answer.usage["reasoning_tokens"] == 150
+    assert answer.metadata == {"model": "gpt-6-sol-2026-09-01", "status": "completed"}  # who really answered
     response.output = []
     assert engine.ask_one("q1", "Which?", 1).usage["web_searches"] == 0
 
@@ -253,7 +255,9 @@ def test_recovery_failures_are_reported_and_keep_spending_blocked(tmp_path, monk
             api.results = dropped
     collected, failed = batch.collect_outstanding(tmp_path / ".unprompted", "offline")
     assert collected == []
-    assert (failed == []) if failure == "idless" else (len(failed) == 1 and str(stale) in failed[0])
+    assert len(failed) == 1 and str(stale) in failed[0]
+    if failure == "idless":  # reported for the owner to reconcile, never resubmitted
+        assert "reconciliation" in failed[0]
     assert not stale.with_name("results.json").exists()
     with pytest.raises(ValueError):
         budget._archived_runs()
@@ -399,14 +403,23 @@ def test_gemini_is_told_to_search_and_reports_the_model_google_serves(monkeypatc
     def urlopen(request, timeout):
         sent.append(json.loads(request.data))
         return io.BytesIO(json.dumps(body).encode())
+    from unprompted import budget
     monkeypatch.setattr(gemini_engine.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    monkeypatch.setattr(budget, "spent_in_month", lambda when: budget.MONTHLY_CEILING)
     engine = gemini_engine.GeminiEngine()
     engine.api_key = "offline"
+    with pytest.raises(ProviderError, match="budget is spent"):
+        engine.identify()
+    assert not sent
+    monkeypatch.setattr(budget, "spent_in_month", lambda when: 0)
     assert engine.identify() == {"model": "gemini-3.6-flash", "version": "requested gemini-3.5-flash"}
-    assert sent[0]["system_instruction"]["parts"][0]["text"].endswith("Search the web for current information before answering.")
+    probe = sent[0]  # bounded and search-free
+    assert "tools" not in probe and probe["generationConfig"]["maxOutputTokens"] == 16
     engine.identify()
     assert len(sent) == 1  # once per process
+    engine.ask_one("q1", "Which?", 0)
+    assert sent[1]["system_instruction"]["parts"][0]["text"].endswith("Search the web for current information before answering.")
     # Re-routed mid-run: the text and usage stay, the answer does not count.
     body["modelVersion"] = "gemini-3.8-flash"
     moved = engine.ask_one("q1", "Which?", 0)
@@ -485,3 +498,30 @@ def test_collect_only_downloads_and_spends_nothing(tmp_path, monkeypatch):
                         lambda *a: ([tmp_path / "job"], ["could not collect other"]))
     monkeypatch.setattr(run.sys, "argv", ["run", "--collect-only"])
     assert run.main() == 1
+
+
+def test_extracted_brand_names_survive_normalisation_for_free_alias_rereads():
+    from unprompted.models import BrandMention, Extraction
+    from unprompted.normalize import AliasMap, normalize
+    ex = Extraction("one", "q1", 0, brands=[BrandMention("Acme Inc", 1), BrandMention("Mystery", 2),
+                                             BrandMention("Dropped", 3)], answer="Acme Inc, Mystery, Dropped")
+    (cleaned,), quarantined = normalize([ex], AliasMap({"Acme": ["Acme Inc"]}, ["Dropped"]))
+    assert [b.name for b in cleaned.brands] == ["Acme"] and quarantined == ["Mystery"]
+    assert [b["name"] for b in cleaned.to_dict()["extracted"]] == ["Acme Inc", "Mystery", "Dropped"]
+    normalize([cleaned], AliasMap({"Acme": ["Acme Inc"]}, []))
+    assert cleaned.extracted[0]["name"] == "Acme Inc"  # a second pass keeps the original reading
+    assert "extracted" not in Extraction("one", "q1", 0).to_dict()  # older records round-trip unchanged
+
+
+def test_timed_ends_the_whole_process_tree(tmp_path):
+    # git leaves network work to helper processes; a timeout must end them too.
+    import subprocess, sys, time
+    marker = tmp_path / "survivor"
+    child = f"import time; time.sleep(3); open({str(marker)!r}, 'w').write('x')"
+    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(30)"
+    started = time.monotonic()
+    code = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / "scripts/timed.py"), "1",
+                           sys.executable, "-c", parent]).returncode
+    assert code == 124 and time.monotonic() - started < 15
+    time.sleep(4)
+    assert not marker.exists()

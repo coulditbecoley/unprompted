@@ -56,7 +56,11 @@ class OpenAIEngine(Engine):
         )
         if getattr(response, "status", None) not in {None, "completed"}:
             usage["incomplete_response"] = 1
-        return text, sources, usage
+        # Which model answered, as the provider reports it: a pin can be
+        # re-routed upstream (Gemini, October 2026) and this is the only proof.
+        metadata = {k: v for k, v in (("model", getattr(response, "model", None)),
+                                      ("status", getattr(response, "status", None))) if isinstance(v, str)}
+        return text, sources, usage, metadata or None
 
 
 def _collect_citations(response: object) -> list[str]:

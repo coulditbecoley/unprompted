@@ -35,7 +35,13 @@ class AnthropicEngine(Engine):
 
         client = Anthropic(api_key=self.api_key, timeout=TIMEOUT_SECONDS, max_retries=0)
         response = client.messages.create(**request_params(question))
-        return read_response(response)
+        return (*read_response(response), response_metadata(response))
+
+
+def response_metadata(response: object) -> dict | None:
+    """Which model answered and why it stopped, as the provider reports them."""
+    metadata = {k: v for k in ("model", "stop_reason") if isinstance(v := getattr(response, k, None), str)}
+    return metadata or None
 
 def read_response(response: object) -> tuple[str, list[str], dict[str, int]]:
     # A refusal is a real outcome, not an error. Surface it as empty text so

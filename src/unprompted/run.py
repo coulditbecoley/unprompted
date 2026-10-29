@@ -514,7 +514,7 @@ def main() -> int:
     )
     parser.add_argument("--date", default=date.today().isoformat())
     parser.add_argument("--summary-file", type=Path, help="write category outcomes for the scheduler notification")
-    parser.add_argument("--dry-run", action="store_true", help="write no files, but still make PAID provider calls")
+    parser.add_argument("--dry-run", action="store_true", help="still makes PAID provider calls and keeps their checkpoints in .unprompted/; only the final run record is not written")
     parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
     parser.add_argument(

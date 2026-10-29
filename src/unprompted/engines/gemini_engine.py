@@ -105,13 +105,18 @@ class GeminiEngine(Engine):
         calls like any other unversioned model change. Every measured answer is
         then checked against it (`_one_call`). Once per process, failures
         included, so a bad probe is not repeated for every category.
-        ponytail: the probe's own usage (a few hundred tokens, no search) is not
-        added to the budget; record it if probes ever grow.
+        ponytail: the probe has no search tool and at most 16 output tokens with
+        minimal thinking, under $0.001; it is refused once the month's budget is
+        spent but not itself added to it.
         """
         if MODEL not in _SERVED:
             refuse_new_paid_work("Gemini model probe")
+            from datetime import date
+            from ..budget import MONTHLY_CEILING, spent_in_month
+            if spent_in_month(date.today()) >= MONTHLY_CEILING:
+                raise ProviderError("gemini: the month's budget is spent, so not even the model probe runs")
             try:
-                _, _, _, metadata = self._one_call("Reply with just the word OK.")
+                metadata = self._probe()
                 if not metadata.get("modelVersion"):
                     raise ProviderError("gemini: the response did not say which model answered")
                 _SERVED[MODEL] = metadata["modelVersion"]
@@ -121,6 +126,18 @@ class GeminiEngine(Engine):
         if isinstance(_SERVED[MODEL], ProviderError):
             raise _SERVED[MODEL]
         return {"model": _SERVED[MODEL], "version": f"requested {MODEL}"}
+
+    def _probe(self) -> dict:
+        """The response's model fields for a tiny, search-free request."""
+        payload = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": "Reply with just the word OK."}]}],
+            "generationConfig": {"maxOutputTokens": 16, "thinkingConfig": {"thinkingLevel": "minimal"}},
+        }).encode("utf-8")
+        request = urllib.request.Request(ENDPOINT.format(model=MODEL), data=payload, method="POST",
+                                         headers={"x-goog-api-key": self.api_key or "", "Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        return {k: body[k] for k in ("modelVersion",) if k in body}
 
     def _one_call(self, question: str) -> tuple[str, list[str], dict[str, int]]:
         payload = json.dumps(

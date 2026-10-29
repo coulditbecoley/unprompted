@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-from .anthropic_engine import request_params, read_response, TIMEOUT_SECONDS
+from .anthropic_engine import request_params, read_response, response_metadata, TIMEOUT_SECONDS
 from .base import refuse_new_paid_work, utc_now, wait_deadline
 from ..models import EngineAnswer
 from ..storage import write_json
@@ -107,7 +107,9 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
         answer.measurement_git_sha = state["measurement_git_sha"]
         result = entry["result"]
         if result["type"] == "succeeded":
-            answer.text, answer.sources, answer.usage = read_response(Message.model_validate(result["message"]))
+            message = Message.model_validate(result["message"])
+            answer.text, answer.sources, answer.usage = read_response(message)
+            answer.metadata = response_metadata(message)
             answer.usage["batch_billed"] = 1
             if answer.usage.get("incomplete_response"):
                 answer.error = "engine failed: incomplete batch response"
@@ -117,7 +119,9 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
             raise ValueError("unknown Claude batch result type")
         destination = state_path.parent.parent / f"claude-{answer.question_id}-{answer.run_index}.json"
         if destination.exists():
-            if json.loads(destination.read_text(encoding="utf-8")) != answer.to_dict():
+            saved = json.loads(destination.read_text(encoding="utf-8"))
+            # Checkpoints written before answers carried metadata (2026-10-29) match without it.
+            if saved != answer.to_dict() and saved != {k: v for k, v in answer.to_dict().items() if k != "metadata"}:
                 raise ValueError(f"Claude checkpoint differs from batch result: {destination}")
         else:
             write_json(destination, answer.to_dict())
@@ -152,7 +156,10 @@ def collect_outstanding(state_dir: Path, api_key: str) -> tuple[list[Path], list
             continue
         try:
             saved = json.loads(job.read_text(encoding="utf-8"))
-            if not saved.get("id"):
+            if not saved.get("id") and not (job in claude and saved.get("collected")):
+                # Never resubmitted: the POST may have succeeded. Reported, so
+                # --collect-only cannot claim the guard is satisfied.
+                failed.append(f"needs reconciliation in the provider console (submission has no batch id): {job}")
                 continue
             if job in claude:
                 if saved.get("collected"):

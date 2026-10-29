@@ -68,10 +68,12 @@ export async function GET() {
     }
     const board = standings(run);
     const leader = board[0];
+    // The week the answers were collected; a re-reading has a later run_date.
+    const week = run.measured_on || run.run_date;
     const detail = leader
       ? `${leader.brand} was named first in ${Math.round(leader.firstShare * 100)}% ` +
-        `of ${leader.totalRuns} answered runs, week of ${run.run_date}`
-      : `no brand was named, week of ${run.run_date}`;
+        `of ${leader.totalRuns} answered runs, week of ${week}`
+      : `no brand was named, week of ${week}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
     // The full record, for readers that would rather count than quote.
     lines.push(`  Data: https://raw.githubusercontent.com/coulditbecoley/unprompted/main/data/runs/${run.run_date}/${category.slug}.json`);
