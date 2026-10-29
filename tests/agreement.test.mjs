@@ -74,6 +74,7 @@ import {
   theSnub,
   leadIsClear,
   boardTakeaways,
+  brandPositions,
   topPickByEngine,
   brandByEngine,
 } from "../lib/metrics.ts";
@@ -115,6 +116,8 @@ test("per-assistant splits add back up to the pooled board", () => {
   // Engine a puts X and Y first once each: a tie, reported as a tie.
   const picks = topPickByEngine(run);
   assert.deepEqual(picks.find(p => p.engine === "a").brands.sort(), ["X", "Y"]);
+  // Positions cover every answered run that named the brand, and nothing else.
+  assert.deepEqual(brandPositions(run, "X"), [2, 1, 0, 0]);
 });
 
 test("ties, missing engines and pluralities cannot manufacture consensus", () => {

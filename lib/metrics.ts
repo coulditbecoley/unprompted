@@ -631,6 +631,20 @@ export function topPickByEngine(
   return out;
 }
 
+/**
+ * Where in the answer a brand appears when it is named: first, second, third,
+ * or later. Counts over answered runs that named it, so the four add up to the
+ * board's "named" figure.
+ */
+export function brandPositions(run: RunRecord, brand: string): [number, number, number, number] {
+  const out: [number, number, number, number] = [0, 0, 0, 0];
+  for (const ex of answered(run)) {
+    const hit = ex.brands.find((b) => b.name === brand);
+    if (hit) out[Math.min(Math.max(hit.position, 1), 4) - 1] += 1;
+  }
+  return out;
+}
+
 /* -- tone ----------------------------------------------------------------- */
 
 export type Tone = { positive: number; neutral: number; negative: number; total: number };

@@ -50,7 +50,7 @@ async page => {
   await table.focus();
   check(await table.evaluate(el => getComputedStyle(el).outlineStyle !== 'none'), 'Scrollable table needs visible focus');
   check(await page.locator('.cns-share[aria-hidden=true]').count() === 0, 'Consensus percentages must be exposed to assistive technology');
-  const cellName = await table.locator('.cns-pick').first().getAttribute('aria-label');
+  const cellName = await table.locator('.cns-pick').filter({ has: page.locator('.cns-share') }).first().getAttribute('aria-label');
   check(cellName && /: .+, \d+% named first$/.test(cellName), 'Each consensus cell must retain assistant, pick and percentage in its accessible name');
   check(await table.getByRole('cell', { name: cellName, exact: true }).count() > 0, 'Consensus cell name must be exposed through table semantics');
   const before = await table.evaluate(el => el.scrollLeft);

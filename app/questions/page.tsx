@@ -5,16 +5,32 @@ import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
-import { categoryLabel, REPO_ROOT, loadHistory, coverage, answered } from "@/lib/data";
+import { categoryLabel, REPO_ROOT, loadHistory, loadQuestionText, coverage, answered, type RunRecord } from "@/lib/data";
 import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AwaitingFirstRun, Kpi } from "@/components/ui";
 
-type Params = { c?: string; date?: string; engine?: string; question?: string; brand?: string };
+type Params = { c?: string; date?: string; engine?: string; question?: string; brand?: string; filter?: string };
 
 function resolve(params: Params): string {
   return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
+}
+
+// A submitted filter may carry a question absent from the newly chosen reading.
+// Direct links to unknown questions still return 404.
+function redirectQuestionFilter(params: Params, category: string, run: RunRecord | undefined) {
+  if (params.filter !== "1") return;
+  const question = params.question && Object.hasOwn(loadQuestionText(category, run), params.question)
+    ? params.question : undefined;
+  const query = new URLSearchParams({
+    c: category,
+    ...(params.date ? { date: params.date } : {}),
+    ...(params.engine ? { engine: params.engine } : {}),
+    ...(params.brand ? { brand: params.brand } : {}),
+    ...(question ? { question } : {}),
+  });
+  redirect(`/questions?${query}#${question ? encodeURIComponent(question) : "question-list"}`);
 }
 
 export async function generateMetadata({
@@ -28,6 +44,7 @@ export async function generateMetadata({
   const history = loadHistory(category, true);
   const run = params.date ? history.find(r => r.run_date === params.date) : history.at(-1);
   if (params.date && !run) notFound();
+  redirectQuestionFilter(params, category, run);
   const engine = run && coverage(run).some(c => c.engine === params.engine) ? params.engine : undefined;
   const brand = params.brand || undefined;
   if (brand && !history.some(r => answered(r).some(e => e.brands.some(b => b.name === brand)))) notFound();
@@ -88,6 +105,7 @@ export default async function QuestionsPage({
   const history = loadHistory(category, true);
   const run = params.date ? history.find(r => r.run_date === params.date) : history.at(-1);
   if (params.date && !run) notFound();
+  redirectQuestionFilter(params, category, run);
   if (run?.methodology?.questions) spec = run.methodology.questions;
   if (params.question && !spec.questions.some(q => q.id === params.question)) notFound();
 
@@ -142,6 +160,10 @@ export default async function QuestionsPage({
       </nav>
       <form action="/questions" className="q-reading">
         <input type="hidden" name="c" value={category} />
+        {params.question && <>
+          <input type="hidden" name="question" value={params.question} />
+          <input type="hidden" name="filter" value="1" />
+        </>}
         <div className="q-filter">
           <label htmlFor="evidence-date">Published reading</label>
           <select className="select" id="evidence-date" name="date" defaultValue={run.run_date}>

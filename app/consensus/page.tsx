@@ -138,8 +138,8 @@ export default async function ConsensusPage({
           {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
             The percentage shows how often the leading brand was named first
-            among answers to that question. A dash means a tie or no
-            pick. Bold marks picks outside the majority, or all picks when
+            among answers to that question. "No unique pick" means tied leaders or no
+            first pick; follow that link to inspect the assistant’s answers. Bold marks picks outside the majority, or all picks when
             there is no majority. Missing picks also prevent full agreement.
             Open a question to read the recorded answers.
           </p>
@@ -221,12 +221,12 @@ function Row({ row, engines, labels, category, date }: { row: QuestionConsensus;
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (
           <span className="cns-pick" role="cell" key={pick.engine} data-differs={differs}
-            aria-label={`${labels.get(pick.engine) ?? pick.engine}: ${pick.brand ?? "No unique pick"}, ${Math.round(pick.share * 100)}% named first`}>
-            {pick.brand ?? "—"}
-            <i className="cns-share mono">
+            aria-label={`${labels.get(pick.engine) ?? pick.engine}: ${pick.brand ? `${pick.brand}, ${Math.round(pick.share * 100)}% named first` : "No unique pick"}`}>
+            {pick.brand ?? <a href={`/questions?${new URLSearchParams({ c: category, date, engine: pick.engine, question: row.questionId })}#${row.questionId}`}>No unique pick</a>}
+            {pick.brand && <><i className="cns-share mono">
               {Math.round(pick.share * 100)}%
             </i>
-            <span className="meter cns-pick-meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": pick.share } as React.CSSProperties} /></span>
+            <span className="meter cns-pick-meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": pick.share } as React.CSSProperties} /></span></>}
           </span>
         );
       })}

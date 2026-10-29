@@ -262,7 +262,7 @@ export default function Home() {
             )}
 
             {board.length > 1 && (
-              <div className="reveal" style={{ marginTop: 48 }}>
+              <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">At a glance</p>
                 <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as recommended first</h2>
                 <p className="section-lead" style={{ marginBottom: 16 }}>
@@ -275,7 +275,7 @@ export default function Home() {
             )}
 
             {picks.length > 1 && (
-              <div className="reveal" style={{ marginTop: 48 }}>
+              <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">Assistant by assistant</p>
                 <h2 style={{ margin: "4px 0 6px" }}>Each assistant&rsquo;s favourite</h2>
                 <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(CATEGORY, b)} />
@@ -287,7 +287,7 @@ export default function Home() {
         )}
       </section>
 
-      <section className="shell section reveal" id="how">
+      <section className="shell section reveal" id="how" style={{ paddingTop: 0 }}>
         <p className="label">How it works</p>
         <h2 style={{ margin: "4px 0 18px" }}>Three steps, every Monday</h2>
         <ol className="steps">

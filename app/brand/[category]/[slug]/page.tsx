@@ -11,6 +11,7 @@ import {
   brandHistory,
   answeredPerQuestion,
   brandByEngine,
+  brandPositions,
   brandTone,
   latestRun,
   loadQuestionText,
@@ -81,6 +82,7 @@ export default async function BrandPage({
   const row = rank >= 0 ? board[rank] : null;
   const tone = run ? brandTone(run, brand) : null;
   const perEngine = run && row ? brandByEngine(run, brand) : [];
+  const positions = run && row ? brandPositions(run, brand) : null;
   // Question by question, strongest first: which buying questions bring this
   // brand up, and which never do.
   const qText = run ? loadQuestionText(category, run) : {};
@@ -171,17 +173,38 @@ export default async function BrandPage({
             </p>
           </div>
 
-          {tone ? (
-            <div className="cmp-pick">
-              <TrimTop />
-              <h2 className="pick-h" style={{ marginTop: 6 }}>How it was described</h2>
-              <ToneBar tone={tone} />
-              <p className="tone-caveat">
-                Judged from the wording of each answer by our reading model, not stated by
-                the assistants. Treat it as softer evidence than the counts.
-              </p>
-            </div>
-          ) : null}
+          <div className="cmp-pick">
+            <TrimTop />
+            {positions && (
+              <>
+                <h2 className="pick-h" style={{ marginTop: 6 }}>Where it appears in the answer</h2>
+                <div className="pos-rows">
+                  {(["First", "Second", "Third", "Fourth or later"] as const).map((label, i) => (
+                    <div className="pos-row" key={label}>
+                      <span>{label}</span>
+                      <span className="meter" data-tone={i === 0 ? undefined : "soft"} aria-hidden="true">
+                        <i style={{ "--v": positions[i] / Math.max(1, row.named) } as React.CSSProperties} />
+                      </span>
+                      <span className="mono">{positions[i]}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="kpi-note" style={{ marginTop: 10 }}>
+                  Out of the {row.named} answers that named {brand}.
+                </p>
+              </>
+            )}
+            {tone ? (
+              <>
+                <h2 className="pick-h" style={{ marginTop: 22 }}>How it was described</h2>
+                <ToneBar tone={tone} />
+                <p className="tone-caveat">
+                  Judged from the wording of each answer by our reading model, not stated by
+                  the assistants. Treat it as softer evidence than the counts.
+                </p>
+              </>
+            ) : null}
+          </div>
         </div>
       )}
 
