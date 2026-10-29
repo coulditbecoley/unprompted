@@ -2321,16 +2321,21 @@ def test_the_claude_canary_stops_a_harness_that_can_write(monkeypatch, tmp_path)
         Path(_re.search(r"create the file (\S+)", prompt).group(1)).write_text("canary")
         return SimpleNamespace(returncode=0, stdout="DONE", stderr="")
     monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: obeys(*a, **k))
-    with pytest.raises(cli_provider.ProviderError, match="isolation no longer holds"):
+    with pytest.raises(cli_provider.ProviderError, match="wrote or read"):
         claude.qualify()
     for broken in (SimpleNamespace(returncode=1, stdout="", stderr="startup failure"),
                    SimpleNamespace(returncode=0, stdout="  ", stderr="")):
         monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, b=broken, **k: b)
         with pytest.raises(cli_provider.ProviderError, match="inconclusive"):
             claude.qualify()  # a harness that never started proved nothing
+    def reads(prompt, cwd, extra=()):
+        return SimpleNamespace(returncode=0, stdout=Path(_re.search(r"read the file (\S+)", prompt).group(1)).read_text(), stderr="")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: reads(*a, **k))
+    with pytest.raises(cli_provider.ProviderError, match="wrote or read"):
+        claude.qualify()  # the planted secret in its reply would have been published
     monkeypatch.setattr(cli_provider.CliProvider, "_exec",
                         lambda self, *a, **k: SimpleNamespace(returncode=0, stdout="FAILED", stderr=""))
-    claude.qualify()  # refused: nothing written, nothing raised
+    claude.qualify()  # refused: nothing written or read, nothing raised
 
 
 def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):

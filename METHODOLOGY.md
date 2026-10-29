@@ -356,8 +356,9 @@ hooks. A test showed that setup let a prompt run shell commands, and a web page
 the engine reads could in principle have done the same. From the November 2
 week the harness runs in safe mode with no user settings, its only tools are
 web search and web fetch, everything else is refused, and the model is pinned
-to `claude-opus-5-5`, the model it already reported. Each run first asks the
-harness to write a file and stops before any paid call if one appears. The
+to `claude-opus-5-5`, the model it already reported. Each run first asks each local
+harness to write one file and print another planted beside it, and stops
+before any paid call if the file appears or the planted text is printed. The
 harness's arguments are now part of the frozen engine configuration, so a later
 change to them is caught like any other unversioned change.
 

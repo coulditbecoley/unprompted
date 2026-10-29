@@ -69,8 +69,7 @@ class CliEngine(Engine):
         """Model and version, probed once per process: every category in a week
         is asked of the same harness, and each probe is a real call."""
         if self.provider.id not in _IDENTITY:
-            if self.provider.command == "claude":
-                self.provider.qualify()  # its flags are the isolation; prove they still hold
+            self.provider.qualify()  # its flags are the isolation; prove they still hold
             _IDENTITY[self.provider.id] = self.provider.identify()
         return _IDENTITY[self.provider.id]
 
