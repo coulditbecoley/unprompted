@@ -87,6 +87,33 @@ export default function Home() {
     .map(({ c, r }) => ({ c, top: standings(r!)[0], date: r!.measured_on || r!.run_date }))
     .filter((x) => x.top);
 
+  // Plain answers to what a first-time visitor asks before believing a chart.
+  // Facts only from METHODOLOGY.md and the data; nothing promotional.
+  const faq: Array<[string, string]> = run
+    ? [
+        [
+          "Can a brand pay to appear or rank higher?",
+          "No. Unprompted is run by Skald Studio, which sells AI visibility work, and says so on every page. No company has any say in the questions, the method or the results, no placement is for sale, and no charted company is a Skald Studio client.",
+        ],
+        [
+          "Does being named first mean a product is the best?",
+          "No. It records what the assistants said, not what is good. A brand named first in 30% of answers is simply the one these assistants put first in about three of every ten answers.",
+        ],
+        [
+          `Why ask every question ${runsPerQ} times?`,
+          `AI assistants rarely give the same answer twice. One answer is a coin flip, so each question is asked ${runsPerQ} times per assistant and the page reports how often a brand came up.`,
+        ],
+        [
+          "Is this what I would see in the ChatGPT or Gemini app?",
+          "Not exactly. We ask each provider's API, with its own web search where it has one. The consumer apps add their own instructions, personalisation and shopping features, which an API does not reproduce.",
+        ],
+        [
+          "Can I check the numbers myself?",
+          "Yes. Every question, every recorded answer, the code and the full history are public. Each board links to the answers behind it.",
+        ],
+      ]
+    : [];
+
   return (
     <>
       <section className="hero">
@@ -325,6 +352,32 @@ export default function Home() {
                 </span>
                 <span className="mono ob-date">{date}</span>
               </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {faq.length > 0 && (
+        <section className="shell section reveal" id="faq" style={{ paddingTop: 0 }}>
+          <p className="label">Common questions</p>
+          <h2 style={{ margin: "4px 0 18px" }}>Before you trust a number here</h2>
+          {/* Same words for readers and for search engines, from one list. */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "FAQPage",
+                mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+              }).replace(/</g, "\\u003c"),
+            }}
+          />
+          <div className="faq">
+            {faq.map(([q, a]) => (
+              <details key={q} className="faq-item">
+                <summary>{q}</summary>
+                <p>{a}</p>
+              </details>
             ))}
           </div>
         </section>

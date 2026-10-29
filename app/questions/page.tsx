@@ -222,7 +222,6 @@ export default async function QuestionsPage({
               return (
                 <details className="q-engine-group" key={engine} open={params.question === q.id}>
                   <summary>{labels.get(engine) ?? engine} <span className="mono">{runs.length} recorded answers</span></summary>
-                  <div className="q-names">
                     {runs.map((r, i) => (
                       <div key={i} className="q-attempt">
                         {r.error ? (
@@ -241,7 +240,6 @@ export default async function QuestionsPage({
                         </details>}
                       </div>
                     ))}
-                  </div>
                 </details>
               );
             })}

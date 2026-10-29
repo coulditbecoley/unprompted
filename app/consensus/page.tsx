@@ -220,12 +220,11 @@ function Row({ row, engines, labels, category, date }: { row: QuestionConsensus;
       {row.picks.map((pick) => {
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (
-          <span className="cns-pick" role="cell" key={pick.engine} data-differs={differs}>
-            <span className="sr-only">{labels.get(pick.engine) ?? pick.engine}: </span>
+          <span className="cns-pick" role="cell" key={pick.engine} data-differs={differs}
+            aria-label={`${labels.get(pick.engine) ?? pick.engine}: ${pick.brand ?? "No unique pick"}, ${Math.round(pick.share * 100)}% named first`}>
             {pick.brand ?? "—"}
             <i className="cns-share mono">
               {Math.round(pick.share * 100)}%
-              <span className="sr-only"> named first</span>
             </i>
             <span className="meter cns-pick-meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": pick.share } as React.CSSProperties} /></span>
           </span>
