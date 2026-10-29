@@ -69,6 +69,8 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
 # drifted CLI model or a broken key is an issue to fix rather than a lost week.
 $readyName    = "Unprompted Monday readiness"
 $readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
+# Local 18:00 across DST, as for the weekly run above.
+$readyTrigger.StartBoundary = (Get-Date).Date.AddHours(18).ToString("yyyy-MM-dd'T'HH:mm:ss")
 $readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
 $readySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 45) -MultipleInstances IgnoreNew
 if (Get-ScheduledTask -TaskName $readyName -ErrorAction SilentlyContinue) {
