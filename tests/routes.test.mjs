@@ -417,3 +417,13 @@ test("the standings JSON carries each share with its denominator and refuses unk
   assert.deepEqual([body.brands[0].brand, body.brands[0].named, body.brands[0].of], [top.brand, top.named, top.totalRuns]);
   assert.equal(body.week, run.measured_on || run.run_date);
 });
+
+test("every top-level page is known to the proxy, so its visits are not counted as missing", () => {
+  const source = fs.readFileSync(new URL("proxy.ts", root), "utf8");
+  const known = [...source.match(/const KNOWN = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const pages = fs.readdirSync(new URL("app/", root), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_") && !entry.name.startsWith("("))
+    .map((entry) => `/${entry.name}`);
+  const missing = pages.filter((page) => !known.some((prefix) => page === prefix || `${page}/`.startsWith(prefix)));
+  assert.deepEqual(missing, []);
+});

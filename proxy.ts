@@ -124,6 +124,7 @@ const KNOWN = [
   "/admin",
   "/api/",
   "/feed.xml",
+  "/find",
   "/llms.txt",
   "/robots.txt",
   "/sitemap.xml",
