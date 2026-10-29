@@ -973,3 +973,11 @@ def test_an_engine_that_declines_most_questions_is_named_not_hidden():
     rows = ([{"engine": "claude", "refused": True, "error": None}] * 6 + [{"engine": "claude", "refused": False, "error": None}] * 4
             + [{"engine": "gemini", "refused": False, "error": None}] * 5 + [{"engine": "gemini", "error": "down"}] * 9)
     assert run.refusal_warnings({"extractions": rows}) == ["claude declined 6 of 10 replies"]
+
+
+def test_a_paid_run_dated_in_another_month_is_refused(monkeypatch):
+    monkeypatch.setattr(run, "load_local_env", lambda: pytest.fail("got past argument checks"))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", "2020-01-06"])
+    with pytest.raises(SystemExit) as stop:
+        run.main()
+    assert stop.value.code == 2

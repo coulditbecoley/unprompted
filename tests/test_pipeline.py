@@ -228,9 +228,9 @@ def test_the_snub_is_none_on_a_quiet_week():
 
 def test_small_sample_dropout_does_not_become_a_headline():
     a, b = _week("A", 1), _week("B", 1)
-    a.total_runs = b.total_runs = 10
+    a.total_runs = b.total_runs = a.named = b.named = 10
     assert the_snub(movement([b], [a])) is None
-    a.total_runs = b.total_runs = 100
+    a.total_runs = b.total_runs = a.named = b.named = 100
     assert the_snub(movement([b], [a])).brand == "A"
 
 

@@ -628,6 +628,11 @@ def main() -> int:
         parser.error("--qualify is an addition to --preflight")
     if args.collect_only and (args.preflight or args.dry_run or args.ignore_budget):
         parser.error("--collect-only runs alone")
+    if not (args.preflight or args.collect_only or args.ignore_budget) and args.date[:7] != date.today().isoformat()[:7]:
+        # Spend is booked by run date and the ceiling is checked for this month,
+        # so a run dated in another month would be paid for outside the check.
+        parser.error(f"--date {args.date} is outside this month: its spend would be booked to another month's "
+                     "budget. Pass --ignore-budget to run it anyway.")
     if args.preflight and (args.dry_run or args.ignore_budget):
         parser.error("--preflight cannot be combined with --dry-run or --ignore-budget")
 

@@ -547,3 +547,44 @@ test("Python and TypeScript agree on the engine error limit", () => {
   const theirs = Number(execFileSync(PYTHON, ["-c", script], { encoding: "utf-8" }).trim());
   assert.equal(MAX_ENGINE_ERROR_RATE, theirs, "the engine error limit has drifted");
 });
+
+/**
+ * Week-over-week movement on every comparable pair in the archive. The Python
+ * report and newsletter print these numbers and the site draws them, and they
+ * used to disagree by 0.1 point on 68 of 1,002 archived deltas.
+ */
+test("Python and TypeScript agree on every archived week-over-week movement", { skip: !PYTHON }, () => {
+  const byCategory = new Map();
+  for (const { file } of publishedRuns()) {
+    const run = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!byCategory.has(run.category)) byCategory.set(run.category, []);
+    byCategory.get(run.category).push({ file, run });
+  }
+  const pairs = [];
+  for (const runs of byCategory.values()) {
+    runs.sort((a, b) => a.run.run_date.localeCompare(b.run.run_date));
+    for (let i = 1; i < runs.length; i += 1) pairs.push([runs[i - 1], runs[i]]);
+  }
+  const ours = pairs.map(([before, now]) => movement(standings(now.run), standings(before.run))
+    // + 0: Math.round gives -0 where Python gives 0; both read as zero.
+    .map(m => [m.brand, m.rotationDelta + 0, m.firstShareDelta + 0, m.significant])
+    .sort((x, y) => byCodePointString(x[0], y[0])));
+  const script = [
+    "import json, sys", SRC_PATH_LINE,
+    "from unprompted.aggregate import brand_week, movement",
+    "out = []",
+    "for before, now in json.loads(sys.stdin.read()):",
+    "    a, b = (json.load(open(f, encoding='utf-8')) for f in (before, now))",
+    "    out.append(sorted([[m.brand, m.rotation_delta, m.first_share_delta, m.significant] for m in movement(brand_week(b), brand_week(a))], key=lambda r: r[0]))",
+    "print(json.dumps(out))",
+  ].join(String.fromCharCode(10));
+  const theirs = JSON.parse(execFileSync(PYTHON, ["-c", script], {
+    input: JSON.stringify(pairs.map(([before, now]) => [before.file, now.file])), encoding: "utf8", cwd: REPO,
+  }));
+  assert.ok(pairs.length > 0);
+  assert.deepEqual(ours, theirs);
+});
+
+function byCodePointString(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}

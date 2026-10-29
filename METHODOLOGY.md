@@ -164,6 +164,11 @@ so treat the interval as the smallest honest uncertainty, not the whole of it.
 A brand that was named last week and not once this week is a disappearance
 rather than a wobble, and always counts.
 
+Positions count charted brands only. A name the alias map excludes, or one
+still in quarantine, is removed before positions are numbered, so "named
+first" means first among the brands this chart tracks, not necessarily the
+first name in the answer.
+
 ---
 
 ## What we measure, and what we do not

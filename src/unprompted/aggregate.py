@@ -196,25 +196,41 @@ def comparison_reason(run: dict, previous: dict | None) -> str | None:
     return None
 
 
+def _share(count: int, total: int) -> float:
+    return count / total if total else 0.0
+
+
+def _points(delta: float) -> float:
+    """A share difference as points to one decimal, halves up: lib/metrics.ts
+    round1. Python's round() takes halves to even, and differencing the
+    4-decimal stored shares rounded twice; together they disagreed with the
+    site on 68 of 1,002 archived deltas, by 0.1 point."""
+    return math.floor(delta * 100 * 10 + 0.5) / 10
+
+
 def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Movement]:
-    """Week-over-week change, including entrants and dropouts."""
+    """Week-over-week change, including entrants and dropouts.
+
+    From the unrounded counts, as the site computes it; the stored 4-decimal
+    `rotation` is for display and the swing check only."""
     prev = {b.brand: b for b in last_week}
     curr = {b.brand: b for b in this_week}
     moves: list[Movement] = []
 
     for brand, now in curr.items():
         before = prev.get(brand)
+        rotation, first = _share(now.named, now.total_runs), _share(now.first_named, now.total_runs)
+        was = _share(before.named, before.total_runs) if before else 0.0
+        was_first = _share(before.first_named, before.total_runs) if before else 0.0
         moves.append(
             Movement(
                 brand=brand,
-                rotation_delta=round((now.rotation - (before.rotation if before else 0.0)) * 100, 1),
-                first_share_delta=round((now.first_share - (before.first_share if before else 0.0)) * 100, 1),
+                rotation_delta=_points(rotation - was),
+                first_share_delta=_points(first - was_first),
                 is_new=before is None,
                 is_dropout=False,
                 significant=(
-                    exceeds_noise(
-                        now.rotation, now.total_runs, before.rotation, before.total_runs
-                    )
+                    exceeds_noise(rotation, now.total_runs, was, before.total_runs)
                     if before
                     else False
                 ),
@@ -226,12 +242,13 @@ def movement(this_week: list[BrandWeek], last_week: list[BrandWeek]) -> list[Mov
             moves.append(
                 Movement(
                     brand=brand,
-                    rotation_delta=round(-before.rotation * 100, 1),
-                    first_share_delta=round(-before.first_share * 100, 1),
+                    rotation_delta=_points(-_share(before.named, before.total_runs)),
+                    first_share_delta=_points(-_share(before.first_named, before.total_runs)),
                     is_new=False,
                     is_dropout=True,
                     # A disappearance still needs enough observations to support a headline.
-                    significant=exceeds_noise(0, this_week[0].total_runs if this_week else 0, before.rotation, before.total_runs),
+                    significant=exceeds_noise(0, this_week[0].total_runs if this_week else 0,
+                                              _share(before.named, before.total_runs), before.total_runs),
                 )
             )
 
