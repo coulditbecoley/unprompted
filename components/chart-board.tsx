@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TrimTop, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import { loadProviders } from "@/lib/providers";
 import { inSentence } from "@/lib/shared";
@@ -21,6 +21,8 @@ import {
   shortfall,
   sourceCounts,
   standings,
+  exceedsNoise,
+  topPickByEngine,
   theSnub,
 } from "@/lib/data";
 
@@ -75,6 +77,7 @@ export function ChartBoard({
   }));
 
   const board = standings(run);
+  const picks = topPickByEngine(run);
   const older = loadHistory(category.slug).filter(r => (r.measured_on || r.run_date) < (run.measured_on || run.run_date)).at(-1);
   const comparisonNote = comparisonReason(run, older);
   const baselineDate = older?.measured_on || older?.run_date;
@@ -115,7 +118,7 @@ export function ChartBoard({
               "@type": "PropertyValue",
               name: b.brand,
               value: Math.round(b.firstShare * 100),
-              unitText: "percent of runs named first",
+              unitText: "percent of answers naming it first",
             })),
           }).replace(/</g, "\\u003c"),
         }}
@@ -128,15 +131,15 @@ export function ChartBoard({
 
       <h1 className="display page-title rise">
         {leader
-          ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.</>
-          : "No brand was named this week."}
+          ? <>{leader.brand} is named first most often: in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
+          : "No brand was named in this reading."}
       </h1>
 
       {/* This sentence has to match what the board actually draws. */}
       <p className="section-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
-        We asked {engineNames.join(", ")} {questionText.length} questions about{" "}
+        We asked {engineNames.length} AI assistants ({engineNames.join(", ")}) the same {questionText.length} questions about{" "}
         {inSentence(category.label)}, {run.runs_per_question} times each, on{" "}
-        {run.measured_on || run.run_date}. Below is how often each brand came up, and how
+        <span style={{ whiteSpace: "nowrap" }}>{run.measured_on || run.run_date}</span>. Below is how often each brand came up, and how
         often it was the first one recommended.
       </p>
 
@@ -152,7 +155,7 @@ export function ChartBoard({
       */}
       {missed.length > 0 && (
         <p className="section-lead coverage-note">
-          <strong>Smaller sample this week.</strong>{" "}
+          <strong>Smaller sample in this reading.</strong>{" "}
           {missed.map((c, i) => (
             <span key={c.engine}>
               {i > 0 ? ", and " : ""}
@@ -166,17 +169,25 @@ export function ChartBoard({
       )}
 
       <div className="kpi-row">
-        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of runs`} meter={leader.firstShare} />}
-        <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions × ${run.runs_per_question} runs × ${run.engines.length} assistants`} />
+        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of answers`} meter={leader.firstShare} />}
+        <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions, each asked ${run.runs_per_question} times, by ${run.engines.length} assistants`} />
         <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant brought up." />
         <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
       </div>
+
+      <Insights board={board} />
 
       <div className="btn-row" style={{ margin: "4px 0 6px" }}>
         <Link className="btn btn-sm" href={`/questions?c=${category.slug}&date=${run.run_date}`}>
           Read the answers <span className="arr" aria-hidden="true">→</span>
         </Link>
         <Link className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/${run.run_date}`}>Permanent link</Link>
+        {/* The file is `latestRun`, so the link appears only where the page shows that same run. */}
+        {latestRun(category.slug)?.run_date === run.run_date && (
+          <a className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/board.csv`} download>
+            Download the numbers (CSV)
+          </a>
+        )}
         {history.length > 1 && (
           <details className="readings">
             <summary className="btn btn-sm btn-ghost">Past readings ({history.length})</summary>
@@ -199,7 +210,10 @@ export function ChartBoard({
         methodVersion={run.method_version}
         runsPerQuestion={run.runs_per_question}
       />
-      <Freshness runDate={run.measured_on || run.run_date} />
+      <Freshness
+        runDate={run.measured_on || run.run_date}
+        latestHref={latestRun(category.slug)?.run_date === run.run_date ? undefined : `/chart/${category.slug}`}
+      />
       {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
       <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
       <HowToRead runsPerQuestion={run.runs_per_question} />
@@ -220,7 +234,7 @@ export function ChartBoard({
         url={`https://unprompted.report/chart/${category.slug}/${run.run_date}`}
         headline={
           leader
-            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(category.label)}.`
+            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers about ${inSentence(category.label)}.`
             : "What AI recommends when nobody's paying."
         }
       />
@@ -233,6 +247,13 @@ export function ChartBoard({
             first pick. A big gap means the assistants know it but reach for something else first.
           </p>
           <LeaderBars rows={board.slice(0, 8)} hrefFor={(b) => brandHref(category.slug, b)} />
+        </div>
+      )}
+
+      {picks.length > 1 && (
+        <div className="reveal" style={{ marginTop: 44 }}>
+          <h2 className="sub-h">Each assistant&rsquo;s favourite</h2>
+          <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(category.slug, b)} />
         </div>
       )}
 
@@ -267,7 +288,8 @@ export function ChartBoard({
               <div className="sp-row" key={p.brand}>
                 <span className="sp-brand">
                   {p.brand}
-                  <small>made by {engineLabels.get(p.engine) ?? p.engine}</small>
+                  {/* One brand can belong to two engines ("claude, claude-code"); name each. */}
+                  <small>made by the company behind {p.engine.split(", ").map((e) => engineLabels.get(e) ?? e).join(" and ")}</small>
                   <span className="sp-meters" aria-hidden="true">
                     <span className="meter"><i style={{ "--v": p.ownRate } as React.CSSProperties} /></span>
                     <span className="meter" data-tone="soft"><i style={{ "--v": p.rivalRate } as React.CSSProperties} /></span>
@@ -289,8 +311,18 @@ export function ChartBoard({
                 </span>
                 <span
                   className="sp-gap"
-                  data-sign={p.gap > 0 ? "up" : p.gap < 0 ? "down" : "flat"}
-                  title="Percentage points by which the owner out-names everyone else"
+                  // Coloured only when the gap beats the noise: the two groups
+                  // are separate answers, so the independent-samples test fits.
+                  data-sign={
+                    !exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
+                      ? "flat"
+                      : p.gap > 0 ? "up" : "down"
+                  }
+                  title={
+                    exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
+                      ? "Percentage points by which the owner out-names everyone else"
+                      : "Percentage points by which the owner out-names everyone else; within the noise at this sample size"
+                  }
                 >
                   {p.gap > 0 ? "+" : ""}
                   {p.gap}
@@ -298,6 +330,9 @@ export function ChartBoard({
               </div>
             ))}
           </div>
+          <p className="kpi-note" style={{ marginTop: 10 }}>
+            Gaps in grey are within the noise at this sample size.
+          </p>
         </>
       )}
 

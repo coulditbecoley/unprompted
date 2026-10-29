@@ -297,12 +297,16 @@ Fast and few. `--fast: 120ms` for state, 380-560ms for entrance, all on
 
 Entrance motion explains order, never decorates. On load the verdict, its
 lead and the stat tiles rise in sequence (`.rise` with a `--i` stagger), the
-question buffer types itself line by line, board steps fade up and share bars
+question buffer types itself line by line, each board row's squares wipe in
+left to right (one animation per row, not per square) and share bars
 (`.meter`, the rotation bar) grow from their left edge. Below the fold,
 sections enter as they scroll in (`.reveal`, a CSS scroll timeline, so there is
 no JavaScript and no observer). The trend line on a brand page draws left to
-right. Two things move on their own: the buffer caret and the green live dot
-beside the measurement date.
+right. Two things move on their own, briefly: the buffer caret blinks four
+times and the neutral dot beside the measurement date pings twice, then both
+rest. Nothing loops forever: an endless blink and ping cost the homepage 19
+points of mobile Lighthouse by keeping the main thread busy. The dot is not
+green, because green means movement and the reading on show can be weeks old.
 
 The board's column dimming is a state, not an animation: it transitions at
 `--fast` and holds.
@@ -325,6 +329,11 @@ global 0.01ms rule below and would otherwise leave sections invisible.
   row of coloured divs is meaningless to a screen reader.
 - Body text sits at or above 4.5:1 on both themes; `--fg-3` is reserved for
   labels and metadata that repeat information available elsewhere.
+- Nothing a reader needs is set below 12px.
+- In forced-colours (high-contrast) mode the chart marks opt out with
+  `forced-color-adjust: none`; without it every bar, meter and square vanished.
+- Content that can sit in the first viewport does not use `.reveal`: a section
+  half in view at load stays faded until scrolled, which reads as broken.
 
 ---
 
@@ -386,3 +395,47 @@ project in five seconds, and every page is built to the homepage's standard.
   freshness, subscribe and the theme toggle.
 - **Sharing.** Every board, dated board and brand page has its own social card
   or share row with live figures; chart pages also emit a schema.org `Dataset`.
+
+## Polish pass 2, 2026-10-29
+
+- **"Answers", not "runs".** One run is one answer; readers only know the
+  second word. Status lines are sentence case ("Each question asked 5× per
+  assistant"), not `5 RUNS/Q`.
+- **The board pools; these split it.** `TopPicks` shows each assistant's own
+  first choice (home and boards). Brand pages add "Which assistants name it"
+  (`brandByEngine`) and "Question by question", which links each question to its
+  recorded answers. Same denominators as the board: answered runs only.
+- **A short trend is labelled.** With eight or fewer points the brand trend
+  prints each value and date, and says plainly when a method change separates
+  every point.
+- **Questions loads answer text one question at a time** (`?question=`), which
+  took the page from 4 MB to 215 KB of HTML.
+- **A CSV of each latest board** at `/chart/<slug>/board.csv`, offered only
+  beside the latest board, with the same answered-runs denominators.
+- **The board is a table to assistive technology**: `role="table"`, column
+  headers that carry `aria-sort`, a row header per brand, and the step row's
+  counts as the cell's accessible name.
+
+- **Colour only past the noise, everywhere.** Self-preference gaps are coloured
+  only when `exceedsNoise` holds (own and rival answers are separate samples);
+  otherwise they are grey, with a note saying so. The lead call on boards uses
+  `leadIsClear`, because first picks share one sample.
+- **Light ramp step 1 is `#bfcbe0`**, evenly between empty and step 2 (about
+  1.4:1 each way); the old `#cfd8e6` sat 1.23:1 from an empty square and read as
+  blank on white.
+- **The homepage brand finder** is a GET form to `/find`, which redirects an
+  exact name to its brand page and anything else to `/categories?q=`.
+- **Only the newest reading may say nothing newer exists.** `Freshness` takes
+  `latestHref` on older dated boards and says "An older reading" with a link to
+  the latest board, instead of the staleness line.
+
+### Codex's pages (Compare, Consensus, Questions, Methodology, Categories)
+
+- **Questions: summaries first, original answers on demand.** The default page includes every recorded attempt's brand summary, including errors and refusals. Full answer text and source links load only for the selected `question=` through a native GET link. Selecting a question opens its assistant groups; individual answers remain native disclosures. Hide/load links preserve the filters. This flow works without JavaScript, and printing includes summaries plus any original answers already loaded, without fetching more.
+- **Questions: filters preserve the evidence.** Category, published reading (`date=`), assistant (`engine=`) and exact archived brand name (`brand=`) identify the evidence. A brand filter includes only answered responses naming that brand, once per answer. Full-reading totals and coverage stay explicitly labelled as before-filter figures. Submitting filters keeps an open question if it exists in the chosen reading; otherwise it drops that selection. Direct invalid question/date/brand links return 404. Known brands with no matching answers get an explicit empty state and retain the requested question anchor. Display measurement and publication dates separately.
+- **Compare: use the same answers for both brands.** The per-assistant table reuses `brandByEngine`: each brand's mention count is divided by all answered responses from that assistant, including answers naming neither brand. Errors and refusals are excluded; assistants with no answered responses are omitted. Known absent brands display zero mentions. The verdict uses first-pick counts and `leadIsClear` on the shared answered population, not independent-sample uncertainty or rounded percentage differences. Equal counts, identical selections and no answers have explicit messages. A lead below the helper's minimum sample/noise threshold is not described as clear. A clear lead in this sample does not establish a lasting preference.
+- **Compare: show the limits of history.** Sparse histories label every measurement and percentage, using solid dots and open squares to distinguish brands without colour. Points are spaced by measurement, not elapsed time. Lines stop where measurements cannot be compared, with a visible explanation. Comparisons and original-answer links retain their category, pair or reading in the URL.
+- **Consensus: unresolved means unresolved.** A pick is an assistant's unique most frequent first-named brand for a question. Ties or no first pick display "No unique pick", with no percentage or meter suggesting a winner. That label links to the exact assistant's dated answers. Question labels link to all assistants' answers for the same question and reading. Full agreement requires every assistant to have the same unique pick. Percentages on resolved picks use that assistant's answered responses to the question. The question column stays visible while the assistant columns scroll on phones.
+- **Methodology: explain the terms before the full method.** The quick glossary defines Answer, Named, First, Reading and Method version, with stable anchors for links from charts. The version notes use a native disclosure; the contents list links into the article. The authoritative text comes from METHODOLOGY.md. Brief page summaries supply navigation context without replacing that source. Tables scroll on narrow screens and expand for print.
+- **Owned-page rhythm and accessibility.** Main sections follow a label, h2 and short lead, with 52px from the preceding visible content to the label. Brand/process card titles are h3s under their section heading; card interiors stay compact. The shared KPI grid controls desktop and mobile tile layout. Focus states, forced-colour chart marks, reduced-motion behavior and print styles preserve the data. Loaded question cards may split across printed pages; compact summary cards stay grouped.
+- **Categories: search the archive's vocabulary.** Live search matches category terms and canonical brand names from published history, including brands absent from the latest reading. Result counts are announced; an empty result explains how to recover, and Clear search returns focus to the input. Published cards show their leader, measurement date and agreement count, with an Open board action. Without JavaScript, hide the inactive search and keep every category link available. Unpublished categories remain visibly distinct from published results.

@@ -45,11 +45,23 @@ export function ThemeToggle() {
       onClick={toggle}
       className="theme-toggle mono"
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       // Rendered but unlabelled until the effect resolves, so the markup is
       // identical on server and client and hydration stays quiet.
       suppressHydrationWarning
     >
-      {theme === null ? "" : theme === "dark" ? "LIGHT" : "DARK"}
+      {/* An icon, not a word: "LIGHT" never fitted the 34px button and spilled
+          over the page edge. The aria-label carries the words. */}
+      {theme === null ? null : theme === "dark" ? (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2" />
+          <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" />
+        </svg>
+      ) : (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
+        </svg>
+      )}
     </button>
   );
 }

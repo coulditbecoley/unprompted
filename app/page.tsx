@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +16,10 @@ import {
   movement,
   questionOrder,
   standings,
+  topPickByEngine,
+  boardTakeaways,
   theSnub,
+  allBrands,
 } from "@/lib/data";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
@@ -23,7 +27,7 @@ import { Subscribe } from "@/components/subscribe";
 import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
-import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -36,6 +40,19 @@ function questionSpec(): QuestionSpec {
   return loadYaml(fs.readFileSync(file, "utf-8")) as QuestionSpec;
 }
 
+/** The verdict travels with the link: search results and previews show it. */
+export function generateMetadata(): Metadata {
+  const run = latestRun(CATEGORY);
+  const top = run ? standings(run)[0] : undefined;
+  if (!run || !top) return { alternates: { canonical: "/" } };
+  const description = `Which brands do AI assistants recommend when nobody pays? In the latest reading, measured ${run.measured_on || run.run_date}, ${top.brand} was named first in ${Math.round(top.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}. Every question and answer is public.`;
+  return {
+    description,
+    alternates: { canonical: "/" },
+    openGraph: { type: "website", siteName: "Unprompted", title: "Unprompted — what AI recommends when nobody's paying", description },
+  };
+}
+
 export default function Home() {
   const spec = questionSpec();
   const run = latestRun(CATEGORY);
@@ -44,6 +61,14 @@ export default function Home() {
   const questions = run?.methodology?.questions?.questions ?? spec.questions;
 
   const board = run ? standings(run) : [];
+  const picks = run ? topPickByEngine(run) : [];
+  // Every brand ever charted, for the finder's suggestions, and each board's
+  // current leader as the placeholder's real examples.
+  const finderBrands = [...new Set(CATEGORIES.flatMap((c) => allBrands(c.slug)))].sort((a, b) => a.localeCompare(b));
+  const leaders = CATEGORIES.map((c) => latestRun(c.slug))
+    .filter((r) => r !== null)
+    .map((r) => standings(r!)[0]?.brand)
+    .filter((b): b is string => Boolean(b));
   const older = history.at(-2);
   const comparisonNote = run ? comparisonReason(run, older) : null;
   const baselineDate = older?.measured_on || older?.run_date;
@@ -67,8 +92,36 @@ export default function Home() {
   const otherBoards = CATEGORIES.filter((c) => c.slug !== CATEGORY)
     .map((c) => ({ c, r: latestRun(c.slug) }))
     .filter((x) => x.r)
-    .map(({ c, r }) => ({ c, top: standings(r!)[0], date: r!.measured_on || r!.run_date }))
-    .filter((x) => x.top);
+    .map(({ c, r }) => ({ c, board: standings(r!), date: r!.measured_on || r!.run_date }))
+    .filter((x) => x.board[0])
+    .map(({ c, board, date }) => ({ c, top: board[0], date, lead: boardTakeaways(board).lead }));
+
+  // Plain answers to what a first-time visitor asks before believing a chart.
+  // Facts only from METHODOLOGY.md and the data; nothing promotional.
+  const faq: Array<[string, string]> = run
+    ? [
+        [
+          "Can a brand pay to appear or rank higher?",
+          "No. Unprompted is run by Skald Studio, which sells AI visibility work, and says so on every page. No company has any say in the questions, the method or the results, no placement is for sale, and no charted company is a Skald Studio client.",
+        ],
+        [
+          "Does being named first mean a product is the best?",
+          "No. It records what the assistants said, not what is good. A brand named first in 30% of answers is simply the one these assistants put first in about three of every ten answers.",
+        ],
+        [
+          `Why ask every question ${runsPerQ} times?`,
+          `AI assistants rarely give the same answer twice. One answer is a coin flip, so each question is asked ${runsPerQ} times per assistant and the page reports how often a brand came up.`,
+        ],
+        [
+          "Is this what I would see in the ChatGPT or Gemini app?",
+          "Not exactly. We ask each provider's API, with its own web search where it has one. The consumer apps add their own instructions, personalisation and shopping features, which an API does not reproduce.",
+        ],
+        [
+          "Can I check the numbers myself?",
+          "Yes. Every question, every recorded answer, the code and the full history are public. Each board links to the answers behind it.",
+        ],
+      ]
+    : [];
 
   return (
     <>
@@ -88,7 +141,7 @@ export default function Home() {
                 <>
                   AI names{" "}
                   <span className="verdict-brand">{leader.brand}</span> first in{" "}
-                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.
+                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.
                 </>
               ) : (
                 <>What AI recommends when nobody&rsquo;s paying.</>
@@ -110,31 +163,63 @@ export default function Home() {
               <a className="btn" href="#how">How it works</a>
               <Link className="btn btn-ghost" href="/categories">All categories</Link>
             </div>
+
+            {/* "Is my tool on here?" is the first question many visitors bring.
+                A plain GET form, so it works before (or without) JavaScript. */}
+            <form action="/find" role="search" className="finder rise" style={{ "--i": 4 } as React.CSSProperties}>
+              <label htmlFor="finder" className="label">Look up a brand</label>
+              <div className="finder-row">
+                <input
+                  id="finder"
+                  name="b"
+                  list="finder-brands"
+                  className="subscribe-input"
+                  autoComplete="off"
+                  placeholder={leaders.length ? `e.g. ${leaders.join(", ")}` : "Brand name"}
+                />
+                <button type="submit" className="btn">Find</button>
+              </div>
+              <datalist id="finder-brands">
+                {finderBrands.map((b) => <option key={b} value={b} />)}
+              </datalist>
+            </form>
           </div>
 
           {/* The query buffer: the actual questions, visible on the page. */}
           <div className="buffer rise" style={{ "--i": 2 } as React.CSSProperties}>
             <div className="buffer-head">
               <span className="buffer-dots" aria-hidden="true"><i /><i /><i /></span>
-              <span className="label">This week&rsquo;s questions</span>
+              <span className="label">The questions we ask</span>
               <span className="label">{questions.length} × {runsPerQ}</span>
             </div>
             <div className="buffer-body" aria-label="The questions being asked">
               {questions.slice(0, 9).map((q, i) => (
-                <div className="buffer-line" key={q.id} style={{ "--i": i } as React.CSSProperties}>
+                <div className="buffer-line" data-wide={i >= 4 || undefined} key={q.id} style={{ "--i": i } as React.CSSProperties}>
                   <span className="buffer-n">{String(i + 1).padStart(2, "0")}</span>
-                  <span className="buffer-q">ask(&ldquo;{q.text}&rdquo;)</span>
+                  <span className="buffer-q">
+                    {run ? (
+                      <Link href={`/questions?${new URLSearchParams({ c: CATEGORY, date: run.run_date, question: q.id })}#${q.id}`}>
+                        ask(&ldquo;{q.text}&rdquo;)
+                      </Link>
+                    ) : (
+                      <>ask(&ldquo;{q.text}&rdquo;)</>
+                    )}
+                  </span>
                 </div>
               ))}
-              <div className="buffer-line" style={{ "--i": 9 } as React.CSSProperties}>
-                <span className="buffer-n">
-                  {String(Math.min(10, questions.length)).padStart(2, "0")}
-                </span>
-                <span className="buffer-q">
-                  <Link href="/questions">…{Math.max(0, questions.length - 9)} more</Link>
-                  <span className="caret" aria-hidden="true" />
-                </span>
-              </div>
+              {/* Phones show four questions, wider screens nine; each gets its own
+                  closing line so the "more" count is true at either width. */}
+              {[4, 9].map((shown) => (
+                <div className="buffer-line" data-more={shown} key={shown} style={{ "--i": shown } as React.CSSProperties}>
+                  <span className="buffer-n">
+                    {String(Math.min(shown + 1, questions.length)).padStart(2, "0")}
+                  </span>
+                  <span className="buffer-q">
+                    <Link href="/questions">…{Math.max(0, questions.length - shown)} more</Link>
+                    <span className="caret" aria-hidden="true" />
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -162,7 +247,7 @@ export default function Home() {
               </Link>
             </div>
             <StatusBar
-              runDate={measured!}
+              runDate={run.run_date}
               engines={engineNames}
               methodVersion={run.method_version}
               runsPerQuestion={run.runs_per_question}
@@ -170,6 +255,7 @@ export default function Home() {
             <Freshness runDate={measured!} />
             {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
             <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
+            <Insights board={board} />
             <HowToRead runsPerQuestion={run.runs_per_question} />
             <LiveBoard
               questions={questionsInBoardOrder}
@@ -186,7 +272,7 @@ export default function Home() {
               url={`https://unprompted.report/chart/${CATEGORY}/${run.run_date}`}
               headline={
                 leader
-                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(categoryLabel(CATEGORY))}.`
+                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}.`
                   : "What AI recommends when nobody's paying."
               }
             />
@@ -206,7 +292,7 @@ export default function Home() {
             )}
 
             {board.length > 1 && (
-              <div className="reveal" style={{ marginTop: 48 }}>
+              <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">At a glance</p>
                 <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as recommended first</h2>
                 <p className="section-lead" style={{ marginBottom: 16 }}>
@@ -217,13 +303,21 @@ export default function Home() {
                 <LeaderBars rows={board.slice(0, 6)} hrefFor={(b) => brandHref(CATEGORY, b)} />
               </div>
             )}
+
+            {picks.length > 1 && (
+              <div className="reveal" style={{ marginTop: 52 }}>
+                <p className="label">Assistant by assistant</p>
+                <h2 style={{ margin: "4px 0 6px" }}>Each assistant&rsquo;s favourite</h2>
+                <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(CATEGORY, b)} />
+              </div>
+            )}
           </>
         ) : (
           <AwaitingFirstRun />
         )}
       </section>
 
-      <section className="shell section reveal" id="how">
+      <section className="shell section reveal" id="how" style={{ paddingTop: 0 }}>
         <p className="label">How it works</p>
         <h2 style={{ margin: "4px 0 18px" }}>Three steps, every Monday</h2>
         <ol className="steps">
@@ -272,18 +366,47 @@ export default function Home() {
             </Link>
           </div>
           <div className="ob-grid">
-            {otherBoards.map(({ c, top, date }) => (
+            {otherBoards.map(({ c, top, date, lead }) => (
               <Link key={c.slug} href={`/chart/${c.slug}`} className="ob-card card-lift">
                 <span className="label">{c.label}</span>
                 <span className="ob-lead">{top.brand}</span>
                 <span className="ob-note">
-                  named first in {Math.round(top.firstShare * 100)}% of runs
+                  named first in {Math.round(top.firstShare * 100)}% of answers
+                  {lead?.kind === "lead" && lead.clear && ` · a clear lead over ${lead.b.brand}`}
+                  {lead?.kind === "lead" && !lead.clear && ` · too close to call with ${lead.b.brand}`}
+                  {lead?.kind === "level" && ` · level with ${lead.b.brand}`}
                 </span>
                 <span className="meter" aria-hidden="true">
                   <i style={{ "--v": top.firstShare } as React.CSSProperties} />
                 </span>
                 <span className="mono ob-date">{date}</span>
               </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {faq.length > 0 && (
+        <section className="shell section reveal" id="faq" style={{ paddingTop: 0 }}>
+          <p className="label">Common questions</p>
+          <h2 style={{ margin: "4px 0 18px" }}>Before you trust a number here</h2>
+          {/* Same words for readers and for search engines, from one list. */}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "FAQPage",
+                mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+              }).replace(/</g, "\\u003c"),
+            }}
+          />
+          <div className="faq">
+            {faq.map(([q, a]) => (
+              <details key={q} className="faq-item">
+                <summary>{q}</summary>
+                <p>{a}</p>
+              </details>
             ))}
           </div>
         </section>

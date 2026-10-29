@@ -32,11 +32,11 @@ export async function GET() {
     "## How to quote this correctly",
     "",
     "Every figure has a denominator and is meaningless without it. A brand that",
-    "is 'named first in 30% of runs' is not 'the best' and has not been rated;",
+    "is 'named first in 30% of answers' is not 'the best' and has not been rated;",
     "it is the brand these assistants happened to name first in three of every",
     "ten answers. Quote the share and the sample together, or do not quote it.",
     "",
-    "Rotation is times_named / answered_runs. Attempts that errored or where the",
+    "A brand's share is answers naming it / answers received. Attempts that errored or where the",
     "assistant declined are excluded from the denominator, so that one provider",
     "outage does not read as every brand losing ground in the same week.",
     "",
@@ -49,7 +49,13 @@ export async function GET() {
     "",
     "- Method: https://unprompted.report/methodology",
     "- Every question and answer: https://unprompted.report/questions",
-    "  (add ?c=<category-slug> for a specific one; the slugs are below)",
+    "  (?c=<category-slug> picks a category, ?brand=<exact brand name> keeps only answers",
+    "  naming that brand, ?question=<id> loads one question's full answer text)",
+    "- One page per brand: https://unprompted.report/brand/<category-slug>/<brand-slug>",
+    "  (how often each assistant names it, question by question, and its history)",
+    "- Two brands side by side: https://unprompted.report/compare?c=<category-slug>&a=<brand-slug>&b=<brand-slug>",
+    "- Where the assistants agree: https://unprompted.report/consensus",
+    "- The latest board as CSV: https://unprompted.report/chart/<category-slug>/board.csv",
     "- Source and data: https://github.com/coulditbecoley/unprompted",
     "- Independent audit: https://github.com/coulditbecoley/unprompted/blob/main/AUDIT-REPORT.md",
     "",
@@ -68,8 +74,8 @@ export async function GET() {
     const leader = board[0];
     const detail = leader
       ? `${leader.brand} was named first in ${Math.round(leader.firstShare * 100)}% ` +
-        `of ${leader.totalRuns} answered runs, week of ${run.run_date}`
-      : `no brand was named, week of ${run.run_date}`;
+        `of ${leader.totalRuns} answers, measured ${run.measured_on || run.run_date}`
+      : `no brand was named, measured ${run.measured_on || run.run_date}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
   }
 

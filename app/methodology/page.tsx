@@ -8,9 +8,10 @@ import { TrimTop } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "How we measure AI brand mentions",
-  openGraph: { title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
+  alternates: { canonical: "/methodology" },
+  openGraph: { url: "/methodology", type: "website", siteName: "Unprompted", title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
   description:
-    "Exactly how Unprompted measures what AI assistants recommend, including what it deliberately does not measure.",
+    "How we count brands once per answer, exclude errors and refusals, and keep method changes out of trend comparisons. Read the glossary and full published method.",
 };
 
 /**
@@ -23,34 +24,48 @@ export default function MethodologyPage() {
   const body = raw.replace(/^# Methodology\s*\n/, "");
   const introAt = body.indexOf("Unprompted measures");
   const changes = introAt > 0 && body.startsWith("**Version") ? body.slice(0, introAt).trim() : "";
-  const content = changes ? body.slice(introAt) : body;
+  const content = (changes ? body.slice(introAt) : body).replace(
+    "A brand that was named last week and not once this week",
+    "A brand that was named in the previous measurement and not once in the latest measurement",
+  );
   const blocks = renderMarkdown(content);
   const headings = [...content.matchAll(/^#{2,3} (.+)$/gm)].map(m => ({ text: m[1].trim(), id: headingId(m[1].trim()) }));
 
   return (
-    <section className="shell section">
+    <section className="shell section method-page">
       <h1 className="display page-title rise">How the measurement works.</h1>
       <p className="section-lead">
-        How we count brand mentions in AI answers, check the results, and decide
-        what we can fairly compare. Use this guide to understand what the charts
-        can and cannot tell you.
+        How we count mentions, check results and decide which measurements can be compared.
       </p>
-      {changes && <aside className="panel method-changes" aria-labelledby="recent-changes">
-        <h2 id="recent-changes">What changed recently</h2>
+      <nav className="evidence-links" aria-label="Start here">
+        <a href="#glossary">Start with the glossary</a>
+        <a href="/categories">Explore published results</a>
+      </nav>
+      {changes && <>
+        <p className="label codex-section-label">Version history</p>
+        <h2 className="sub-h" id="recent-changes">What changed recently</h2>
+        <p className="cmp-note">Read the latest updates to the collection and counting rules.</p>
+        <details className="panel method-changes">
+        <summary>Read recent changes</summary>
         <div className="prose">{renderMarkdown(changes)}</div>
-      </aside>}
-      <ol className="method-flow" aria-label="From questions to published results">
+      </details></>}
+      <p className="label codex-section-label">Process</p>
+      <h2 className="sub-h">From questions to published results</h2>
+      <p className="cmp-note">Five steps connect each question to its public evidence.</p>
+      <ol className="method-flow" role="list" aria-label="From questions to published results">
         {[
-          ["Ask", "Repeat the category’s buying questions across AI assistants."],
-          ["Count", "Read the answers and record which brands were named."],
-          ["Check", "Hold results that fail the publication checks."],
-          ["Publish", "Keep passing results and their evidence in the public archive."],
+          ["Ask", "Use the fixed set of buying questions for the category."],
+          ["Repeat", "Ask each active assistant each question five times."],
+          ["Read", "Record brands, order and sources. Set aside unrecognised names."],
+          ["Check", "Keep results off the chart if they fail the checks."],
+          ["Publish", "Publish checked results with their original answers."],
         ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
           <span className="mono method-step" aria-hidden="true">{i + 1}</span>
-          <h2 id={`process-${title.toLowerCase()}`}>{title}</h2><p>{detail}</p>
+          <h3 id={`process-${title.toLowerCase()}`}>{title}</h3><p>{detail}</p>
+          {i < 4 && <span className="method-arrow" aria-hidden="true">&rarr;</span>}
         </li>)}
       </ol>
-      <div className="panel reveal" style={{ marginBottom: 26, padding: "16px 20px 16px 28px" }}>
+      <div className="panel reveal method-source">
         <TrimTop />
         <p style={{ fontSize: 14.5, margin: 0, color: "var(--fg-2)" }}>
           The full method below comes from{" "}
@@ -64,9 +79,21 @@ export default function MethodologyPage() {
       <div className="method-layout">
         <details className="method-toc panel" open>
           <summary>On this page</summary>
-          <nav aria-label="Methodology sections">{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
+          <nav aria-label="Methodology sections"><a href="#glossary">Quick glossary</a>{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
         </details>
-        <div className="prose methodology-copy">{blocks}</div>
+        <div className="prose methodology-copy">
+          <p className="label codex-section-label">Definitions</p>
+          <h2 className="sub-h" id="glossary">Quick glossary <SectionLink id="glossary" label="Quick glossary" /></h2>
+          <p className="cmp-note">Five terms used throughout the charts and recorded answers.</p>
+          <dl className="method-glossary">
+            <dt id="glossary-answer">Answer</dt><dd>One recorded response to one question from one assistant. Errors and refusals are excluded from mention percentages.</dd>
+            <dt id="glossary-named">Named</dt><dd>A brand appears anywhere in an answer. Naming it repeatedly still counts as one answer naming it.</dd>
+            <dt id="glossary-first">First</dt><dd>The first brand named in an answer. This measures visibility, not product quality.</dd>
+            <dt id="glossary-reading">Reading</dt><dd>A published analysis of recorded answers. A later reading can recheck those answers without asking the assistants again.</dd>
+            <dt id="glossary-method-version">Method version</dt><dd>The recorded version of the rules used to collect and count answers. Method changes can prevent fair comparisons between measurements.</dd>
+          </dl>
+          {blocks}
+        </div>
       </div>
     </section>
   );
@@ -77,6 +104,18 @@ export default function MethodologyPage() {
  * paragraphs, plus inline bold, code and links. Adding a markdown dependency to
  * render one file we control would be more machinery than the job needs.
  */
+const METHOD_HEADERS: Record<string, [string, string]> = {
+  "What we do, every week": ["Collection", "How buying questions become a published measurement."],
+  "Why we ask five times instead of once": ["Sampling", "Repeated answers show how often a brand appears."],
+  "How much of a change is real": ["Uncertainty", "Small samples limit what a change can tell us."],
+  "What we measure, and what we do not": ["Scope", "API answers measure visibility, not product quality."],
+  "Active engines": ["Providers", "The assistants and models used for each measurement."],
+  "Never break the series": ["Comparability", "Method changes determine which readings can be compared."],
+  "Disclosure": ["Operator", "Who runs the chart and how the work is funded."],
+  "A conflict we have to declare": ["Independence", "How we disclose and handle conflicts of interest."],
+  "Corrections": ["Review", "How mistakes are reported and corrected."],
+};
+
 function renderMarkdown(md: string): React.ReactNode[] {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out: React.ReactNode[] = [];
@@ -103,7 +142,12 @@ function renderMarkdown(md: string): React.ReactNode[] {
       const id = headingId(heading[2]);
       const text = <>{inline(heading[2])} <SectionLink id={id} label={heading[2]} /></>;
       if (level === 1) out.push(<h2 className="sub-h" id={id} key={key++}>{text}</h2>);
-      else if (level === 2) out.push(<h2 id={id} key={key++}>{text}</h2>);
+      else if (level === 2 && METHOD_HEADERS[heading[2]]) {
+        const [label, lead] = METHOD_HEADERS[heading[2]];
+        out.push(<p className="label codex-section-label" key={key++}>{label}</p>);
+        out.push(<h2 className="sub-h" id={id} key={key++}>{text}</h2>);
+        out.push(<p className="cmp-note" key={key++}>{lead}</p>);
+      } else if (level === 2) out.push(<h2 id={id} key={key++}>{text}</h2>);
       else out.push(<h3 id={id} key={key++}>{text}</h3>);
       i += 1;
       continue;
@@ -119,10 +163,11 @@ function renderMarkdown(md: string): React.ReactNode[] {
         i += 1;
       }
       out.push(
-        <div key={key++} style={{ overflowX: "auto" }}>
+        <div key={key++} className="method-table" role="region" aria-label={`Table: ${head.join(", ")}`} tabIndex={0}>
+          <p className="table-scroll-note">Scroll horizontally to read all columns.</p>
           <table>
             <thead>
-              <tr>{head.map((c, n) => <th key={n}>{inline(c)}</th>)}</tr>
+              <tr>{head.map((c, n) => <th scope="col" key={n}>{inline(c)}</th>)}</tr>
             </thead>
             <tbody>
               {body.map((row, n) => (

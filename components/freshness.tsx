@@ -26,7 +26,14 @@ function relative(target: Date, now: Date): string {
   return `in ${Math.round(hours / 24)}d`;
 }
 
-export function Freshness({ runDate }: { runDate: string }) {
+export function Freshness({
+  runDate,
+  latestHref,
+}: {
+  runDate: string;
+  /** Set on an older reading: where the newest board is. Its absence means this is the newest. */
+  latestHref?: string;
+}) {
   // Rendered only after mount: server and client clocks differ, and a
   // countdown baked into static HTML is stale the moment it is built.
   const [when, setWhen] = useState<string | null>(null);
@@ -45,14 +52,22 @@ export function Freshness({ runDate }: { runDate: string }) {
 
   return (
     <div className="freshness">
-      <span>MEASURED {runDate}</span>
-      {age !== null && age > 8 && <span role="status">STALE: {age} DAYS OLD · NO NEWER MEASUREMENT SHOWN</span>}
+      <span>Measured {runDate}</span>
+      {/* Only the newest reading may say nothing newer exists; an older one
+          says it is older and points to the newest. */}
+      {latestHref ? (
+        <span role="status">
+          An older reading · <a href={latestHref}>see the latest board</a>
+        </span>
+      ) : (
+        age !== null && age > 8 && <span role="status">{age} days old · no newer measurement published yet</span>
+      )}
       <span className="next" suppressHydrationWarning>
-        {when ? `NEXT RUN ${when}` : "UPDATES EVERY MONDAY"}
+        {when ? `Next update ${when}` : "Updates every Monday"}
       </span>
       <span className="spacer" />
       <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">
-        CHECK THE RAW DATA →
+        Check the raw data →
       </a>
     </div>
   );
@@ -83,10 +98,10 @@ export function ShareRow({ headline, url = "https://unprompted.report" }: { head
   return (
     <div className="share-row">
       <button type="button" className="share-btn" onClick={copy} data-done={copied}>
-        {copied ? "COPIED" : "COPY THIS RESULT"}
+        {copied ? "Copied" : "Copy this result"}
       </button>
       <a className="share-btn" href={intent} target="_blank" rel="noopener noreferrer">
-        SHARE ON X
+        Share on X
       </a>
     </div>
   );

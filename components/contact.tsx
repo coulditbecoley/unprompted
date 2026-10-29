@@ -91,7 +91,7 @@ export function Contact() {
       if (res.ok && body.success) {
         send({ path: window.location.pathname, event: "contact:sent" });
         setState("done");
-        setNote("Your message was sent to the operator for review.");
+        setNote("Your message was sent for review.");
         form.reset();
         return;
       }
@@ -99,7 +99,7 @@ export function Contact() {
       setNote(body.message ?? "The form service did not accept your message. Please try again.");
     } catch {
       setState("error");
-      setNote("We could not confirm delivery. Your message is still here; check your connection before trying again.");
+      setNote("We could not confirm delivery. Your message is still here. Check your connection before trying again.");
     }
   }
 
@@ -110,12 +110,18 @@ export function Contact() {
         Help us check the results. <SectionLink id="contact" label="Corrections and questions" />
       </h3>
       <p className="subscribe-lead">
-        Found a missing brand or a number that looks wrong? Send the page link,
-        the brand name, and what you noticed so we can check it against the
-        recorded answers.
+        Found a missing brand or a number that looks wrong?
+        Send the page link, brand name and what you noticed. We’ll check the recorded answers.
       </p>
 
-      <form onSubmit={submit} className="contact-form">
+      <noscript>
+        <style>{".contact-polished .contact-form { display: none; }"}</style>
+        <p className="subscribe-lead">
+          Enable JavaScript to send a message, or{" "}
+          <a href="https://github.com/coulditbecoley/unprompted/issues">report a correction publicly on GitHub</a>.
+        </p>
+      </noscript>
+      <form onSubmit={submit} method="post" className="contact-form">
         {/* The provided markup had no labels at all. Placeholders are not
             labels: they vanish on focus and screen readers do not announce
             them as names for the field. */}
@@ -182,7 +188,7 @@ export function Contact() {
           className="btn btn-go subscribe-submit contact-submit"
           disabled={state === "sending"}
         >
-          {state === "sending" ? "SENDING…" : "SEND MESSAGE"}
+          {state === "sending" ? "Sending…" : "Send message"}
         </button>
       </form>
 

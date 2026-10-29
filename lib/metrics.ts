@@ -276,6 +276,57 @@ export function exceedsNoise(
   return Math.abs(p1 - p2) / se > 1.96;
 }
 
+/**
+ * Is the leader's first-pick lead over the runner-up bigger than the noise?
+ *
+ * Not `exceedsNoise`: both shares come from the same answers, and an answer
+ * that names one brand first cannot name the other first, so the two are
+ * negatively correlated. The multinomial variance of the difference is
+ * (p1 + p2 - (p1 - p2)^2) / n, wider than the independent formula, which would
+ * call close leads clear. Same 1.96 floor and the same caveat: repeats within a
+ * week are not independent draws, so this is a floor, not a p-value.
+ */
+export function leadIsClear(first1: number, first2: number, n: number): boolean {
+  if (n < 30) return false;
+  const p1 = first1 / n;
+  const p2 = first2 / n;
+  const se = Math.sqrt((p1 + p2 - (p1 - p2) ** 2) / n);
+  if (se === 0) return p1 !== p2;
+  return (p1 - p2) / se > 1.96;
+}
+
+/**
+ * The two takeaways the board's "What stands out" box prints, decided here so
+ * they can be tested. Ties are decided on counts, never rounded percentages;
+ * the gap threshold (20 points) is compared in whole answers so floating-point
+ * rounding cannot drop an exact boundary.
+ */
+export function boardTakeaways(board: BrandStanding[]): {
+  lead:
+    | null
+    | { kind: "level"; a: BrandStanding; b: BrandStanding }
+    | { kind: "lead"; a: BrandStanding; b: BrandStanding; answers: number; clear: boolean };
+  gap: BrandStanding | null;
+} {
+  const [a, b] = board;
+  const lead = !a || !b
+    ? null
+    : a.firstNamed === b.firstNamed
+      ? ({ kind: "level", a, b } as const)
+      : ({
+          kind: "lead",
+          a,
+          b,
+          answers: a.firstNamed - b.firstNamed,
+          clear: leadIsClear(a.firstNamed, b.firstNamed, a.totalRuns),
+        } as const);
+  // Widest gap between "named at all" and "named first" in the top eight,
+  // leader included, so "widest" is literally true.
+  const top = board.slice(0, 8).sort((x, y) => y.named - y.firstNamed - (x.named - x.firstNamed))[0];
+  const gap = top && (top.named - top.firstNamed) * 5 >= top.totalRuns ? top : null;
+  return { lead, gap };
+}
+
 /** The 95% half-interval on a proportion, in percentage points. */
 export function marginOfError(p: number, n: number): number {
   if (n < 1) return 0;
@@ -517,6 +568,106 @@ export function engineDivergence(
   return [...counts.entries()]
     .map(([engine, v]) => ({ engine, ...v }))
     .sort((a, b) => b.differs - a.differs || a.engine.localeCompare(b.engine));
+}
+
+/**
+ * One brand, read engine by engine: how many of each assistant's answered runs
+ * named it, and how many put it first. Same denominator as the board (answered
+ * runs only), split by who answered. Engines that answered nothing are left out
+ * rather than shown as zero.
+ */
+export function brandByEngine(
+  run: RunRecord,
+  brand: string,
+): Array<{ engine: string; named: number; first: number; of: number }> {
+  const counts = new Map<string, { named: number; first: number; of: number }>();
+  for (const ex of answered(run)) {
+    const entry = counts.get(ex.engine) ?? { named: 0, first: 0, of: 0 };
+    entry.of += 1;
+    const hit = ex.brands.find((b) => b.name === brand);
+    if (hit) {
+      entry.named += 1;
+      if (hit.position === 1) entry.first += 1;
+    }
+    counts.set(ex.engine, entry);
+  }
+  return run.engines
+    .filter((e) => counts.has(e))
+    .map((engine) => ({ engine, ...counts.get(engine)! }))
+    .sort((a, b) => b.named / b.of - a.named / a.of || a.engine.localeCompare(b.engine));
+}
+
+/**
+ * Each assistant's own first choice: the brand it put first most often across
+ * its answered runs. A tie is reported as a tie, every brand sharing the top
+ * count, because equal counts are not a preference. Order within a tie follows
+ * mentions then name, so it never depends on file order. An engine with no
+ * first-placed brand at all is left out.
+ */
+export function topPickByEngine(
+  run: RunRecord,
+): Array<{ engine: string; brands: string[]; first: number; of: number }> {
+  const per = new Map<string, { of: number; first: Map<string, number>; named: Map<string, number> }>();
+  for (const ex of answered(run)) {
+    const e = per.get(ex.engine) ?? { of: 0, first: new Map(), named: new Map() };
+    e.of += 1;
+    for (const b of ex.brands) {
+      e.named.set(b.name, (e.named.get(b.name) ?? 0) + 1);
+      if (b.position === 1) e.first.set(b.name, (e.first.get(b.name) ?? 0) + 1);
+    }
+    per.set(ex.engine, e);
+  }
+  const out: Array<{ engine: string; brands: string[]; first: number; of: number }> = [];
+  for (const engine of run.engines) {
+    const e = per.get(engine);
+    if (!e || e.first.size === 0) continue;
+    const first = Math.max(...e.first.values());
+    const brands = [...e.first.entries()]
+      .filter(([, n]) => n === first)
+      .map(([name]) => name)
+      .sort((x, y) => (e.named.get(y) ?? 0) - (e.named.get(x) ?? 0) || x.localeCompare(y));
+    out.push({ engine, brands, first, of: e.of });
+  }
+  return out;
+}
+
+/**
+ * Where in the answer a brand appears when it is named: first, second, third,
+ * or later. Counts over answered runs that named it, so the four add up to the
+ * board's "named" figure.
+ */
+export function brandPositions(run: RunRecord, brand: string): [number, number, number, number] {
+  const out: [number, number, number, number] = [0, 0, 0, 0];
+  for (const ex of answered(run)) {
+    const hit = ex.brands.find((b) => b.name === brand);
+    if (hit) out[Math.min(Math.max(hit.position, 1), 4) - 1] += 1;
+  }
+  return out;
+}
+
+/**
+ * The brands most often named in the same answer as this one, out of the
+ * answered runs that named it. Ties order by name so the list is stable.
+ */
+export function brandCompanions(
+  run: RunRecord,
+  brand: string,
+  limit = 5,
+): { of: number; rows: Array<{ brand: string; together: number }> } {
+  const counts = new Map<string, number>();
+  let of = 0;
+  for (const ex of answered(run)) {
+    if (!ex.brands.some((b) => b.name === brand)) continue;
+    of += 1;
+    for (const name of new Set(ex.brands.map((b) => b.name))) {
+      if (name !== brand) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const rows = [...counts.entries()]
+    .map(([name, together]) => ({ brand: name, together }))
+    .sort((a, b) => b.together - a.together || a.brand.localeCompare(b.brand))
+    .slice(0, limit);
+  return { of, rows };
 }
 
 /* -- tone ----------------------------------------------------------------- */

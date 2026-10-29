@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { deriveSessionToken, validSession, isAuthorised } from "../lib/auth.ts";
 import { nextRun } from "../lib/schedule.ts";
+import { csvCell } from "../lib/shared.ts";
 
 test("Monday countdown stays at 13:00 Eastern across daylight saving changes", () => {
   for (const [now, expected] of [
@@ -72,7 +73,67 @@ import {
   comparisonReason,
   movement,
   theSnub,
+  leadIsClear,
+  boardTakeaways,
+  brandPositions,
+  brandCompanions,
+  topPickByEngine,
+  brandByEngine,
 } from "../lib/metrics.ts";
+
+test("CSV fields stay one field and never run as formulas", () => {
+  assert.equal(csvCell("Cursor"), "Cursor");
+  assert.equal(csvCell(0.34), "0.34");
+  assert.equal(csvCell(-1), "-1", "numbers are not text and keep their sign");
+  assert.equal(csvCell('Say "hi", ok'), '"Say ""hi"", ok"');
+  assert.equal(csvCell("line\nbreak"), '"line\nbreak"');
+  assert.equal(csvCell("Carriage\rTool"), '"Carriage\rTool"');
+  assert.equal(csvCell("=1+1"), "'=1+1");
+  assert.equal(csvCell("@cmd"), "'@cmd");
+});
+
+test("a lead is only called clear when it beats the shared-sample noise", () => {
+  // 34% vs 30% of 450 answers: four points, well inside the noise.
+  assert.equal(leadIsClear(153, 135, 450), false);
+  // 39% vs 26% of 225: thirteen points, clear.
+  assert.equal(leadIsClear(88, 59, 225), true);
+  // The independent-samples test would call this one clear; the shared-sample one must not.
+  assert.equal(exceedsNoise(0.30, 300, 0.22, 300), true);
+  assert.equal(leadIsClear(90, 66, 300), false);
+  assert.equal(leadIsClear(10, 5, 20), false, "too few answers to call anything");
+});
+
+test("board takeaways decide ties on counts and gaps on whole answers", () => {
+  const row = (brand, named, firstNamed, totalRuns = 100) =>
+    ({ brand, named, firstNamed, totalRuns, rotation: named / totalRuns, firstShare: firstNamed / totalRuns });
+  // Equal counts are level; unequal counts that round alike are a lead, not a tie.
+  assert.equal(boardTakeaways([row("A", 50, 30), row("B", 40, 30)]).lead.kind, "level");
+  const near = boardTakeaways([row("A", 50, 30049, 100000), row("B", 40, 29501, 100000)]).lead;
+  assert.equal(near.kind, "lead");
+  assert.equal(near.answers, 548);
+  // Exactly 20 points of gap counts, despite 0.3 - 0.1 being 0.19999999999999998 in floats.
+  assert.equal(boardTakeaways([row("A", 50, 40), row("B", 30, 10)]).gap?.brand, "B");
+  assert.equal(boardTakeaways([row("A", 50, 40), row("B", 29, 10)]).gap, null);
+  assert.equal(boardTakeaways([row("A", 50, 40)]).lead, null, "one brand has no runner-up");
+});
+
+test("per-assistant splits add back up to the pooled board", () => {
+  const ex = (engine, names) => ({ engine, question_id: "q1", run_index: 0, refused: false, error: null, sources: [],
+    brands: names.map((name, i) => ({ name, position: i + 1, sentiment: "neutral" })) });
+  const run = { engines: ["a", "b"], extractions: [
+    ex("a", ["X", "Y"]), ex("a", ["Y"]), ex("b", ["X"]), ex("b", ["Y", "X"]),
+    { ...ex("b", ["X"]), error: "timeout" },
+  ] };
+  const split = brandByEngine(run, "X");
+  assert.deepEqual(split.map(s => [s.engine, s.named, s.first, s.of]), [["b", 2, 1, 2], ["a", 1, 1, 2]]);
+  // Engine a puts X and Y first once each: a tie, reported as a tie.
+  const picks = topPickByEngine(run);
+  assert.deepEqual(picks.find(p => p.engine === "a").brands.sort(), ["X", "Y"]);
+  // Positions cover every answered run that named the brand, and nothing else.
+  assert.deepEqual(brandPositions(run, "X"), [2, 1, 0, 0]);
+  // Y shares two of X's three answered runs; the errored run does not count.
+  assert.deepEqual(brandCompanions(run, "X"), { of: 3, rows: [{ brand: "Y", together: 2 }] });
+});
 
 test("ties, missing engines and pluralities cannot manufacture consensus", () => {
   const row = (engine, brand, index = 0) => ({ engine, question_id: "q1", run_index: index,

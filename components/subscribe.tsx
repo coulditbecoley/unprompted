@@ -121,13 +121,11 @@ export function Subscribe() {
       <div className="subscribe-body">
         <p className="label">Get it every week</p>
         <h2 className="subscribe-head">
-          The chart updates every Monday. Have it come to you.
+          Get each new reading by email.
         </h2>
         <p className="subscribe-lead">
-          No account, no paywall, and nothing here is gated. Everything on this
-          site stays free to read whether you subscribe or not. The confirmation
-          tells you whether the mailing service accepted your request or it was
-          sent to the operator for follow-up. RSS is available immediately.
+          A new reading is scheduled every Monday. No account and no paywall:
+          everything here stays free whether you subscribe or not.
         </p>
 
         <form onSubmit={submit} className="subscribe-form">
