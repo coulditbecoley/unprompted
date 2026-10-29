@@ -1334,6 +1334,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .pick-tie { font-size: 13px; font-weight: 400; color: var(--fg-3); }
 .pick-note { font-size: 12.5px; color: var(--fg-2); }
 @media (max-width: 620px) { .pick-grid { grid-template-columns: 1fr 1fr; } .pick-brand { font-size: 16px; } }
+.brand-trust { margin: 8px 0 0; font-size: 13.5px; color: var(--fg-3); max-width: 68ch; }
+
 /* Brand page: position in the answer. */
 .pos-rows { display: grid; gap: 8px; margin-top: 4px; }
 .pos-row { display: grid; grid-template-columns: 112px 1fr 40px; gap: 12px; align-items: center; font-size: 13.5px; color: var(--fg-2); }

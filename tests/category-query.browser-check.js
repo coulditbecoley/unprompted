@@ -32,6 +32,9 @@ async page => {
     await p.screenshot({path:`.playwright-cli/codex-r21-${width}-${theme}.png`});
     await p.getByRole('button',{name:'Clear search',exact:true}).click();
     check(await p.locator('.cat-card').count()===3 && await p.locator('#cat-q').evaluate(el=>el===document.activeElement),'Live clear/focus failed');
+    check(!new URL(p.url()).searchParams.has('q'),'Clear must remove the persisted search');
+    await p.reload();
+    check(await p.locator('.cat-card').count()===3 && await p.locator('#cat-q').inputValue()==='', 'Refresh must keep the search cleared');
    } else check(!await p.getByRole('button',{name:'Clear search',exact:true}).isVisible(),'No-JS clear must not be an inert button');
    out.push({javaScriptEnabled,width,theme,result:'PASS'});
   } finally {await context.close();}

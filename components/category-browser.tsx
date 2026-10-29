@@ -74,7 +74,13 @@ export function CategoryBrowser({
             No brands or categories match &ldquo;{query}&rdquo;. Try a broader term or clear
             the search to see all categories.
           </p>
-          <button type="button" className="btn" onClick={() => { setQuery(""); searchInput.current?.focus(); }}>Clear search</button>
+          <button type="button" className="btn" onClick={() => {
+            setQuery("");
+            const url = new URL(window.location.href);
+            url.searchParams.delete("q");
+            window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+            searchInput.current?.focus();
+          }}>Clear search</button>
         </div>
       )}
 

@@ -141,6 +141,11 @@ export default async function BrandPage({
           <>{brand} was not named in any answer in the latest measurement.</>
         )}
       </p>
+      {/* Trust is asked at the top, not after the history table. */}
+      <p className="brand-trust rise" style={{ "--i": 2 } as React.CSSProperties}>
+        Counted from {run ? run.engines.length : "several"} AI assistants&rsquo; answers to the same buying
+        questions. Nobody can pay to appear. <Link href="/methodology">How this is measured →</Link>
+      </p>
 
       {row && (
         <div className="kpi-row">
