@@ -2277,11 +2277,13 @@ def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp
     this check stayed green because a held run counted as having happened."""
     wd = _watchdog(monkeypatch, tmp_path, ["alpha"], held=[("2026-10-19", "alpha")])
     (tmp_path / "last-run.json").write_text(json.dumps({"status": "held", "at": "2026-10-19T18:00:00+00:00",
-        "detail": "alpha: held - 2 unrecognised brand name(s) appeared"}), encoding="utf-8")
+        "detail": "alpha: held - 2 unrecognised brand name(s) appeared",
+        "categories": {"alpha": {"outcome": "held", "reasons": ["2 unrecognised brand name(s): `Evil`"]}}}), encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["watchdog", "--date", "2026-10-20"])
     assert wd.main() == 1
     err = capsys.readouterr().err
     assert "Weekly run held, not published: 2026-10-19" in err and "aliases/<category>.yml" in err
+    assert "- `alpha`: held · `2 unrecognised brand name(s): Evil`" in err  # per category, backticks stripped
 
     # A re-reading of that week, published later under the day it ran, settles it.
     d = tmp_path / "data/runs/2026-10-28"

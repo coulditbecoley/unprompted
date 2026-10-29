@@ -218,6 +218,11 @@ def main() -> int:
             f"`data/last-run.json` says: **{status.get('status', 'nothing at all')}**"
             + (f" at {status['at']}" if status.get("at") else ""),
             "",
+            # Per category when the run recorded it. Reasons quote brand names
+            # from AI answers, so they go in code spans with backticks removed.
+            *[f"- `{c}`: {o.get('outcome', '?')}" + "".join(f" · `{str(r).replace('`', '')[:200]}`" for r in o.get("reasons", [])[:3])
+              for c, o in sorted((status.get("categories") or {}).items()) if isinstance(o, dict)],
+            *([""] if status.get("categories") else []),
             "What to do:" if steps else
             "Its reason is not one this check recognises; see the detail in `data/last-run.json`." if status else
             "No status for this week reached GitHub, so the reason is not known here; check the run log on the measuring machine.",
