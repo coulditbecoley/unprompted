@@ -50,6 +50,12 @@ def response_metadata(response: object) -> dict | None:
              for citation in getattr(block, "citations", None) or [] if isinstance(url := getattr(citation, "url", None), str)]
     if cited:
         metadata["cited"] = list(dict.fromkeys(cited))
+    # What it searched for: evidence of how an engine frames a buying question.
+    queries = [block.input["query"] for block in getattr(response, "content", None) or []
+               if getattr(block, "type", None) == "server_tool_use" and isinstance(getattr(block, "input", None), dict)
+               and isinstance(block.input.get("query"), str)]
+    if queries:
+        metadata["queries"] = queries
     return metadata or None
 
 def read_response(response: object) -> tuple[str, list[str], dict[str, int]]:

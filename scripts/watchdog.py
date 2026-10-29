@@ -220,7 +220,7 @@ def main() -> int:
             "",
             # Per category when the run recorded it. Reasons quote brand names
             # from AI answers, so they go in code spans with backticks removed.
-            *[f"- `{c}`: {o.get('outcome', '?')}" + "".join(f" · `{str(r).replace('`', '')[:200]}`" for r in o.get("reasons", [])[:3])
+            *[f"- `{c}`: {o.get('outcome', '?')}" + "".join(f" · `{' '.join(str(r).replace('`', '').split())[:200]}`" for r in o.get("reasons", [])[:3])
               for c, o in sorted((status.get("categories") or {}).items()) if isinstance(o, dict)],
             *([""] if status.get("categories") else []),
             "What to do:" if steps else

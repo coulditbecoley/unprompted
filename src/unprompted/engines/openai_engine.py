@@ -60,6 +60,11 @@ class OpenAIEngine(Engine):
         # re-routed upstream (Gemini, October 2026) and this is the only proof.
         metadata = {k: v for k, v in (("model", getattr(response, "model", None)),
                                       ("status", getattr(response, "status", None))) if isinstance(v, str)}
+        # What it searched for: evidence of how an engine frames a buying question.
+        queries = [q for item in getattr(response, "output", None) or [] if getattr(item, "type", None) == "web_search_call"
+                   if isinstance(q := getattr(getattr(item, "action", None), "query", None), str)]
+        if queries:
+            metadata["queries"] = queries
         return text, sources, usage, metadata or None
 
 

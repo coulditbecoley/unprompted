@@ -23,7 +23,8 @@ def install_provider(monkeypatch, outcomes=("end_turn", "refusal", "pause_turn",
                 "type": "succeeded", "message": {
                     "id": f"m{i}", "type": "message", "role": "assistant", "model": "claude-opus-5",
                     "stop_reason": stop, "stop_sequence": None,
-                    "content": [{"type": "text", "text": "Alpha is an option.", "citations": [
+                    "content": [{"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "alpha brand"}},
+                                {"type": "text", "text": "Alpha is an option.", "citations": [
                                      {"type": "web_search_result_location", "url": "https://example.com", "title": "Alpha",
                                       "encrypted_index": "x", "cited_text": "Alpha"}]},
                                 {"type": "web_search_tool_result", "tool_use_id": "search",
@@ -53,7 +54,7 @@ def test_batch_reuses_identity_preserves_evidence_and_never_retries_paid_results
     assert by_index[0].text == "Alpha is an option."
     assert by_index[0].usage["batch_billed"] == 1
     assert by_index[0].usage["cache_creation_1h_input_tokens"] == 100
-    assert by_index[0].metadata == {"model": "claude-opus-5", "stop_reason": "end_turn", "cited": ["https://example.com"]}
+    assert by_index[0].metadata == {"model": "claude-opus-5", "stop_reason": "end_turn", "cited": ["https://example.com"], "queries": ["alpha brand"]}
     assert by_index[1].text == "" and by_index[1].error is None
     assert by_index[2].error and by_index[2].usage["output_tokens"] == 100
     assert by_index[3].error.endswith("expired") and not by_index[3].usage
@@ -112,7 +113,7 @@ def test_budget_estimates_discount_without_repricing_history():
 def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch):
     import openai
     from unprompted.engines.openai_engine import OpenAIEngine
-    response = NS(output_text="Alpha", status="completed", model="gpt-6-sol-2026-09-01", output=[NS(type="web_search_call"),
+    response = NS(output_text="Alpha", status="completed", model="gpt-6-sol-2026-09-01", output=[NS(type="web_search_call", action=NS(query="best ai coding tools")),
                   NS(type="message"), NS(type="web_search_call")], usage=NS(
         input_tokens=1000, output_tokens=200, input_tokens_details=NS(cached_tokens=500),
         output_tokens_details=NS(reasoning_tokens=150)))
@@ -123,7 +124,7 @@ def test_openai_counts_actual_search_calls_and_captures_cache_usage(monkeypatch)
     assert answer.usage["web_searches"] == 2
     assert answer.usage["cached_input_tokens"] == 500
     assert answer.usage["reasoning_tokens"] == 150
-    assert answer.metadata == {"model": "gpt-6-sol-2026-09-01", "status": "completed"}  # who really answered
+    assert answer.metadata == {"model": "gpt-6-sol-2026-09-01", "status": "completed", "queries": ["best ai coding tools"]}
     response.output = []
     assert engine.ask_one("q1", "Which?", 1).usage["web_searches"] == 0
 
