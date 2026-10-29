@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.mark.skipif(sys.platform != "win32", reason="executes the actual Windows cmd launcher")
 def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
-    repo = tmp_path / "repo with spaces"
+    repo = tmp_path / "coley's repo with spaces"
     remote = tmp_path / "remote.git"
     repo.mkdir()
     env = {**os.environ, "TEMP": str(tmp_path / "temp with spaces"), "TMP": str(tmp_path / "temp with spaces")}

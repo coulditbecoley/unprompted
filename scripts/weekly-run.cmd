@@ -23,7 +23,11 @@ if not exist "%UNPROMPTED_PYTHON%" (
 REM The log lives with the checkpoints it explains (gitignored), not in %TEMP%,
 REM which Windows may clear; it is rotated once it passes 20 MB.
 set "LOG=%CD%\.unprompted\logs\weekly.log"
-"%UNPROMPTED_PYTHON%" -c "import pathlib; p=pathlib.Path(r'%LOG%'); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.replace(p.with_suffix('.log.1'))" 2>nul
+"%UNPROMPTED_PYTHON%" -c "import os, pathlib; p = pathlib.Path(os.environ['LOG']); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.replace(p.with_suffix('.log.1'))" 2>nul
+REM Read from the environment, never pasted into Python source: a checkout
+REM path with an apostrophe would break the literal. If the folder cannot be
+REM made, log where it used to go rather than lose every line.
+if errorlevel 1 set "LOG=%TEMP%\unprompted-weekly.log"
 
 REM Start marker for the shadow step's time budget at the end. Best effort.
 "%UNPROMPTED_PYTHON%" -c "import pathlib,time; p=pathlib.Path('.unprompted'); p.mkdir(exist_ok=True); (p/'weekly-started').write_text(str(time.time()))" 2>nul
