@@ -96,8 +96,9 @@ export const KNOWN_CLIS: Array<{
     // --skip-git-repo-check because the pipeline runs it from an empty
     // directory, and codex otherwise refuses outside a trusted repository.
     // The rest drop the operator's hooks, MCP servers and execpolicy, and stop
-    // model-generated shell commands from writing anything. The trailing "-"
-    // reads the prompt from stdin and must stay last.
+    // model-generated shell commands from writing anything. -m pins the model
+    // (the CLI default moved in 0.163.0); changing it is a method change. The
+    // trailing "-" reads the prompt from stdin and must stay last.
     args: [
       "exec",
       "--skip-git-repo-check",
@@ -105,6 +106,8 @@ export const KNOWN_CLIS: Array<{
       "--ignore-rules",
       "--sandbox",
       "read-only",
+      "-m",
+      "gpt-6-astra",
       "-",
     ],
     versionArgs: ["--version"],

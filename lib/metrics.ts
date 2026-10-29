@@ -236,7 +236,7 @@ export function standings(run: RunRecord): BrandStanding[] {
     (a, b) =>
       b.firstShare - a.firstShare ||
       b.rotation - a.rotation ||
-      a.brand.localeCompare(b.brand),
+      byCodePoint(a.brand, b.brand),
   );
   return out;
 }
@@ -382,7 +382,13 @@ export function sourceCounts(run: RunRecord): Array<[string, number]> {
       if (host) counts.set(host, (counts.get(host) ?? 0) + 1);
     }
   }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || byCodePoint(a[0], b[0]));
+}
+
+// Python's tie-break: raw code points, so "HunyuanImage" sorts before
+// "getimg.ai". localeCompare ignores case and put them the other way round.
+function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**

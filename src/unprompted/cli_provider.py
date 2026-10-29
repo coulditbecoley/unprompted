@@ -50,8 +50,10 @@ ALLOWED_CLIS: dict[str, tuple[str, ...]] = {
     "claude": ("-p", "--strict-mcp-config"),
     # --ignore-user-config drops hooks and MCP servers; --ignore-rules drops
     # execpolicy; --sandbox read-only blocks writes from model-generated shell
-    # commands. The trailing "-" makes it read the prompt from stdin and must
-    # stay last.
+    # commands. -m pins the model: with the user config ignored, the CLI's own
+    # default decides, and codex-cli 0.163.0 moved it to gpt-6.1-sol (2026-10).
+    # Changing it is a method change. The trailing "-" makes it read the prompt
+    # from stdin and must stay last.
     "codex": (
         "exec",
         "--skip-git-repo-check",
@@ -59,6 +61,8 @@ ALLOWED_CLIS: dict[str, tuple[str, ...]] = {
         "--ignore-rules",
         "--sandbox",
         "read-only",
+        "-m",
+        "gpt-6-astra",
         "-",
     ),
     # Not installed here, so unverified: left at its documented invocation

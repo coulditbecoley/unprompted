@@ -70,6 +70,8 @@
         "--ignore-rules",
         "--sandbox",
         "read-only",
+        "-m",
+        "gpt-6-astra",
         "-"
       ],
       "note": "CLI extraction is disabled by the resolver until filesystem and network isolation are qualified. Local engine operation is configured separately."
@@ -101,6 +103,8 @@
         "--ignore-rules",
         "--sandbox",
         "read-only",
+        "-m",
+        "gpt-6-astra",
         "-"
       ],
       "note": "Own chart row, not a substitute for the hosted chatgpt engine. In testing it ranked Claude Code above OpenAI's own Codex. Enabled for the same reason as claude-code."
