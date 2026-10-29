@@ -1316,6 +1316,9 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   background: var(--surface); border: var(--rule-w) solid var(--rule); border-radius: var(--r); box-shadow: var(--shadow-1);
 }
 .pick-brand { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
+.pick-brand a { color: inherit; text-decoration: none; }
+.pick-brand a:hover, .pick-brand a:focus-visible { text-decoration: underline; text-decoration-color: var(--fg-3); }
+.pick-tie { font-size: 13px; font-weight: 400; color: var(--fg-3); }
 .pick-note { font-size: 12.5px; color: var(--fg-2); }
 @media (max-width: 620px) { .pick-grid { grid-template-columns: 1fr 1fr; } .pick-brand { font-size: 16px; } }
 /* Brand page: one row per assistant. */
@@ -1622,4 +1625,39 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .cmp-labelled-dates > span:last-child { left: 100% !important; transform: translateX(-100%); }
 .cmp-legend .cmp-key { width: 6px; height: 6px; border: 1px solid var(--fg); border-radius: 50%; background: var(--fg); }
 .cmp-legend .cmp-key.is-b { width: 10px; height: 10px; border: 2px solid var(--fg-2); border-radius: 0; background: transparent; }
+/* Round 5: system-colour marks and readable printed evidence. */
+@media (forced-colors: active) {
+  .cns-strip > span { forced-color-adjust: none; background: Canvas; border-color: CanvasText; }
+  .cns-strip > span[data-agreed="true"] { background: CanvasText; }
+  .cmp-history-dot, .cmp-legend .cmp-key { forced-color-adjust: none; background: CanvasText; border-color: CanvasText; }
+  .cmp-history-dot.is-b, .cmp-legend .cmp-key.is-b { background: Canvas; }
+  .cmp-history-line { forced-color-adjust: none; stroke: CanvasText; }
+  .cmp-history-svg .spark-grid { forced-color-adjust: none; stroke: GrayText; }
+  :is(.cmp-page, .cns-page, .q-page) .meter { forced-color-adjust: none; background: Canvas; border: 1px solid GrayText; }
+  :is(.cmp-page, .cns-page, .q-page) .meter > i { background: CanvasText; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) *,
+  :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) *::before,
+  :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) *::after {
+    animation: none !important; transition: none !important;
+  }
+}
+@media print {
+  :is(.cmp-page, .cns-page, .q-page, .method-page, .categories-page, [data-not-found]) {
+    --fg: #000; --fg-2: #333; --fg-3: #555; --bg: #fff; --surface: #fff;
+    --surface-2: #eee; --rule: #bbb; --rule-2: #aaa; --accent: #000;
+  }
+  .cmp-presets, .cat-tabs, .table-scroll-note, .q-load-answers { display: none !important; }
+  .cns .cns-row { grid-template-columns: minmax(120px, 1.5fr) repeat(var(--engines), minmax(0, 1fr)) 50px; min-width: 0; gap: 8px; }
+  .cns .cns-row > * { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+  .cns .cns-q { position: static; width: auto; }
+  .cmp-chart-scroll, .method-table { overflow: visible; }
+  .cmp-chart-scroll > div { min-width: 0 !important; }
+  .method-table table { min-width: 0; width: 100%; }
+  .cns-strip, .cmp-plot, .q-coverage .meter { print-color-adjust: exact; }
+  .q-engine-group::details-content, .q-answer::details-content { content-visibility: visible; display: block; }
+  .q-engine-group > :not(summary), .q-answer > :not(summary) { display: block; }
+
+}
 /* === codex pages: end === */

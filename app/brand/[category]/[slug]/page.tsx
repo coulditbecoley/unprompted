@@ -284,7 +284,7 @@ export default async function BrandPage({
         <Link className="btn" href={`/chart/${category}`}>
           Back to the {inSentence(label)} board <span className="arr" aria-hidden="true">→</span>
         </Link>
-        {run && (
+        {run && row && (
           <Link className="btn btn-ghost" href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, brand })}`}>
             Read the answers that named {brand}
           </Link>

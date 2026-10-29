@@ -29,7 +29,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <section className="shell section">
+    <section className="shell section categories-page">
       <p className="label">Browse</p>
       <h1 className="display page-title rise">
         What we measure.

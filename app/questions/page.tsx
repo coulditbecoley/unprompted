@@ -119,7 +119,7 @@ export default async function QuestionsPage({
     byQuestion.set(ex.question_id, list);
   }
 
-  const visibleQuestions = spec.questions.filter(q => !selectedBrand || byQuestion.has(q.id));
+  const visibleQuestions = spec.questions.filter(q => !selectedBrand || byQuestion.has(q.id) || params.question === q.id);
 
   return (
     <section className="shell section q-page">
@@ -207,7 +207,7 @@ export default async function QuestionsPage({
                 {params.question === q.id ? "Hide full answer text" : "Read full answers to this question"}
               </a>
             </p>}
-            {rows.length === 0 && <p className="cmp-note">No attempts for this question were recorded in this reading.</p>}
+            {rows.length === 0 && <p className="cmp-note">{selectedBrand ? `No answers to this question name ${selectedBrand} with these filters.` : "No attempts for this question were recorded in this reading."}</p>}
 
             {engines.map((engine) => {
               const runs = rows

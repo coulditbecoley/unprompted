@@ -548,13 +548,14 @@ export function brandByEngine(
 
 /**
  * Each assistant's own first choice: the brand it put first most often across
- * its answered runs. Ties go to the brand named more often overall, then by
- * name, so the result never depends on file order. An engine with no
+ * its answered runs. A tie is reported as a tie, every brand sharing the top
+ * count, because equal counts are not a preference. Order within a tie follows
+ * mentions then name, so it never depends on file order. An engine with no
  * first-placed brand at all is left out.
  */
 export function topPickByEngine(
   run: RunRecord,
-): Array<{ engine: string; brand: string; first: number; of: number }> {
+): Array<{ engine: string; brands: string[]; first: number; of: number }> {
   const per = new Map<string, { of: number; first: Map<string, number>; named: Map<string, number> }>();
   for (const ex of answered(run)) {
     const e = per.get(ex.engine) ?? { of: 0, first: new Map(), named: new Map() };
@@ -565,14 +566,16 @@ export function topPickByEngine(
     }
     per.set(ex.engine, e);
   }
-  const out: Array<{ engine: string; brand: string; first: number; of: number }> = [];
+  const out: Array<{ engine: string; brands: string[]; first: number; of: number }> = [];
   for (const engine of run.engines) {
     const e = per.get(engine);
     if (!e || e.first.size === 0) continue;
-    const [brand, first] = [...e.first.entries()].sort(
-      (a, b) => b[1] - a[1] || (e.named.get(b[0]) ?? 0) - (e.named.get(a[0]) ?? 0) || a[0].localeCompare(b[0]),
-    )[0];
-    out.push({ engine, brand, first, of: e.of });
+    const first = Math.max(...e.first.values());
+    const brands = [...e.first.entries()]
+      .filter(([, n]) => n === first)
+      .map(([name]) => name)
+      .sort((x, y) => (e.named.get(y) ?? 0) - (e.named.get(x) ?? 0) || x.localeCompare(y));
+    out.push({ engine, brands, first, of: e.of });
   }
   return out;
 }

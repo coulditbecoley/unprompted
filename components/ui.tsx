@@ -466,26 +466,38 @@ export function TopPicks({
   labels,
   hrefFor,
 }: {
-  picks: Array<{ engine: string; brand: string; first: number; of: number }>;
+  picks: Array<{ engine: string; brands: string[]; first: number; of: number }>;
   labels: Map<string, string>;
   hrefFor: (brand: string) => string;
 }) {
-  const brands = new Set(picks.map((p) => p.brand));
+  const brands = [...new Set(picks.flatMap((p) => p.brands))];
+  const ties = picks.some((p) => p.brands.length > 1);
+  const list = brands.join(", ").replace(/, ([^,]*)$/, " and $1");
   return (
     <>
       <p className="section-lead" style={{ marginBottom: 16 }}>
-        {brands.size === 1
-          ? `Every assistant put ${picks[0].brand} first more often than anything else.`
-          : `Taken one at a time, the ${picks.length} assistants split between ${brands.size} favourites: ${[...brands].join(", ").replace(/, ([^,]*)$/, " and $1")}.`}
+        {brands.length === 1
+          ? `Every assistant put ${brands[0]} first more often than anything else.`
+          : `Taken one at a time, the ${picks.length} assistants split between ${brands.length} favourites: ${list}.`}
+        {ties && " Where two brands were put first equally often, both are shown."}
       </p>
       <div className="pick-grid">
         {picks.map((p, i) => (
-          <Link key={p.engine} href={hrefFor(p.brand)} className="pick-card card-lift rise" style={{ "--i": i } as React.CSSProperties}>
+          <div key={p.engine} className="pick-card rise" style={{ "--i": i } as React.CSSProperties}>
             <span className="label">{labels.get(p.engine) ?? p.engine}</span>
-            <span className="pick-brand">{p.brand}</span>
+            <span className="pick-brand">
+              {p.brands.map((b, j) => (
+                <span key={b}>
+                  {j > 0 && <span className="pick-tie"> tied with </span>}
+                  <Link href={hrefFor(b)}>{b}</Link>
+                </span>
+              ))}
+            </span>
             <span className="meter" aria-hidden="true"><i style={{ "--v": p.first / p.of } as React.CSSProperties} /></span>
-            <span className="pick-note">first in {p.first} of {p.of} answers</span>
-          </Link>
+            <span className="pick-note">
+              first in {p.first} of {p.of} answers{p.brands.length > 1 ? " each" : ""}
+            </span>
+          </div>
         ))}
       </div>
     </>

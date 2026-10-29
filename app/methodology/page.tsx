@@ -32,7 +32,7 @@ export default function MethodologyPage() {
   const headings = [...content.matchAll(/^#{2,3} (.+)$/gm)].map(m => ({ text: m[1].trim(), id: headingId(m[1].trim()) }));
 
   return (
-    <section className="shell section">
+    <section className="shell section method-page">
       <h1 className="display page-title rise">How the measurement works.</h1>
       <p className="section-lead">
         How we count brand mentions in AI answers, check the results, and decide
