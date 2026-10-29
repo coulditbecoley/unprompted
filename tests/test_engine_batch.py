@@ -374,3 +374,12 @@ def test_records_without_metadata_round_trip_unchanged_and_searches_price_by_pre
     assert _searches({"requests": 1}) == 1
     assert _searches({"web_searches": 0, "requests": 1}) == 0
     assert _price("gemini", {"web_searches": 2}) == 2 * _price("gemini", {"web_searches": 1}) > 0
+
+
+def test_batch_waits_end_with_the_run_not_after_one_hour(monkeypatch):
+    # 2026-10-19: a one-hour cap stranded a paid batch that would have ended.
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "_PROCESS_STARTED", base.time.monotonic())
+    assert base.wait_deadline(batch.MAX_WAIT_SECONDS) - base.time.monotonic() > 5 * 3600
+    monkeypatch.setattr(base, "_PROCESS_STARTED", base.time.monotonic() - base.RUN_SECONDS + 60)
+    assert base.wait_deadline(batch.MAX_WAIT_SECONDS) - base.time.monotonic() <= 60

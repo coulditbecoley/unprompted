@@ -8,12 +8,15 @@ import time
 from pathlib import Path
 
 from .anthropic_engine import request_params, read_response, TIMEOUT_SECONDS
-from .base import utc_now
+from .base import utc_now, wait_deadline
 from ..models import EngineAnswer
 from ..storage import write_json
 
 POLL_SECONDS = 15
-MAX_WAIT_SECONDS = 3600
+# Batches may take up to 24 hours. One hour stranded the 2026-10-19 image
+# batch after its other 375 calls were paid, and the uncollected batch then
+# refused every later category. Waits are now bounded by the run's own clock.
+MAX_WAIT_SECONDS = 6 * 3600
 
 
 def _client(api_key):
@@ -76,7 +79,7 @@ def collect(state_path: Path, api_key: str, deadline: float | None = None) -> li
     results_path = state_path.with_name("results.json")
     if not results_path.exists():
         client = _client(api_key)
-        recovery, deadline = deadline, time.monotonic() + MAX_WAIT_SECONDS if deadline is None else deadline
+        recovery, deadline = deadline, wait_deadline(MAX_WAIT_SECONDS) if deadline is None else deadline
         label = f"Claude batch {state['id']}"
         while True:
             batch = read_retrying(lambda: client.messages.batches.retrieve(state["id"]), deadline, label)

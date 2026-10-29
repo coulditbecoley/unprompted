@@ -20,6 +20,17 @@ SYSTEM_PROMPT = (
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = 2.0
 
+# Every batch wait in one process shares this wall clock. Task Scheduler stops
+# the weekly run at 8 hours, and a run killed there commits nothing at all, so
+# waits end an hour short of it and the categories that did pass still publish.
+RUN_SECONDS = 7 * 3600
+_PROCESS_STARTED = time.monotonic()
+
+
+def wait_deadline(max_wait: float) -> float:
+    """When a batch wait started now must give up: `max_wait`, or the run's end."""
+    return min(time.monotonic() + max_wait, _PROCESS_STARTED + RUN_SECONDS)
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
