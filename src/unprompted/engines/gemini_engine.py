@@ -112,12 +112,12 @@ class GeminiEngine(Engine):
         spent but not itself added to it.
         """
         if MODEL not in _SERVED:
-            refuse_new_paid_work("Gemini model probe")
             from datetime import date
             from ..budget import MONTHLY_CEILING, spent_in_month
             if MONTHLY_CEILING > 0 and spent_in_month(date.today()) >= MONTHLY_CEILING:  # 0 = no ceiling
                 raise ProviderError("gemini: the month's budget is spent, so not even the model probe runs")
             for attempt in range(MAX_ATTEMPTS):
+                refuse_new_paid_work("Gemini model probe")  # before every attempt, retries included
                 try:
                     metadata = self._probe()
                     if not metadata.get("modelVersion"):

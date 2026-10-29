@@ -567,7 +567,24 @@ def test_a_transient_gemini_probe_failure_is_retried_not_fatal(monkeypatch):
 
 
 def test_an_idless_extraction_intent_blocks_recovery_only_when_it_was_submitted(tmp_path):
-    for started, failures in ((False, 0), (True, 1)):
-        job = tmp_path / f"{started}/.unprompted/2026-09-14/alpha/batch.json"
-        write_json(job, {"result_checkpoint_version": 1, **({"submission_started": True} if started else {})})
+    for started, version, failures in ((False, None, 0), (True, 1, 1), (False, 1, 1)):  # mirrors budget.py
+        job = tmp_path / f"{started}{version}/.unprompted/2026-09-14/alpha/batch.json"
+        write_json(job, {"result_checkpoint_version": version, **({"submission_started": True} if started else {})})
         assert len(batch.collect_outstanding(job.parents[2], "offline")[1]) == failures
+
+
+def test_a_gemini_probe_retry_is_not_started_after_the_run_clock(monkeypatch):
+    from unprompted import budget
+    from unprompted.engines import base, gemini_engine
+    monkeypatch.setattr(gemini_engine, "_SERVED", {})
+    monkeypatch.setattr(budget, "spent_in_month", lambda when: 0)
+    probes = []
+    def probe(self):
+        probes.append(1)
+        monkeypatch.setattr(base, "_PROCESS_STARTED", base.time.monotonic() - base.RUN_SECONDS - 1)
+        raise ConnectionError("503 UNAVAILABLE")
+    monkeypatch.setattr(gemini_engine.GeminiEngine, "_probe", probe)
+    monkeypatch.setattr(gemini_engine.time, "sleep", lambda s: None)
+    with pytest.raises(TimeoutError, match="budget is spent"):
+        gemini_engine.GeminiEngine().identify()
+    assert len(probes) == 1
