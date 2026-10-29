@@ -636,3 +636,11 @@ def test_a_gemini_probe_that_searches_is_reported(monkeypatch, capsys):
     monkeypatch.setattr(gemini_engine.GeminiEngine, "_probe", lambda self: {"modelVersion": "gemini-3.6-flash", "web_searches": 2})
     assert gemini_engine.GeminiEngine().identify()["model"] == "gemini-3.6-flash"
     assert "probe searched 2 time(s)" in capsys.readouterr().err
+
+
+def test_the_run_clock_is_never_a_faked_clock():
+    # Under tests/future_date.py only the calendar may move: freezegun's fake
+    # monotonic differs between threads, so the run clock must stay real.
+    import time
+    assert "freezegun" not in (getattr(time.monotonic, "__module__", "") or "")
+    assert "freezegun" not in (getattr(time.perf_counter, "__module__", "") or "")

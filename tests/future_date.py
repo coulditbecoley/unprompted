@@ -17,6 +17,13 @@ def pytest_configure(config):
     global _freezer
     _freezer = freeze_time(os.environ["FAKE_TODAY"], tick=True)
     _freezer.start()
+    # Only the calendar moves. freezegun also fakes the duration clocks, and
+    # worker threads can see the real ones, so a run-clock check could pass on
+    # one thread and refuse on another; the real ones are put back.
+    import time
+    import freezegun.api as api
+    time.monotonic, time.monotonic_ns = api.real_monotonic, api.real_monotonic_ns
+    time.perf_counter, time.perf_counter_ns = api.real_perf_counter, api.real_perf_counter_ns
 
 
 def pytest_unconfigure(config):
