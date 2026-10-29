@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { SectionLink } from "@/components/contact";
 
 import {
   type Category,
@@ -22,7 +23,7 @@ export function CategoryBrowser({
   counts,
 }: {
   groups: Array<{ sector: Sector; categories: Category[] }>;
-  counts: Record<string, { brands: number; weeks: number } | undefined>;
+  counts: Record<string, { leader: string | null; share: number; measured: string } | undefined>;
 }) {
   const [query, setQuery] = useState("");
 
@@ -50,7 +51,7 @@ export function CategoryBrowser({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search: grading, sleeves, PSA…"
+          placeholder="Search categories or brands"
           className="cat-search-input mono"
           autoComplete="off"
         />
@@ -60,18 +61,19 @@ export function CategoryBrowser({
       </div>
 
       {filtered.length === 0 && (
-        <div className="panel" style={{ paddingLeft: 22 }}>
+        <div className="panel cat-empty">
           <p style={{ margin: 0, color: "var(--fg-2)" }}>
-            Nothing matches &ldquo;{query}&rdquo;. We measure a small number of
-            categories deliberately, and add them one at a time.
+            No categories match &ldquo;{query}&rdquo;. Try a broader term or clear
+            the search to see all categories.
           </p>
+          <button type="button" className="btn" onClick={() => setQuery("")}>Clear search</button>
         </div>
       )}
 
       {filtered.map(({ sector, categories }) => (
-        <section key={sector.slug} className="cat-sector">
+        <section key={sector.slug} className="cat-sector reveal">
           <div className="cat-sector-head">
-            <h2>{sector.label}</h2>
+            <h2 id={`sector-${sector.slug}`}>{sector.label} <SectionLink id={`sector-${sector.slug}`} label={sector.label} /></h2>
             <p>{sector.blurb}</p>
           </div>
 
@@ -87,15 +89,19 @@ export function CategoryBrowser({
                   <span className="trim-top" aria-hidden="true" />
                   <div className="cat-card-body">
                     <p className="cat-status" data-live={live}>
-                      {live ? "MEASURED WEEKLY" : "NOT YET MEASURED"}
+                      {live ? "RESULTS AVAILABLE" : "NO PUBLISHED RESULTS"}
                     </p>
                     <h3>{category.label}</h3>
                     <p className="cat-question">{category.question}</p>
                     {stat ? (
+                      <div>
                       <p className="cat-stat mono">
-                        {stat.brands} brands tracked · {stat.weeks} week
-                        {stat.weeks === 1 ? "" : "s"} recorded
+                        {stat.leader ? <><strong>{stat.leader}</strong> · {Math.round(stat.share * 100)}% named first</> : "No brand named in this reading"}
                       </p>
+                      <span className="meter cat-count-meter" aria-hidden="true"><i style={{ "--v": stat.share } as React.CSSProperties} /></span>
+                      <p className="cat-scale">Measured {stat.measured}</p>
+                      <span className="cat-open">Open board <span className="arr" aria-hidden="true">→</span></span>
+                      </div>
                     ) : (
                       <p className="cat-stat mono cat-stat-dim">
                         No data published yet
@@ -109,7 +115,7 @@ export function CategoryBrowser({
                 <Link
                   key={category.slug}
                   href={`/chart/${category.slug}`}
-                  className="cat-card"
+                  className="cat-card card-lift"
                   data-live="true"
                 >
                   {inner}

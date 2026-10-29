@@ -92,10 +92,16 @@ that shifts by digit width is a defect.
 
 ## Material and structure
 
-There is **one radius** (`--r: 6px`, with `--r-sm: 4px` for controls). There are
-no shadows. Elevation is expressed by a hairline border against a slightly
-lifted surface, which is what a dense interface can afford without the page
-turning soft.
+There is **one radius** (`--r: 6px`, with `--r-sm: 4px` for controls).
+Elevation is a hairline border against a slightly lifted surface, plus **one
+shadow ramp** (`--shadow-1` for controls, `--shadow-2` for every raised panel,
+`--shadow-hover` for a clickable card under the pointer). The ramp is low and
+cool-biased; in dark mode it adds a 1px inner top highlight instead of a grey
+haze. Every raised object sits at the same height, so depth reads as one sheet
+of paper above the page and never as a stack of floating cards.
+
+Hover lift (`.card-lift`, `.btn`) is reserved for things you can click. A panel
+that only holds numbers never moves.
 
 Panels are the same object everywhere: `--surface` ground, 1px `--rule` border,
 6px radius, `overflow: hidden` so rows clip cleanly to the corner.
@@ -289,12 +295,21 @@ one phone row, and the page must never scroll sideways.
 Fast and few. `--fast: 120ms` for state, 380-560ms for entrance, all on
 `cubic-bezier(0.16, 1, 0.3, 1)`.
 
-Three animations exist in the whole system: board steps fade up on load, the
-rotation bar grows from its left edge, and the caret in the question buffer
-blinks. Everything else is a colour, filter or border transition on hover.
+Entrance motion explains order, never decorates. On load the verdict, its
+lead and the stat tiles rise in sequence (`.rise` with a `--i` stagger), the
+question buffer types itself line by line, board steps fade up and share bars
+(`.meter`, the rotation bar) grow from their left edge. Below the fold,
+sections enter as they scroll in (`.reveal`, a CSS scroll timeline, so there is
+no JavaScript and no observer). The trend line on a brand page draws left to
+right. Two things move on their own: the buffer caret and the green live dot
+beside the measurement date.
 
 The board's column dimming is a state, not an animation: it transitions at
-`--fast` and holds. Nothing on this site moves on its own except the caret.
+`--fast` and holds.
+
+Scroll reveals are gated on `prefers-reduced-motion: no-preference` as well as
+on browser support, because a scroll-timeline animation is not shortened by the
+global 0.01ms rule below and would otherwise leave sections invisible.
 
 `prefers-reduced-motion: reduce` collapses every animation and transition to
 0.01ms globally, and the smooth scroll with it.
@@ -344,3 +359,30 @@ It must never show a mocked-up number.
 The direction contract is emitted as a real HTML comment in the shipped markup,
 not a JSX comment. A JSX comment is compiler syntax and reaches no output, which
 makes it a contract nobody can audit. Grep the built output for the seed key.
+
+---
+
+## Polish pass, 2026-10-28
+
+Five rounds across every public page, with one goal: a newcomer understands the
+project in five seconds, and every page is built to the homepage's standard.
+
+- **Plain words first.** Every page opens with what it shows and why it
+  matters. The board carries a key (`HowToRead`) that says what a square,
+  "Named", "First" and the change column mean. Engine ids are never shown to a
+  reader; `loadProviders()` labels are.
+- **Shared kit** in `components/ui.tsx`: `Kpi` stat tiles, `LeaderBars` (named
+  at all vs named first, side by side, because the gap is the finding),
+  `HowToRead`. In CSS: `.btn` variants, `.select`, `.meter`, `.crumbs`,
+  `.page-title`, `.sub-h`, `.sec-head`, `.reveal`, `.rise`, `.card-lift`.
+- **The meter is neutral.** A share is not a movement, so bars use the board's
+  blue step ramp (`--cell-2` pale, `--cell-4` solid), never green or red.
+- **The hero** gains one soft light and a fading dot grid behind the verdict.
+  It is the only decorative surface on the site and it carries no information,
+  so it is kept faint enough to vanish in a screenshot.
+- **Performance.** Geist and Geist Mono are self-hosted through `next/font`
+  instead of a render-blocking Google Fonts stylesheet. All new charts are
+  server-rendered SVG or CSS; the only client components are still the board,
+  freshness, subscribe and the theme toggle.
+- **Sharing.** Every board, dated board and brand page has its own social card
+  or share row with live figures; chart pages also emit a schema.org `Dataset`.

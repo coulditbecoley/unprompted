@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 
 import { CategoryBrowser } from "@/components/category-browser";
 import { categoriesBySector } from "@/lib/categories";
-import { latestRun, loadHistory, standings } from "@/lib/data";
+import { latestRun, standings } from "@/lib/data";
+import { Kpi } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "Categories",
   description:
     "Every category Unprompted measures, grouped by sector. Which brands AI assistants name when people ask what to buy.",
+  openGraph: { title: "Browse AI brand charts", description: "See the leading brand, first-pick share, and measurement date for each category." },
 };
 
 export default function CategoriesPage() {
@@ -15,12 +17,13 @@ export default function CategoriesPage() {
 
   // Counts come from the data itself, so a category cannot advertise a chart
   // that does not exist.
-  const counts: Record<string, { brands: number; weeks: number } | undefined> = {};
+  const counts: Record<string, { leader: string | null; share: number; measured: string } | undefined> = {};
   for (const group of groups) {
     for (const category of group.categories) {
       const run = latestRun(category.slug);
+      const leader = run ? standings(run)[0] : undefined;
       counts[category.slug] = run
-        ? { brands: standings(run).length, weeks: loadHistory(category.slug).length }
+        ? { leader: leader?.brand ?? null, share: leader?.firstShare ?? 0, measured: run.measured_on || run.run_date }
         : undefined;
     }
   }
@@ -28,14 +31,17 @@ export default function CategoriesPage() {
   return (
     <section className="shell section">
       <p className="label">Browse</p>
-      <h1 style={{ fontSize: "clamp(28px,5vw,44px)", fontWeight: 800, margin: "6px 0 12px" }}>
+      <h1 className="display page-title rise">
         What we measure.
       </h1>
       <p className="section-lead">
-        Every category is a real buying question, asked of the AI assistants
-        {" "}every week and published in full. We add them one at a time and only
-        list one as measured once it has data.
+        Choose a category to see which brands AI assistants mention in answers
+        to buying questions. We attempt a measurement each week and publish only
+        results that pass our checks.
       </p>
+      <div className="kpi-row">
+        <Kpi label="Categories" value={Object.keys(counts).length} note="Browse the subjects we track below." />
+      </div>
 
       <CategoryBrowser groups={groups} counts={counts} />
     </section>

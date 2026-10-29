@@ -23,3 +23,8 @@ export const DISCLOSURE =
 
 export const OPERATOR = "Skald Studio";
 export const OPERATOR_URL = "https://skaldstudio.io";
+
+/** A category label as it reads mid-sentence: "AI coding assistants" keeps its acronym. */
+export function inSentence(label: string): string {
+  return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}

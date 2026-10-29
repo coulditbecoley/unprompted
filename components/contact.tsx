@@ -31,6 +31,22 @@ const MAX_MESSAGE = 4000;
 
 type State = "idle" | "sending" | "done" | "error";
 
+/** A normal anchor still works when clipboard access is unavailable. */
+export function SectionLink({ id, label }: { id: string; label: string }) {
+  const [note, setNote] = useState("");
+  return <>
+    <a className="section-link" href={`#${id}`} aria-label={`Copy link to ${label}`} onClick={async () => {
+      try {
+        await navigator.clipboard.writeText(new URL(`#${id}`, window.location.href).href);
+        setNote("Link copied.");
+      } catch {
+        setNote("Copy the section address from your browser’s address bar.");
+      }
+    }}>#</a>
+    <span className="sr-only" role="status">{note}</span>
+  </>;
+}
+
 export function Contact() {
   const [state, setState] = useState<State>("idle");
   const [note, setNote] = useState("");
@@ -45,7 +61,7 @@ export function Contact() {
     // form's sibling has no abuse controls at all; this is the cheap half.
     if (data.get("botcheck")) {
       setState("done");
-      setNote("Thanks. I read everything that comes through here.");
+      setNote("Thanks for your message.");
       form.reset();
       return;
     }
@@ -75,28 +91,28 @@ export function Contact() {
       if (res.ok && body.success) {
         send({ path: window.location.pathname, event: "contact:sent" });
         setState("done");
-        setNote("Thanks. I read everything that comes through here.");
+        setNote("Your message was sent to the operator for review.");
         form.reset();
         return;
       }
       setState("error");
-      setNote(body.message ?? "That did not send.");
+      setNote(body.message ?? "The form service did not accept your message. Please try again.");
     } catch {
       setState("error");
-      setNote("Could not reach the form service.");
+      setNote("We could not confirm delivery. Your message is still here; check your connection before trying again.");
     }
   }
 
   return (
-    <div className="contact">
-      <p className="label">Say something</p>
-      <h3 className="contact-head">
-        Found a brand we are missing, or a number that looks wrong?
+    <div className="contact contact-polished reveal">
+      <p className="label">Corrections and questions</p>
+      <h3 className="contact-head" id="contact">
+        Help us check the results. <SectionLink id="contact" label="Corrections and questions" />
       </h3>
       <p className="subscribe-lead">
-        Corrections are the most useful thing anyone sends. Every alias decision
-        and every held week is in the public repository, so a specific complaint
-        can be checked against the data.
+        Found a missing brand or a number that looks wrong? Send the page link,
+        the brand name, and what you noticed so we can check it against the
+        recorded answers.
       </p>
 
       <form onSubmit={submit} className="contact-form">
@@ -163,10 +179,10 @@ export function Contact() {
 
         <button
           type="submit"
-          className="share-btn subscribe-submit contact-submit"
+          className="btn btn-go subscribe-submit contact-submit"
           disabled={state === "sending"}
         >
-          {state === "sending" ? "SENDING…" : "SEND"}
+          {state === "sending" ? "SENDING…" : "SEND MESSAGE"}
         </button>
       </form>
 

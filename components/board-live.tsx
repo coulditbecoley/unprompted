@@ -101,7 +101,12 @@ export function LiveBoard({
   denominators: number[];
   evidenceUrl?: string;
 }) {
-  const [active, setActive] = useState<number | null>(null);
+  // Hover is a glance; the picker is a choice. Only a choice opens the
+  // evidence panel, or sweeping the pointer across the board would push the
+  // board down the page under it.
+  const [hover, setHover] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const active = hover ?? picked;
   const [sort, setSort] = useState<SortKey>("first");
 
   const steps = rows[0]?.standing.steps.length ?? 0;
@@ -130,19 +135,26 @@ export function LiveBoard({
     // than the page, so it leaves with the board instead of following the
     // reader down into the next section.
     <div className="board-wrap">
-      <label htmlFor="board-question">Inspect a question</label>{" "}
-      <select id="board-question" value={active ?? ""} onChange={e => setActive(e.target.value === "" ? null : Number(e.target.value))}>
-        <option value="">Choose a question</option>
-        {questions.map((q, i) => <option key={i} value={i}>{i + 1}. {q}</option>)}
-      </select>
-      {active !== null && <details open className="question-evidence"><summary>{questions[active]}</summary>
-        <dl className="audience-rows">{rows.map(row => <div key={row.standing.brand}><dt>{row.standing.brand}</dt><dd>{row.standing.stepNamed[active] ?? 0}/{denominators[active] ?? 0}</dd></div>)}</dl>
-        {evidenceUrl && <a href={evidenceUrl}>Read the original answers</a>}
+      <div className="board-tools">
+        <label htmlFor="board-question" className="label">Read one question</label>
+        <select id="board-question" className="select" value={picked ?? ""} onChange={e => setPicked(e.target.value === "" ? null : Number(e.target.value))}>
+          <option value="">All {steps} questions</option>
+          {questions.map((q, i) => <option key={i} value={i}>{i + 1}. {q}</option>)}
+        </select>
+        {picked !== null && (
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPicked(null)}>
+            Clear
+          </button>
+        )}
+      </div>
+      {picked !== null && <details open className="question-evidence panel"><summary>Who was named for &ldquo;{questions[picked]}&rdquo;</summary>
+        <dl className="audience-rows">{[...rows].sort((a, b) => (b.standing.stepNamed[picked] ?? 0) - (a.standing.stepNamed[picked] ?? 0)).filter(row => (row.standing.stepNamed[picked] ?? 0) > 0).map(row => <div key={row.standing.brand}><dt>{row.standing.brand}</dt><dd><span className="meter" aria-hidden="true"><i style={{ "--v": (row.standing.stepNamed[picked] ?? 0) / Math.max(1, denominators[picked] ?? 0) } as React.CSSProperties} /></span>{row.standing.stepNamed[picked] ?? 0}/{denominators[picked] ?? 0}</dd></div>)}</dl>
+        {evidenceUrl && <a className="btn btn-sm" href={evidenceUrl}>Read the original answers <span className="arr" aria-hidden="true">→</span></a>}
       </details>}
       <div className="board-read" data-on={active !== null}>
         {active === null ? (
           <span className="board-read-idle">
-            {steps} questions · hover a step to read one down the board
+            {steps} questions · hover any square to see that question and who leads it
           </span>
         ) : (
           <>
@@ -167,7 +179,7 @@ export function LiveBoard({
         )}
       </div>
 
-      <div className="seq-board">
+      <div className="seq-board" onMouseLeave={() => setHover(null)}>
         <TrimTop />
         <div className="seq-row seq-head">
           <span className="label seq-rank" aria-hidden="true">
@@ -210,7 +222,7 @@ export function LiveBoard({
             move={row.move}
             href={row.href}
             activeStep={active}
-            onStep={setActive}
+            onStep={setHover}
           />
         ))}
       </div>

@@ -1,14 +1,17 @@
+import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
 
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
-import { categoryLabel, REPO_ROOT, latestRun, loadHistory } from "@/lib/data";
+import { categoryLabel, REPO_ROOT, loadHistory, coverage } from "@/lib/data";
+import { loadProviders } from "@/lib/providers";
+import { inSentence } from "@/lib/shared";
 import { notFound } from "next/navigation";
-import { AwaitingFirstRun, TrimTop } from "@/components/ui";
+import { AwaitingFirstRun, Kpi } from "@/components/ui";
 
-type Params = { c?: string; date?: string };
+type Params = { c?: string; date?: string; engine?: string };
 
 function resolve(params: Params): string {
   return params.c && getCategory(params.c) ? params.c : DEFAULT_CATEGORY;
@@ -23,8 +26,9 @@ export async function generateMetadata({
   const label = categoryLabel(category);
   return {
     title: `Every question, every answer: ${label}`,
+    openGraph: { title: `Recorded AI answers: ${label}`, description: "Read the questions, brand mentions, and source evidence behind the chart." },
     description:
-      `The exact questions asked about ${label.toLowerCase()}, and which brands ` +
+      `The exact questions asked about ${inSentence(label)}, and which brands ` +
       "each AI assistant named for each one. Show your work.",
   };
 }
@@ -82,12 +86,18 @@ export default async function QuestionsPage({
     return (
       <section className="shell section">
         <CategoryTabs category={category} />
+        <h1 className="display page-title rise">Check the recorded answers.</h1>
         <AwaitingFirstRun />
+        <a className="btn" href="/categories">Browse available results</a>
       </section>
     );
   }
 
   const byQuestion = new Map<string, typeof run.extractions>();
+  const labels = new Map(loadProviders().map(p => [p.id, p.label]));
+  const counts = coverage(run);
+  const selectedEngine = counts.some(c => c.engine === params.engine) ? params.engine : undefined;
+  const usable = counts.reduce((sum, c) => sum + c.answered, 0);
   for (const ex of run.extractions) {
     const list = byQuestion.get(ex.question_id) ?? [];
     list.push(ex);
@@ -97,27 +107,52 @@ export default async function QuestionsPage({
   return (
     <section className="shell section">
       <CategoryTabs category={category} />
-      <p className="label">{categoryLabel(category)} · week of {run.run_date}</p>
-      <form action="/questions"><input type="hidden" name="c" value={category} /><label htmlFor="evidence-date">Published reading </label><select id="evidence-date" name="date" defaultValue={run.run_date}>{history.map(r => <option key={r.run_date}>{r.run_date}</option>)}</select> <button type="submit" className="btn">Open</button></form>
-      {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
-      <h1 style={{ fontSize: "clamp(26px,4.6vw,40px)", fontWeight: 800, margin: "6px 0 12px" }}>
-        Every question, and what each assistant answered.
+      <p className="label">{categoryLabel(category)} · measured {run.measured_on || run.run_date} · reading {run.run_date}</p>
+      <h1 className="display page-title rise">
+        Check the answers behind the chart.
       </h1>
       <p className="section-lead">
-        {spec.questions.length} questions, asked {run.runs_per_question} times of
-        each engine. Below is which brands each engine named, per run, in order.
-        The raw answers behind all of it are in the repository.
+        Read the buying questions and the recorded AI answers to check where
+        each brand mention came from. Each question is scheduled for
+        {" "}{run.runs_per_question} attempts per engine (an AI assistant).
+        Each attempt is one run; errors and refusals are shown but excluded
+        from mention percentages.
+      </p>
+      <form action="/questions" className="btn-row q-reading"><input type="hidden" name="c" value={category} /><label htmlFor="evidence-date">Published reading </label><select className="select" id="evidence-date" name="date" defaultValue={run.run_date}>{history.map(r => <option key={r.run_date}>{r.run_date}</option>)}</select> <label htmlFor="evidence-engine">Assistant</label><select className="select" id="evidence-engine" name="engine" defaultValue={selectedEngine ?? ""}><option value="">All assistants</option>{counts.map(c => <option key={c.engine} value={c.engine}>{labels.get(c.engine) ?? c.engine}</option>)}</select><button type="submit" className="btn btn-go">Show answers</button></form>
+      {!run.methodology?.questions && <p className="cmp-note">Legacy record: question wording below comes from the current bank, not a frozen historical snapshot. Raw answers remain as recorded.</p>}
+      <div className="kpi-row">
+        <Kpi label="Questions listed" value={spec.questions.length} note="The question list for this reading." />
+        <Kpi i={1} label="Usable answers" value={usable} note={`Of ${run.extractions.length} recorded attempts.`} meter={usable / Math.max(run.extractions.length, 1)} />
+        <Kpi i={2} label="Errors or refusals" value={run.extractions.length - usable} note="Excluded from brand mention percentages." />
+      </div>
+      <div className="panel q-coverage reveal">
+        <h2 className="sub-h" id="coverage">Answer coverage by assistant</h2>
+        <p className="cmp-note">Coverage is for the full reading. Bar length is the share of recorded attempts that produced a usable answer.</p>
+        {counts.map(c => <div className="q-coverage-row" key={c.engine}>
+          <span>{labels.get(c.engine) ?? c.engine}</span>
+          <span className="meter" aria-hidden="true"><i style={{ "--v": c.answered / Math.max(c.attempted, 1) } as React.CSSProperties} /></span>
+          <span className="mono">{c.answered}/{c.attempted}</span>
+        </div>)}
+      </div>
+      <p className="cmp-note">
+        Each line lists the brands found in one answer. Open it to read the
+        original text and recorded source links. Sources may be citations or
+        search results; a link alone does not show which brand it supports.
       </p>
 
+      <nav className="q-jump" aria-label="Jump to a question">
+        {spec.questions.map((q, i) => <a className="btn btn-sm" key={q.id} href={`#${q.id}`} title={q.text}>Q{String(i + 1).padStart(2, "0")}</a>)}
+      </nav>
+      {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?c=${category}&date=${run.run_date}`}>Show all assistants</a></p>}
       {spec.questions.map((q) => {
-        const rows = byQuestion.get(q.id) ?? [];
+        const rows = (byQuestion.get(q.id) ?? []).filter(r => !selectedEngine || r.engine === selectedEngine);
         const engines = [...new Set(rows.map((r) => r.engine))].sort();
 
         return (
-          <div className="q-block" key={q.id} id={q.id}>
-            <TrimTop />
+          <div className="q-block panel" key={q.id} id={q.id}>
             <p className="label" style={{ marginTop: 6 }}>{q.id}</p>
-            <p className="q-text">{q.text}</p>
+            <h2 className="q-text">{q.text} <SectionLink id={q.id} label={q.text} /></h2>
+            {rows.length === 0 && <p className="cmp-note">No attempts for this question were recorded in this reading.</p>}
 
             {engines.map((engine) => {
               const runs = rows
@@ -125,29 +160,29 @@ export default async function QuestionsPage({
                 .sort((a, b) => a.run_index - b.run_index);
 
               return (
-                <div className="q-eng" key={engine}>
-                  <span className="label">{engine}</span>
-                  <span className="q-names">
+                <details className="q-engine-group" key={engine}>
+                  <summary>{labels.get(engine) ?? engine} <span className="mono">{runs.length} recorded answers</span></summary>
+                  <div className="q-names">
                     {runs.map((r, i) => (
-                      <span key={i} style={{ display: "block" }}>
+                      <div key={i} className="q-attempt">
                         {r.error ? (
-                          <em>error: {r.error.slice(0, 80)}</em>
+                          <em>Could not use this answer: {r.error.slice(0, 80)}</em>
                         ) : r.refused ? (
-                          <em>declined to recommend</em>
+                          <em>Declined to recommend a brand</em>
                         ) : r.brands.length ? (
                           r.brands.map((b) => b.name).join(" · ")
                         ) : (
-                          <em>named nothing</em>
+                          <em>No recognized brand found</em>
                         )}
-                        <details><summary>Answer {r.run_index + 1} · {r.fetched_at || "fetch time not recorded"}</summary>
+                        <details className="q-answer"><summary>Read answer {r.run_index + 1} · {shortTime(r.fetched_at)}</summary>
                           <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{r.answer || "Raw text was not recorded for this answer."}</p>
                           <p>Source evidence: {r.source_kind || "type not recorded"}</p>
                           <ul>{r.sources.filter(s => /^https?:\/\//i.test(s)).map((s, j) => <li key={j}><a href={s} target="_blank" rel="noopener noreferrer">{s}</a></li>)}</ul>
                         </details>
-                      </span>
+                      </div>
                     ))}
-                  </span>
-                </div>
+                  </div>
+                </details>
               );
             })}
           </div>
@@ -155,4 +190,11 @@ export default async function QuestionsPage({
       })}
     </section>
   );
+}
+
+function shortTime(value?: string): string {
+  if (!value) return "time not recorded";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "time not recorded";
+  return `${date.toISOString().slice(11, 16)} UTC`;
 }

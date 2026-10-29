@@ -1,3 +1,4 @@
+import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
 
 import { CATEGORIES, DEFAULT_CATEGORY, getCategory } from "@/lib/categories";
@@ -10,7 +11,9 @@ import {
   loadQuestionText,
   type QuestionConsensus,
 } from "@/lib/data";
-import { AwaitingFirstRun, StatusBar, TrimTop } from "@/components/ui";
+import { AwaitingFirstRun, Kpi, StatusBar } from "@/components/ui";
+import { loadProviders } from "@/lib/providers";
+import { inSentence } from "@/lib/shared";
 
 type Params = { c?: string };
 
@@ -38,8 +41,9 @@ export async function generateMetadata({
   const category = resolve(await searchParams);
   const label = categoryLabel(category);
   return {
-    title: `Do the engines agree? ${label}`,
-    description: `Which brand each AI assistant names first, question by question, for ${label.toLowerCase()}. Where they agree, and where they do not.`,
+    title: `Do AI assistants agree? ${label}`,
+    openGraph: { title: `Do AI assistants agree? ${label}`, description: "Compare each assistant?s first pick, question by question." },
+    description: `Which brand each AI assistant names first, question by question, for ${inSentence(label)}. Where they agree, and where they do not.`,
   };
 }
 
@@ -55,7 +59,9 @@ export default async function ConsensusPage({
     return (
       <section className="shell section">
         <CategoryTabs category={category} />
+        <h1 className="display page-title rise">Do the assistants agree?</h1>
         <AwaitingFirstRun />
+        <a className="btn" href="/categories">Browse available results</a>
       </section>
     );
   }
@@ -65,41 +71,47 @@ export default async function ConsensusPage({
   const divergence = engineDivergence(rows);
   const engines = rows[0]?.picks.map((p) => p.engine) ?? [];
   const contested = rows.filter((r) => !r.settled);
+  const labels = new Map(loadProviders().map(p => [p.id, p.label]));
 
   return (
     <section className="shell section">
       <CategoryTabs category={category} />
 
-      <h1 className="display cns-title">
+      <h1 className="display page-title rise cns-title">
         {engines.length < 2 ? (
-          <>This measurement has fewer than two engines.</>
+          <>Too few AI assistants to compare.</>
         ) : (
           <>
-            The engines agree on {score.settled} of {score.total} questions.
+            AI assistants agree on {score.settled} of {score.total} questions.
           </>
         )}
       </h1>
       <p className="section-lead cns-lead">
         {engines.length < 2 ? (
           <>
-            Agreement needs at least two engines. This measurement has too few
-            to compare.
+            This page compares which brands AI assistants name first. We need
+            answers from at least two assistants to measure agreement.
           </>
         ) : (
           <>
-            Each engine&rsquo;s pick is the brand it named first most often across
-            its repeats. Where every engine picks the same brand, the question is
-            settled. Where they split, the answer a buyer gets depends on which
-            assistant they happened to ask. {categoryLabel(category)}, measured on{" "}
+            See whether different AI assistants name the same brand first, or
+            whether your choice of assistant could change the answer.
+            {" "}{categoryLabel(category)}, measured on{" "}
             {run.measured_on || run.run_date}.
           </>
         )}
+      </p>
+      <p className="cmp-note">
+        An engine is an AI assistant accessed through its API or command-line
+        tool. Its pick is the brand it names first most often across repeated
+        answers. Agreement means every engine has the same pick; it does not
+        establish which product is best.
       </p>
 
       <div style={{ marginTop: 20 }}>
         <StatusBar
           runDate={run.run_date}
-          engines={run.engines}
+          engines={run.engines.map(e => labels.get(e) ?? e)}
           methodVersion={run.method_version}
           runsPerQuestion={run.runs_per_question}
         />
@@ -107,21 +119,29 @@ export default async function ConsensusPage({
 
       {engines.length >= 2 && (
         <>
-          <div className="cns-summary">
-            <Stat value={`${Math.round(score.share * 100)}%`} label="questions settled" />
-            <Stat value={String(contested.length)} label="questions split" />
-            <Stat value={String(engines.length)} label="engines compared" />
+          <div className="kpi-row">
+            <Kpi value={Math.round(score.share * 100)} unit="%" label="Full agreement" meter={score.share} note={`${score.settled} of ${score.total} questions.`} />
+            <Kpi i={1} value={contested.length} label="Without full agreement" note="Different picks, ties, or missing picks." />
+            <Kpi i={2} value={engines.length} label="Engines compared" note="Each engine contributes one pick per question." />
+          </div>
+          <div className="panel cns-agreement reveal">
+            <h2 className="sub-h" id="agreement">Agreement at a glance</h2>
+            <p className="cmp-note">One square per question. Filled squares mean every engine picked the same brand.</p>
+            <div className="cns-strip" role="img" aria-label={`${score.settled} of ${score.total} questions have full agreement.`}>
+              {rows.map(row => <span key={row.questionId} data-agreed={row.settled} title={`${row.text}: ${row.settled ? 'all agree' : 'no full agreement'}`} />)}
+            </div>
           </div>
 
-          <h2 className="cmp-h2">Question by question</h2>
+          <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
           {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
           <p className="cmp-note">
-            A pick set in full weight is one that differs from what the other
-            engines chose. Colour is not used here, so a split reads the same in
-            greyscale or in a screenshot.
+            The percentage shows how often the leading brand was named first
+            among usable answers to that question. A dash means a tie or no
+            pick. Bold marks picks outside the majority, or all picks when
+            there is no majority. Missing picks also prevent full agreement.
           </p>
 
-          <div className="panel cns">
+          <div className="panel cns reveal" role="region" aria-label="Assistant picks by question" tabIndex={0}>
             <div
               className="cns-row cns-head"
               style={{ "--engines": engines.length } as React.CSSProperties}
@@ -129,29 +149,29 @@ export default async function ConsensusPage({
               <span className="label">Question</span>
               {engines.map((engine) => (
                 <span className="label cns-engine" key={engine}>
-                  {engine}
+                  {labels.get(engine) ?? engine}
                 </span>
               ))}
               <span className="label cns-verdict">Verdict</span>
             </div>
 
             {rows.map((row) => (
-              <Row key={row.questionId} row={row} engines={engines.length} />
+              <Row key={row.questionId} row={row} engines={engines.length} labels={labels} />
             ))}
           </div>
 
-          <h2 className="cmp-h2">Where each engine breaks from the pack</h2>
+          <h2 className="sub-h" id="differences">How often each engine differs from the majority <SectionLink id="differences" label="How often each engine differs from the majority" /></h2>
           <p className="cmp-note">
-            How often an engine&rsquo;s pick differs from the brand most engines
-            chose. Reported per engine rather than naming one contrarian, because
-            the odd one out changes from question to question.
+            The count is questions where a majority chose a brand and this
+            engine chose another brand or had no pick, out of all questions
+            shown. Questions without a majority add no differences.
           </p>
-          <div className="panel cns-div">
+          <div className="panel cns-div reveal">
             {divergence.map((d) => (
               <div className="cns-div-row" key={d.engine}>
-                <span className="mono cns-div-name">{d.engine}</span>
-                <span className="cns-div-track" aria-hidden="true">
-                  <i style={{ width: `${(d.differs / Math.max(d.of, 1)) * 100}%` }} />
+                <span className="cns-div-name">{labels.get(d.engine) ?? d.engine}</span>
+                <span className="meter" aria-hidden="true">
+                  <i style={{ "--v": d.differs / Math.max(d.of, 1) } as React.CSSProperties} />
                 </span>
                 <span className="mono cns-div-fig">
                   {d.differs}/{d.of}
@@ -184,17 +204,7 @@ function CategoryTabs({ category }: { category: string }) {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="cns-stat">
-      <TrimTop />
-      <span className="mono cns-stat-v">{value}</span>
-      <span className="cns-stat-l">{label}</span>
-    </div>
-  );
-}
-
-function Row({ row, engines }: { row: QuestionConsensus; engines: number }) {
+function Row({ row, engines, labels }: { row: QuestionConsensus; engines: number; labels: Map<string, string> }) {
   // Three engines naming three different brands has no majority worth marking,
   // so every pick is flagged as divergent, which is the honest reading.
   const threeWay = row.agree <= 1 && row.picks.length > 1;
@@ -206,16 +216,17 @@ function Row({ row, engines }: { row: QuestionConsensus; engines: number }) {
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (
           <span className="cns-pick" key={pick.engine} data-differs={differs}>
-            <span className="sr-only">{pick.engine}: </span>
+            <span className="sr-only">{labels.get(pick.engine) ?? pick.engine}: </span>
             {pick.brand ?? "—"}
             <i className="cns-share mono" aria-hidden="true">
               {Math.round(pick.share * 100)}%
             </i>
+            <span className="meter cns-pick-meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": pick.share } as React.CSSProperties} /></span>
           </span>
         );
       })}
       <span className="mono cns-verdict" data-settled={row.settled}>
-        {row.settled ? "Agreed" : threeWay ? `Split ${row.picks.length}` : "Split"}
+        {row.settled ? "Agree ?" : "Split"}
       </span>
     </div>
   );

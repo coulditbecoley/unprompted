@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CATEGORIES, getCategory } from "@/lib/categories";
+import { loadProviders } from "@/lib/providers";
+import { inSentence } from "@/lib/shared";
 import {
   categoryLabel,
   allBrands,
@@ -13,7 +15,8 @@ import {
   slugify,
   standings,
 } from "@/lib/data";
-import { StatusBar, ToneBar, TrimTop } from "@/components/ui";
+import { ShareRow } from "@/components/freshness";
+import { Kpi, LeaderBars, StatusBar, ToneBar, TrimTop, brandHref } from "@/components/ui";
 
 /**
  * Statically generated, one permanent page per brand.
@@ -45,11 +48,15 @@ export async function generateMetadata({
   const run = latestRun(category);
   const row = run ? standings(run).find((s) => s.brand === brand) : null;
 
+  const description = row
+      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))} measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
+      : `Tracking how often AI assistants name ${brand}.`;
+  const url = `/brand/${category}/${slug}`;
   return {
     title: `${brand} in AI answers`,
-    description: row
-      ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${categoryLabel(category).toLowerCase()} measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
-      : `Tracking how often AI assistants name ${brand}.`,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title: `${brand} in AI answers`, description, url, type: "article", siteName: "Unprompted" },
   };
 }
 
@@ -65,115 +72,127 @@ export default async function BrandPage({
 
   const run = latestRun(category);
   const history = brandHistory(category, brand);
-  const row = run ? standings(run).find((s) => s.brand === brand) : null;
+  const board = run ? standings(run) : [];
+  const rank = board.findIndex((s) => s.brand === brand);
+  const row = rank >= 0 ? board[rank] : null;
   const tone = run ? brandTone(run, brand) : null;
   const runs = loadHistory(category);
+  const label = categoryLabel(category);
+  const engineLabels = new Map(loadProviders().map((p) => [p.id, p.label]));
+  // The brands either side of this one, so a reader sees it in context rather
+  // than as a lone figure. The window shifts at the ends of the board.
+  const from = Math.max(0, Math.min(rank - 2, board.length - 5));
+  const neighbours = rank >= 0 ? board.slice(from, from + 5) : [];
 
   return (
     <section className="shell section">
-      <p className="label">{categoryLabel(category)}</p>
-      <h1 style={{ fontSize: "clamp(30px,5.5vw,52px)", fontWeight: 800, margin: "6px 0 14px" }}>
-        {brand}
-      </h1>
+      <nav className="crumbs label" aria-label="Breadcrumb">
+        <Link href={`/chart/${category}`}>{label}</Link>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{brand}</span>
+      </nav>
+      <h1 className="display page-title rise">{brand}</h1>
 
       {/* Answer-first. The complete answer sits in the first sentence so it can
           be lifted whole. */}
-      <p style={{ fontSize: 19, color: "var(--fg-2)", maxWidth: "60ch", marginTop: 0 }}>
+      <p className="brand-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
         {row ? (
           <>
             AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
-            {row.totalRuns} answers about {categoryLabel(category).toLowerCase()} measured on
-            {run!.measured_on || run!.run_date}, and named it first in{" "}
-            {Math.round(row.firstShare * 100)}% of runs.
+            {row.totalRuns} answers about {inSentence(label)} measured on{" "}
+            {run!.measured_on || run!.run_date}, and recommended it first in{" "}
+            {Math.round(row.firstShare * 100)}% of them.
           </>
         ) : (
-          <>
-            {brand} was not named in any answer in the latest measurement.
-          </>
+          <>{brand} was not named in any answer in the latest measurement.</>
         )}
       </p>
 
-      {run && (
-        <div style={{ marginTop: 24 }}>
-          <StatusBar
-            runDate={run.run_date}
-            engines={run.engines}
-            methodVersion={run.method_version}
-            runsPerQuestion={run.runs_per_question}
-          />
+      {row && (
+        <div className="kpi-row">
+          <Kpi i={0} label="Board position" value={`#${rank + 1}`} unit={` of ${board.length}`} note="Ranked by how often it was the first pick." />
+          <Kpi i={1} label="Named in" value={Math.round(row.rotation * 100)} unit="%" note={`${row.named} of ${row.totalRuns} answers mentioned it.`} meter={row.rotation} />
+          <Kpi i={2} label="Named first" value={Math.round(row.firstShare * 100)} unit="%" note="Share of answers where it was the first recommendation." meter={row.firstShare} />
+          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Median place in the list when it was named." />
         </div>
+      )}
+
+      {run && (
+        <StatusBar
+          runDate={run.run_date}
+          engines={run.engines.map((e) => engineLabels.get(e) ?? e)}
+          methodVersion={run.method_version}
+          runsPerQuestion={run.runs_per_question}
+        />
       )}
 
       {row && (
         <div className="cmp-grid" style={{ marginTop: 14 }}>
-          <div className="cmp-pick">
+          <div className="cmp-pick reveal">
             <TrimTop />
-            <h3 style={{ marginTop: 6 }}>Latest measurement</h3>
-            <div className="cmp-stat">
-              <span>Rotation</span>
-              <span>
-                {row.named}/{row.totalRuns} · {Math.round(row.rotation * 100)}%
-              </span>
-            </div>
-            <div className="cmp-stat">
-              <span>Named first</span>
-              <span>{Math.round(row.firstShare * 100)}%</span>
-            </div>
-            <div className="cmp-stat">
-              <span>Median position</span>
-              <span>{row.medianPosition ?? "—"}</span>
-            </div>
-            <div className="cmp-stat">
-              <span>Measurements tracked</span>
-              <span>{history.length}</span>
-            </div>
-            {tone && (
-              <div style={{ marginTop: 14 }}>
-                <p className="label" style={{ margin: "0 0 7px" }}>
-                  How it is spoken about
-                </p>
-                <ToneBar tone={tone} />
-                <p className="tone-caveat">
-                  Read from the answers by the extraction model, not stated by the
-                  engines. Softer evidence than a name count, and reported as such.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="cmp-pick">
-            <TrimTop />
-            <h3 style={{ marginTop: 6 }}>Every answer in this measurement</h3>
-            <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 10 }}>
+            <h3 style={{ marginTop: 6 }}>Every answer, one square each</h3>
+            <div className="answer-grid" role="img" aria-label={`${row.named} of ${row.cells.length} answers named ${brand}.`}>
               {row.cells.map((on, i) => (
-                <i key={i} className="seq-cell" data-on={on} style={{ animationDelay: `${i * 18}ms` }} />
+                <i key={i} className="seq-cell" data-on={on} style={{ animationDelay: `${Math.min(i, 120) * 8}ms` }} />
               ))}
             </div>
-            <p style={{ fontSize: 13, color: "var(--fg-3)", marginTop: 12 }}>
-              Filled means named in that run.
+            <p className="kpi-note" style={{ marginTop: 12 }}>
+              Filled squares are answers that mentioned {brand}. Empty ones did not.
             </p>
           </div>
+
+          {tone ? (
+            <div className="cmp-pick reveal">
+              <TrimTop />
+              <h3 style={{ marginTop: 6 }}>How it was described</h3>
+              <ToneBar tone={tone} />
+              <p className="tone-caveat">
+                Judged from the wording of each answer by our reading model, not stated by
+                the assistants. Treat it as softer evidence than the counts.
+              </p>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {row && (
+        <ShareRow
+          url={`https://unprompted.report/brand/${category}/${slug}`}
+          headline={`AI assistants named ${brand} in ${Math.round(row.rotation * 100)}% of answers about ${inSentence(label)}, and first in ${Math.round(row.firstShare * 100)}%.`}
+        />
+      )}
+
+      {neighbours.length > 1 && (
+        <div className="reveal">
+          <h2 className="sub-h">Where it sits on the board</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            Its closest neighbours this week. Pale bar: named at all. Solid bar: named first.
+          </p>
+          <LeaderBars rows={neighbours} start={from} highlight={brand} hrefFor={(b) => brandHref(category, b)} />
         </div>
       )}
 
       {history.length > 1 && <Sparkline history={history} />}
 
-      <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>Full history</h2>
-      <div className="seq-board">
+      <h2 className="sub-h">Full history</h2>
+      <div className="seq-board reveal">
         <TrimTop />
-        <div className="seq-row seq-head" style={{ gridTemplateColumns: "1fr auto auto" }}>
+        <div className="seq-row seq-head hist-row">
           <span className="label">Measured</span>
-          <span className="label">Named</span>
-          <span className="label">First</span>
+          <span className="label">Named in</span>
+          <span className="label" style={{ textAlign: "right" }}>First</span>
         </div>
         {history
           .slice()
           .reverse()
           .map((h) => (
-            <div className="seq-row" key={h.date} style={{ gridTemplateColumns: "1fr auto auto" }}>
-              <span className="mono" style={{ fontSize: 13.5 }}><Link href={`/chart/${category}/${h.readingDate}`}>{h.date}</Link>{h.breakReason && <small style={{ display: "block" }}>{h.breakReason}</small>}</span>
-              <span className="mono" style={{ fontSize: 13 }}>{Math.round(h.rotation * 100)}%</span>
-              <span className="mono" style={{ fontSize: 13, color: "var(--fg-2)" }}>
+            <div className="seq-row hist-row" key={h.date}>
+              <span className="mono" style={{ fontSize: 13.5 }}><Link href={`/chart/${category}/${h.readingDate}`}>{h.date}</Link>{h.breakReason && <small className="hist-break">{h.breakReason}</small>}</span>
+              <span className="hist-meter">
+                <span className="meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": h.rotation } as React.CSSProperties} /></span>
+                <span className="mono">{Math.round(h.rotation * 100)}%</span>
+              </span>
+              <span className="mono" style={{ fontSize: 13, textAlign: "right" }}>
                 {Math.round(h.firstShare * 100)}%
               </span>
             </div>
@@ -185,46 +204,88 @@ export default async function BrandPage({
         )}
       </div>
 
+      <div className="btn-row" style={{ marginTop: 22 }}>
+        <Link className="btn" href={`/chart/${category}`}>
+          Back to the {inSentence(label)} board <span className="arr" aria-hidden="true">→</span>
+        </Link>
+        {run && (
+          <Link className="btn btn-ghost" href={`/questions?c=${category}&date=${run.run_date}`}>
+            Read the answers
+          </Link>
+        )}
+      </div>
+
       <p className="mono" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 20 }}>
-        Measured across {runs.length} measurement{runs.length === 1 ? "" : "s"}. Raw answers
-        for every figure are in the public repository.
+        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. The raw
+        answers behind every figure are in the public repository.
       </p>
     </section>
   );
 }
 
-/** Rotation over time. Hand-drawn SVG: no chart library for one polyline. */
+/** Share of answers naming the brand over time. Hand-drawn SVG: no chart library for one line. */
 function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
   const W = 720;
-  const H = 72;
-  const pad = 4;
-  const points = history.map((h, i) => {
-    const x = history.length === 1 ? W / 2 : pad + (i * (W - pad * 2)) / (history.length - 1);
-    const y = H - pad - h.rotation * (H - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const line = points.map((p, i) => `${i === 0 || history[i].breakReason ? "M" : "L"}${p}`).join(" ");
-  const hasBreak = history.some(h => h.breakReason);
+  const H = 140;
+  const padX = 8;
+  const padY = 14;
+  const xy = history.map((h, i) => ({
+    x: history.length === 1 ? W / 2 : padX + (i * (W - padX * 2)) / (history.length - 1),
+    y: H - padY - h.rotation * (H - padY * 2),
+  }));
+  const line = xy.map((p, i) => `${i === 0 || history[i].breakReason ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  // Area only under an unbroken line: shading across a break would draw a
+  // continuity the method says is not there.
+  const hasBreak = history.some((h, i) => i > 0 && h.breakReason);
+  const area = hasBreak ? null : `M${xy[0].x},${H - padY} ${xy.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} L${xy[xy.length - 1].x},${H - padY} Z`;
+  const last = history[history.length - 1];
 
   return (
-    <>
-      <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>Rotation over time</h2>
-      <p>Points are evenly spaced by measurement.</p>
-      <div className="panel" style={{ padding: "18px 20px" }}>
+    <div className="reveal">
+      <h2 className="sub-h">Named in, week by week</h2>
+      <p className="section-lead" style={{ marginBottom: 14 }}>
+        Share of answers that mentioned it, one point per measurement, evenly spaced.
+      </p>
+      <div className="panel spark-panel">
+        <div className="spark-axis mono" aria-hidden="true">
+          <span>100%</span>
+          <span>50%</span>
+          <span>0%</span>
+        </div>
         <svg
           className="spark"
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Rotation across ${history.length} measurements, currently ${Math.round(history[history.length - 1].rotation * 100)} percent. Lines connect comparable measurements only.`}
+          aria-label={`Share of answers naming it across ${history.length} measurements, currently ${Math.round(last.rotation * 100)} percent. Lines connect comparable measurements only.`}
         >
-          <line className="spark-grid" x1="0" y1={H - pad} x2={W} y2={H - pad} />
-          <line className="spark-grid" x1="0" y1={pad} x2={W} y2={pad} />
+          <defs>
+            <linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="var(--accent)" stopOpacity="0.22" />
+              <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <line className="spark-grid" x1="0" y1={padY} x2={W} y2={padY} />
+          <line className="spark-grid" x1="0" y1={H / 2} x2={W} y2={H / 2} strokeDasharray="3 4" />
+          <line className="spark-grid" x1="0" y1={H - padY} x2={W} y2={H - padY} />
+          {area && <path d={area} fill="url(#spark-fill)" />}
           <path className="spark-line" d={line} />
-          {points.map((p, i) => <circle key={history[i].date} className="spark-dot" cx={p.split(",")[0]} cy={p.split(",")[1]} r="3.5" />)}
         </svg>
-        {hasBreak && <p>Lines break where measurements are not comparable. See the dated readings below.</p>}
+        <div className="spark-dots" aria-hidden="true">
+          {xy.map((p, i) => (
+            <i
+              key={history[i].date}
+              title={`${history[i].date}: ${Math.round(history[i].rotation * 100)}%`}
+              style={{ left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%` }}
+            />
+          ))}
+        </div>
+        <div className="spark-dates mono" aria-hidden="true">
+          <span>{history[0].date}</span>
+          <span>{last.date} · {Math.round(last.rotation * 100)}%</span>
+        </div>
+        {hasBreak && <p className="kpi-note" style={{ marginTop: 10 }}>The line breaks where the method changed and weeks cannot be compared.</p>}
       </div>
-    </>
+    </div>
   );
 }

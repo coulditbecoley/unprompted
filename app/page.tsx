@@ -20,7 +20,10 @@ import {
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
+import { CATEGORIES } from "@/lib/categories";
+import { inSentence } from "@/lib/shared";
+import { loadProviders } from "@/lib/providers";
+import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, brandHref } from "@/components/ui";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -56,77 +59,118 @@ export default function Home() {
     ? questionOrder(run).map((id) => text[id] ?? id)
     : [];
 
+  // Engine ids are internal. A newcomer knows the assistants by name.
+  const engineLabels = new Map(loadProviders().map((p) => [p.id, p.label]));
+  const engineNames = (run?.engines ?? []).map((e) => engineLabels.get(e) ?? e);
+  const runsPerQ = run?.runs_per_question ?? spec.runs_per_question;
+  const answered = run ? answeredPerQuestion(run).reduce((a, b) => a + b, 0) : 0;
+  const otherBoards = CATEGORIES.filter((c) => c.slug !== CATEGORY)
+    .map((c) => ({ c, r: latestRun(c.slug) }))
+    .filter((x) => x.r)
+    .map(({ c, r }) => ({ c, top: standings(r!)[0], date: r!.measured_on || r!.run_date }))
+    .filter((x) => x.top);
+
   return (
     <>
-      <section className="hero shell">
-        <div className="hero-grid">
+      <section className="hero">
+        <div className="hero-bg" aria-hidden="true" />
+        <div className="shell hero-grid">
           <div>
-            <p className="label" style={{ marginBottom: 18 }}>
-              {categoryLabel(CATEGORY)} · {measured ?? "not yet measured"}
+            <p className="eyebrow rise">
+              <span className="live-dot" aria-hidden="true" />
+              {categoryLabel(CATEGORY)} · {measured ? `measured ${measured}` : "not yet measured"}
             </p>
 
             {/* Answer-first: the verdict is the first thing on the page, before
                 any explanation, because that is what gets read and cited. */}
-            <h1 className="display">
+            <h1 className="display rise" style={{ "--i": 1 } as React.CSSProperties}>
               {leader ? (
                 <>
                   AI names{" "}
                   <span className="verdict-brand">{leader.brand}</span> first in{" "}
-                  {Math.round(leader.firstShare * 100)}% of runs.
+                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.
                 </>
               ) : (
                 <>What AI recommends when nobody&rsquo;s paying.</>
               )}
             </h1>
 
-            <p className="hero-sub">
-              Every week we ask the AI assistants the same {questions.length}{" "}
-              buying questions, {run?.runs_per_question ?? spec.runs_per_question} times each, and publish
-              exactly who they name. The questions, the method and every raw answer
-              are public.
+            <p className="hero-sub rise" style={{ "--i": 2 } as React.CSSProperties}>
+              When someone asks an AI assistant &ldquo;what should I buy?&rdquo;, which
+              brands does it recommend? Every week we ask{" "}
+              {engineNames.length ? engineNames.join(", ") : "the major assistants"} the
+              same {questions.length} buying questions, {runsPerQ} times each, and
+              count who they name. Nobody can pay to appear, and every answer is public.
             </p>
 
-            <p className="mono" style={{ fontSize: 12.5 }}>
-              <Link href={`/chart/${CATEGORY}`}>See the full board →</Link>
-            </p>
+            <div className="btn-row rise" style={{ marginTop: 22, "--i": 3 } as React.CSSProperties}>
+              <Link className="btn btn-go" href={`/chart/${CATEGORY}`}>
+                See the full board <span className="arr" aria-hidden="true">→</span>
+              </Link>
+              <a className="btn" href="#how">How it works</a>
+              <Link className="btn btn-ghost" href="/categories">All categories</Link>
+            </div>
           </div>
 
           {/* The query buffer: the actual questions, visible on the page. */}
-          <div className="buffer">
-            <TrimTop />
+          <div className="buffer rise" style={{ "--i": 2 } as React.CSSProperties}>
+            <div className="buffer-head">
+              <span className="buffer-dots" aria-hidden="true"><i /><i /><i /></span>
+              <span className="label">This week&rsquo;s questions</span>
+              <span className="label">{questions.length} × {runsPerQ}</span>
+            </div>
             <div className="buffer-body" aria-label="The questions being asked">
               {questions.slice(0, 9).map((q, i) => (
-                <div className="buffer-line" key={q.id}>
+                <div className="buffer-line" key={q.id} style={{ "--i": i } as React.CSSProperties}>
                   <span className="buffer-n">{String(i + 1).padStart(2, "0")}</span>
                   <span className="buffer-q">ask(&ldquo;{q.text}&rdquo;)</span>
                 </div>
               ))}
-              <div className="buffer-line">
+              <div className="buffer-line" style={{ "--i": 9 } as React.CSSProperties}>
                 <span className="buffer-n">
                   {String(Math.min(10, questions.length)).padStart(2, "0")}
                 </span>
                 <span className="buffer-q">
-                  …{Math.max(0, questions.length - 9)} more
+                  <Link href="/questions">…{Math.max(0, questions.length - 9)} more</Link>
                   <span className="caret" aria-hidden="true" />
                 </span>
               </div>
             </div>
           </div>
         </div>
+
+        {run && (
+          <div className="shell"><div className="kpi-row">
+            <Kpi i={0} label="Questions" value={questions.length} note="Real buying questions, worded the way people ask them." />
+            <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`Each question asked ${runsPerQ} times per assistant.`} />
+            <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant recommended." />
+            <Kpi i={3} label="AI assistants" value={engineNames.length} note={engineNames.join(" · ")} />
+          </div></div>
+        )}
       </section>
 
-      <section className="shell section">
+      <section className="shell section" id="board" style={{ paddingTop: 24 }}>
         {run ? (
           <>
+            <div className="sec-head">
+              <div>
+                <p className="label">The board</p>
+                <h2>Who the assistants recommend</h2>
+              </div>
+              <Link className="btn btn-sm" href={`/chart/${CATEGORY}`}>
+                Open full board <span className="arr" aria-hidden="true">→</span>
+              </Link>
+            </div>
             <StatusBar
               runDate={measured!}
-              engines={run.engines}
+              engines={engineNames}
               methodVersion={run.method_version}
               runsPerQuestion={run.runs_per_question}
             />
             <Freshness runDate={measured!} />
-            {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
-            <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
+            {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
+            <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
+            <HowToRead runsPerQuestion={run.runs_per_question} />
             <LiveBoard
               questions={questionsInBoardOrder}
               denominators={answeredPerQuestion(run)}
@@ -142,22 +186,35 @@ export default function Home() {
               url={`https://unprompted.report/chart/${CATEGORY}/${run.run_date}`}
               headline={
                 leader
-                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${categoryLabel(CATEGORY).toLowerCase()}.`
+                  ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(categoryLabel(CATEGORY))}.`
                   : "What AI recommends when nobody's paying."
               }
             />
 
             {snub && (
-              <div className="snub">
+              <div className="snub reveal">
                 <p className="label" style={{ color: "var(--down)" }}>
-                  The Snub
+                  Biggest drop
                 </p>
                 <h3>{snub.brand}</h3>
                 <p>
                   {snub.isDropout
-                    ? `Named on ${baselineDate}. Not named in this measurement.`
-                    : `Down ${Math.abs(snub.rotationDelta)} points since ${baselineDate}.`}
+                    ? `Named on ${baselineDate}. Not named at all this time.`
+                    : `Named in ${Math.abs(snub.rotationDelta)} points fewer answers than on ${baselineDate}.`}
                 </p>
+              </div>
+            )}
+
+            {board.length > 1 && (
+              <div className="reveal" style={{ marginTop: 48 }}>
+                <p className="label">At a glance</p>
+                <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as recommended first</h2>
+                <p className="section-lead" style={{ marginBottom: 16 }}>
+                  The pale bar is how often a brand came up at all. The solid bar is how
+                  often it was the first pick. When the two differ, the assistants know the
+                  brand but reach for something else first.
+                </p>
+                <LeaderBars rows={board.slice(0, 6)} hrefFor={(b) => brandHref(CATEGORY, b)} />
               </div>
             )}
           </>
@@ -166,20 +223,71 @@ export default function Home() {
         )}
       </section>
 
-      <section className="shell section">
-        <h2>Why we repeat each question</h2>
-        <p className="section-lead">
-          These systems do not give the same answer twice. Ask the same question on
-          Monday and Wednesday and you can get different brands. Asking once and
-          publishing the result would be publishing a coin flip, so we ask
-          repeatedly and report how <em>often</em> a brand was named. Each step on
-          the board above is one question, and its height is how often that brand
-          was named for it.
-        </p>
-        <p className="mono" style={{ fontSize: 12.5 }}>
-          <Link href="/methodology">Read the full method →</Link>
-        </p>
+      <section className="shell section reveal" id="how">
+        <p className="label">How it works</p>
+        <h2 style={{ margin: "4px 0 18px" }}>Three steps, every Monday</h2>
+        <ol className="steps">
+          <li className="step card-lift">
+            <span className="step-n mono">01</span>
+            <h3>Ask</h3>
+            <p>
+              We put the same {questions.length} buying questions to each assistant,
+              worded like a real person would. No brand names in the question.
+            </p>
+          </li>
+          <li className="step card-lift">
+            <span className="step-n mono">02</span>
+            <h3>Repeat</h3>
+            <p>
+              AI rarely gives the same answer twice, so each question is asked{" "}
+              {runsPerQ} times. One answer is a coin flip; {runsPerQ} is a pattern.
+            </p>
+          </li>
+          <li className="step card-lift">
+            <span className="step-n mono">03</span>
+            <h3>Count</h3>
+            <p>
+              We record every brand named and which came first, then publish the
+              totals with the raw answers so anyone can check them.
+            </p>
+          </li>
+        </ol>
+        <div className="btn-row" style={{ marginTop: 18 }}>
+          <Link className="btn" href="/methodology">
+            Read the full method <span className="arr" aria-hidden="true">→</span>
+          </Link>
+          <Link className="btn btn-ghost" href="/questions">See every answer</Link>
+        </div>
       </section>
+
+      {otherBoards.length > 0 && (
+        <section className="shell section reveal" style={{ paddingTop: 0 }}>
+          <div className="sec-head">
+            <div>
+              <p className="label">Other boards</p>
+              <h2>Measured the same way</h2>
+            </div>
+            <Link className="btn btn-sm btn-ghost" href="/categories">
+              All categories <span className="arr" aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <div className="ob-grid">
+            {otherBoards.map(({ c, top, date }) => (
+              <Link key={c.slug} href={`/chart/${c.slug}`} className="ob-card card-lift">
+                <span className="label">{c.label}</span>
+                <span className="ob-lead">{top.brand}</span>
+                <span className="ob-note">
+                  named first in {Math.round(top.firstShare * 100)}% of runs
+                </span>
+                <span className="meter" aria-hidden="true">
+                  <i style={{ "--v": top.firstShare } as React.CSSProperties} />
+                </span>
+                <span className="mono ob-date">{date}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="shell">
         <Subscribe />

@@ -4,9 +4,10 @@ import { notFound } from "next/navigation";
 import { LiveBoard } from "@/components/board-live";
 import { Freshness, ShareRow } from "@/components/freshness";
 import { Subscribe } from "@/components/subscribe";
-import { AwaitingFirstRun, StatusBar, TrimTop, brandHref } from "@/components/ui";
+import { AwaitingFirstRun, HowToRead, Kpi, LeaderBars, StatusBar, TrimTop, brandHref } from "@/components/ui";
 import type { Category, Sector } from "@/lib/categories";
 import { loadProviders } from "@/lib/providers";
+import { inSentence } from "@/lib/shared";
 import {
   answeredPerQuestion,
   comparisonReason,
@@ -89,32 +90,54 @@ export function ChartBoard({
   const text = loadQuestionText(category.slug, run);
   const questionText = questionOrder(run).map((id) => text[id] ?? id);
 
+  const engineNames = run.engines.map((e) => engineLabels.get(e) ?? e);
+  const answered = answeredPerQuestion(run).reduce((x, y) => x + y, 0);
+  const maxSource = sources[0]?.[1] ?? 1;
+
   return (
     <section className="shell section">
-      <p className="label">
-        {sector && (
-          <>
-            <Link href="/categories" style={{ color: "inherit" }}>
-              {sector.label}
-            </Link>
-            {" · "}
-          </>
-        )}
-        {category.label}
-      </p>
+      {/* Machine-readable summary of the same figures the page prints, so a
+          search engine or an assistant can cite the week without scraping. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Dataset",
+            name: `${category.label}: which brands AI assistants recommend (${run.measured_on || run.run_date})`,
+            description: `How often ${engineNames.join(", ")} named each brand across ${questionText.length} buying questions about ${inSentence(category.label)}, ${run.runs_per_question} runs each.`,
+            url: `https://unprompted.report/chart/${category.slug}/${run.run_date}`,
+            dateModified: run.measured_on || run.run_date,
+            isAccessibleForFree: true,
+            license: "https://github.com/coulditbecoley/unprompted/blob/main/LICENSE",
+            creator: { "@type": "Organization", name: "Unprompted", url: "https://unprompted.report" },
+            variableMeasured: board.slice(0, 10).map((b) => ({
+              "@type": "PropertyValue",
+              name: b.brand,
+              value: Math.round(b.firstShare * 100),
+              unitText: "percent of runs named first",
+            })),
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
+      <nav className="crumbs label" aria-label="Breadcrumb">
+        <Link href="/categories">{sector ? sector.label : "Categories"}</Link>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{category.label}</span>
+      </nav>
 
-      <h1 style={{ fontSize: "clamp(28px,5vw,44px)", fontWeight: 800, margin: "6px 0 10px" }}>
+      <h1 className="display page-title rise">
         {leader
-          ? `${leader.brand} leads, named first in ${Math.round(leader.firstShare * 100)}% of runs.`
+          ? <>{leader.brand} leads, named first in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of runs.</>
           : "No brand was named this week."}
       </h1>
 
       {/* This sentence has to match what the board actually draws. */}
-      <p className="section-lead">
-        Measured on {run.measured_on || run.run_date}. One step per question, {run.runs_per_question} runs
-        each across {run.engines.length} engine
-        {run.engines.length === 1 ? "" : "s"}. A taller step means the brand was
-        named more often for that question.
+      <p className="section-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
+        We asked {engineNames.join(", ")} {questionText.length} questions about{" "}
+        {inSentence(category.label)}, {run.runs_per_question} times each, on{" "}
+        {run.measured_on || run.run_date}. Below is how often each brand came up, and how
+        often it was the first one recommended.
       </p>
 
       {/*
@@ -129,30 +152,57 @@ export function ChartBoard({
       */}
       {missed.length > 0 && (
         <p className="section-lead coverage-note">
-          <strong>Incomplete usable sample.</strong>{" "}
+          <strong>Smaller sample this week.</strong>{" "}
           {missed.map((c, i) => (
             <span key={c.engine}>
               {i > 0 ? ", and " : ""}
-              {c.label}: {c.answered} usable readings from {c.attempted} attempts
+              {c.label}: {c.answered} usable answers from {c.attempted} attempts
             </span>
           ))}
-          . Excluded readings: {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)}.
-          Failed calls, extraction errors, and refusals are excluded from ranking
-          percentages. They are not counted as answers that omitted a brand.
+          . {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)} answers were
+          left out because the call failed, the assistant refused, or the answer could
+          not be read. They are not counted as answers that skipped a brand.
         </p>
       )}
 
+      <div className="kpi-row">
+        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of runs`} meter={leader.firstShare} />}
+        <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions × ${run.runs_per_question} runs × ${run.engines.length} assistants`} />
+        <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant brought up." />
+        <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
+      </div>
+
+      <div className="btn-row" style={{ margin: "4px 0 6px" }}>
+        <Link className="btn btn-sm" href={`/questions?c=${category.slug}&date=${run.run_date}`}>
+          Read the answers <span className="arr" aria-hidden="true">→</span>
+        </Link>
+        <Link className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/${run.run_date}`}>Permanent link</Link>
+        {history.length > 1 && (
+          <details className="readings">
+            <summary className="btn btn-sm btn-ghost">Past readings ({history.length})</summary>
+            <ul className="readings-list panel">
+              {history.slice().reverse().map(r => (
+                <li key={r.run_date}>
+                  <Link href={`/chart/${category.slug}/${r.run_date}`} aria-current={r.run_date === run.run_date ? "page" : undefined}>
+                    {r.run_date}{r.source_run ? " · reprocessed" : ""}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+
       <StatusBar
         runDate={run.run_date}
-        engines={run.engines}
+        engines={engineNames}
         methodVersion={run.method_version}
         runsPerQuestion={run.runs_per_question}
       />
       <Freshness runDate={run.measured_on || run.run_date} />
-      {!run.methodology?.questions && <p className="cmp-note">Legacy reading: question wording comes from the current bank; historical wording was not recorded.</p>}
-      <p>{comparisonNote ?? <>Compared with the measurement from <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
-      <p><Link href={`/chart/${category.slug}/${run.run_date}`}>Permanent link to this result</Link> · <Link href={`/questions?c=${category.slug}&date=${run.run_date}`}>Read the supporting answers</Link></p>
-      <details><summary>Published readings</summary><ul>{history.map(r => <li key={r.run_date}><Link href={`/chart/${category.slug}/${r.run_date}`}>{r.run_date}{r.source_run ? " (reprocessed)" : ""}</Link></li>)}</ul></details>
+      {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
+      <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
+      <HowToRead runsPerQuestion={run.runs_per_question} />
 
       <LiveBoard
         evidenceUrl={`/questions?c=${category.slug}&date=${run.run_date}`}
@@ -170,44 +220,58 @@ export function ChartBoard({
         url={`https://unprompted.report/chart/${category.slug}/${run.run_date}`}
         headline={
           leader
-            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${category.label.toLowerCase()}.`
+            ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of runs about ${inSentence(category.label)}.`
             : "What AI recommends when nobody's paying."
         }
       />
 
+      {board.length > 1 && (
+        <div className="reveal" style={{ marginTop: 44 }}>
+          <h2 className="sub-h">Mentioned often vs. recommended first</h2>
+          <p className="section-lead" style={{ marginBottom: 14 }}>
+            Pale bar: how often the brand came up at all. Solid bar: how often it was the
+            first pick. A big gap means the assistants know it but reach for something else first.
+          </p>
+          <LeaderBars rows={board.slice(0, 8)} hrefFor={(b) => brandHref(category.slug, b)} />
+        </div>
+      )}
+
       {snub && (
-        <div className="snub">
+        <div className="snub reveal">
           <p className="label" style={{ color: "var(--down)" }}>
-            The Snub
+            Biggest drop
           </p>
           <h3>{snub.brand}</h3>
           <p>
             {snub.isDropout
-              ? `Named on ${baselineDate}. Not named in this measurement.`
-              : `Down ${Math.abs(snub.rotationDelta)} points since ${baselineDate}.`}
+              ? `Named on ${baselineDate}. Not named at all this time.`
+              : `Named in ${Math.abs(snub.rotationDelta)} points fewer answers than on ${baselineDate}.`}
           </p>
         </div>
       )}
 
       {preference.length > 0 && (
         <>
-          <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>
-            Does an engine favour its own tool?
+          <h2 className="sub-h reveal">
+            Does an assistant favour its own product?
           </h2>
           <p className="section-lead">
-            Some of the products above are made by the same companies whose
-            assistants we ask. This compares how often an engine named its own
-            product against how often every other engine named it. A gap is a
-            measurement, not an accusation, and a small gap on this sample size
-            is noise.
+            Some products here are made by the same companies whose assistants we ask.
+            This compares how often an assistant named its own product with how often
+            the other assistants did. A gap is a measurement, not an accusation, and a
+            small gap on this sample is noise.
           </p>
-          <div className="seq-board">
+          <div className="seq-board reveal">
             <TrimTop />
             {preference.map((p) => (
               <div className="sp-row" key={p.brand}>
                 <span className="sp-brand">
                   {p.brand}
-                  <small>made by {p.engine}</small>
+                  <small>made by {engineLabels.get(p.engine) ?? p.engine}</small>
+                  <span className="sp-meters" aria-hidden="true">
+                    <span className="meter"><i style={{ "--v": p.ownRate } as React.CSSProperties} /></span>
+                    <span className="meter" data-tone="soft"><i style={{ "--v": p.rivalRate } as React.CSSProperties} /></span>
+                  </span>
                 </span>
                 <span className="sp-num">
                   <small>ITS OWN</small>
@@ -239,20 +303,22 @@ export function ChartBoard({
 
       {sources.length > 0 && (
         <>
-          <h2 style={{ fontSize: 22, marginTop: 44, marginBottom: 6 }}>
-            What the answers were built from
+          <h2 className="sub-h reveal">
+            Sites the assistants drew on
           </h2>
           <p className="section-lead">
-            The domains these assistants cited most while answering. This is where
-            the recorded citations or search results point to. This does not establish what caused a recommendation.
+            The websites that came up most often, as citations in the answers or
+            as search results the assistants pulled. This shows where they looked,
+            not proof of why they recommended anything.
           </p>
-          <div className="seq-board">
+          <div className="seq-board reveal">
             <TrimTop />
             {sources.map(([host, count]) => (
-              <div className="seq-row" key={host} style={{ gridTemplateColumns: "1fr auto" }}>
-                <span className="mono" style={{ fontSize: 14 }}>
+              <div className="seq-row src-row" key={host}>
+                <span className="mono" style={{ fontSize: 13.5, overflowWrap: "anywhere" }}>
                   {host}
                 </span>
+                <span className="meter" data-tone="soft" aria-hidden="true"><i style={{ "--v": count / maxSource } as React.CSSProperties} /></span>
                 <span className="mono" style={{ fontSize: 13, color: "var(--fg-2)" }}>
                   {count}
                 </span>

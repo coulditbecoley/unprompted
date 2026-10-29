@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { CATEGORY, categoryLabel, latestRun, standings } from "@/lib/data";
+import { CATEGORY, categoryLabel, latestRun, loadHistory, standings } from "@/lib/data";
 
 export const alt = "Unprompted — what AI recommends when nobody's paying";
 export const size = { width: 1200, height: 630 };
@@ -16,8 +16,11 @@ export const contentType = "image/png";
  * Built from the same materials as the site: graphite ground, bone type, one
  * the board's own step colour, and the mark's step rhythm. No gradients.
  */
-export default function OpenGraphImage() {
-  const run = latestRun(CATEGORY);
+export function boardCard(category: string, date?: string) {
+  // A dated permalink must preview that week, not whatever leads today.
+  const run = date
+    ? loadHistory(category, true).find((r) => r.run_date === date) ?? null
+    : latestRun(category);
   const board = run ? standings(run).slice(0, 5) : [];
   const leader = board[0];
 
@@ -109,7 +112,7 @@ export default function OpenGraphImage() {
           }}
         >
           <div style={{ display: "flex" }}>
-            {run ? `${categoryLabel(CATEGORY)} · week of ${run.run_date}` : categoryLabel(CATEGORY)}
+            {run ? `${categoryLabel(category)} · measured ${run.measured_on || run.run_date}` : categoryLabel(category)}
           </div>
           <div style={{ display: "flex" }}>unprompted.report</div>
         </div>
@@ -117,4 +120,8 @@ export default function OpenGraphImage() {
     ),
     size,
   );
+}
+
+export default function OpenGraphImage() {
+  return boardCard(CATEGORY);
 }
