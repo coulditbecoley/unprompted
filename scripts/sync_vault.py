@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+from unprompted.storage import run_lock  # noqa: E402 - stdlib-only module
 DEFAULT_VAULT = Path.home() / "FenrirVault"
 FOLDER = Path("Projects") / "Unprompted" / "Weeks"
 STAMP = "type: unprompted-week"
@@ -37,7 +39,17 @@ def pretty(slug: str) -> str:
 
 
 def pull() -> None:
-    """Fast-forward only. A dirty or diverged repo is a human's problem."""
+    """Fast-forward only. A dirty or diverged repo is a human's problem.
+
+    Skipped while a weekly run holds the run lock: a pull then could swap in
+    new aliases or code between two categories of the same week.
+    """
+    try:
+        with run_lock(REPO / ".unprompted"):
+            pass
+    except OSError:
+        print("a run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
+        return
     result = subprocess.run(
         ["git", "pull", "--ff-only"],
         cwd=REPO,

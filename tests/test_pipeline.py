@@ -2392,3 +2392,13 @@ def test_alarm_reasons_cannot_break_out_into_markdown():
     reason = "ok" + chr(10) * 2 + "@someone" + chr(10) * 2 + "# injected"
     line = wd.category_lines({"categories": {"alpha": {"outcome": "held", "reasons": [reason]}}})[0]
     assert chr(10) not in line and line.count("`") == 4 and "`ok @someone # injected`" in line
+
+
+def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    from unprompted.storage import run_lock
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    monkeypatch.setattr(sv.subprocess, "run", lambda *a, **k: pytest.fail("pulled during a run"))
+    with run_lock(tmp_path / ".unprompted"):
+        sv.pull()

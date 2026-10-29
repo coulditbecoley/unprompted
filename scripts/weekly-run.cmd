@@ -188,10 +188,14 @@ exit /b 3
 :published
 REM Mirror the week into the Obsidian vault while the data is fresh, and
 REM archive the audience counters with it.
+REM A failure here is logged and reported in the exit code, but it never
+REM replaces a held week's 2 and never skips the shadow step below.
+set "SYNC_FAILED="
 "%UNPROMPTED_PYTHON%" scripts\sync_vault.py --no-pull >> "%TEMP%\unprompted-weekly.log" 2>&1
-if errorlevel 1 exit /b 4
+if errorlevel 1 set "SYNC_FAILED=1"
 "%UNPROMPTED_PYTHON%" scripts\sync_analytics.py >> "%TEMP%\unprompted-weekly.log" 2>&1
-if errorlevel 1 exit /b 4
+if errorlevel 1 set "SYNC_FAILED=1"
+if defined SYNC_FAILED echo WARNING: vault or analytics sync failed after publishing; the week itself is published. >> "%TEMP%\unprompted-weekly.log"
 
 REM Shadow second reader. Jev re-reads the stored answers of the date this run
 REM measured and writes only to the gitignored audit\jev-shadow. It runs after
@@ -200,4 +204,6 @@ REM task's 8-hour limit, and its exit code is ignored. It does not report into
 REM data\last-run.json or the notification.
 "%UNPROMPTED_PYTHON%" scripts\compare_jev.py weekly >> "%TEMP%\unprompted-weekly.log" 2>&1
 
+REM 4 only for an otherwise clean week: a held week stays 2.
+if "%RUN_EXIT%"=="0" if defined SYNC_FAILED exit /b 4
 exit /b %RUN_EXIT%
