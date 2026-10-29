@@ -17,6 +17,7 @@ import {
   questionOrder,
   standings,
   topPickByEngine,
+  boardTakeaways,
   theSnub,
   allBrands,
 } from "@/lib/data";
@@ -91,8 +92,9 @@ export default function Home() {
   const otherBoards = CATEGORIES.filter((c) => c.slug !== CATEGORY)
     .map((c) => ({ c, r: latestRun(c.slug) }))
     .filter((x) => x.r)
-    .map(({ c, r }) => ({ c, top: standings(r!)[0], date: r!.measured_on || r!.run_date }))
-    .filter((x) => x.top);
+    .map(({ c, r }) => ({ c, board: standings(r!), date: r!.measured_on || r!.run_date }))
+    .filter((x) => x.board[0])
+    .map(({ c, board, date }) => ({ c, top: board[0], date, lead: boardTakeaways(board).lead }));
 
   // Plain answers to what a first-time visitor asks before believing a chart.
   // Facts only from METHODOLOGY.md and the data; nothing promotional.
@@ -364,12 +366,15 @@ export default function Home() {
             </Link>
           </div>
           <div className="ob-grid">
-            {otherBoards.map(({ c, top, date }) => (
+            {otherBoards.map(({ c, top, date, lead }) => (
               <Link key={c.slug} href={`/chart/${c.slug}`} className="ob-card card-lift">
                 <span className="label">{c.label}</span>
                 <span className="ob-lead">{top.brand}</span>
                 <span className="ob-note">
                   named first in {Math.round(top.firstShare * 100)}% of answers
+                  {lead?.kind === "lead" && lead.clear && ` · a clear lead over ${lead.b.brand}`}
+                  {lead?.kind === "lead" && !lead.clear && ` · too close to call with ${lead.b.brand}`}
+                  {lead?.kind === "level" && ` · level with ${lead.b.brand}`}
                 </span>
                 <span className="meter" aria-hidden="true">
                   <i style={{ "--v": top.firstShare } as React.CSSProperties} />

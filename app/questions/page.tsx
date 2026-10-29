@@ -1,3 +1,4 @@
+import { firstPickSummary } from "./first-pick-summary";
 import { BrandHighlight } from "./brand-highlight";
 import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
@@ -230,6 +231,7 @@ export default async function QuestionsPage({
           <div className="q-block panel" key={q.id} id={q.id}>
             <p className="label">{q.id}</p>
             <h2 className="q-text">{q.text} <SectionLink id={q.id} label={q.text} /></h2>
+            <p className="cmp-note q-first-pick">{firstPickSummary(rows)}</p>
             <p className="cmp-note">{rows.length} recorded attempts with these filters.</p>
             {rows.length > 0 && <p className="q-load-answers">
               <a className="btn btn-sm" href={`/questions?${new URLSearchParams({

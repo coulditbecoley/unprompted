@@ -1467,8 +1467,10 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cat-scale { font-size: 11px; color: var(--fg-3); margin: 7px 0 0; }
 .cat-empty { padding: 24px; }
 .cat-empty .btn { margin-top: 16px; }
-.method-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 28px 0; }
-.method-flow li { padding: 20px; }
+.method-flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 28px; list-style: none; padding: 0; margin: 28px 0; }
+.method-flow li { position: relative; padding: 20px; }
+.method-arrow { position: absolute; right: -24px; top: 50%; transform: translateY(-50%); color: var(--fg-2); font-size: 20px; }
+.q-first-pick { overflow-wrap: anywhere; color: var(--fg); }
 .method-flow h3 { font-size: 20px; margin: 12px 0 8px; }
 .method-flow p { color: var(--fg-2); font-size: 14px; line-height: 1.6; margin: 0; }
 .method-step { color: var(--fg-3); font-size: 13px; }
@@ -1477,8 +1479,9 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .contact-polished .contact-head { font-size: clamp(22px, 3vw, 30px); }
 .contact-polished .contact-form { padding-top: 10px; }
 .contact-polished .subscribe-input:focus { border-color: var(--accent); }
-@media (max-width: 768px) {
-  .method-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1000px) {
+  .method-flow { grid-template-columns: 1fr; }
+  .method-arrow { right: auto; top: auto; bottom: -28px; left: 50%; transform: translateX(-50%) rotate(90deg); }
 }
 @media (max-width: 560px) {
   .cmp-form .select { flex-basis: 100%; max-width: none; width: 100%; }
@@ -1486,7 +1489,6 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   .q-coverage-row { grid-template-columns: minmax(80px, 1fr) minmax(40px, 1fr) 64px; gap: 10px; font-size: 13px; }
   .cat-search { flex-wrap: wrap; }
   .cat-search-input { width: 100%; min-width: 0; }
-  .method-flow { gap: 8px; }
   .method-flow li { padding: 14px; }
 }
 

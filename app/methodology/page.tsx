@@ -51,16 +51,18 @@ export default function MethodologyPage() {
       </details></>}
       <p className="label codex-section-label">Process</p>
       <h2 className="sub-h">From questions to published results</h2>
-      <p className="cmp-note">Four steps connect each question to its public evidence.</p>
-      <ol className="method-flow" aria-label="From questions to published results">
+      <p className="cmp-note">Five steps connect each question to its public evidence.</p>
+      <ol className="method-flow" role="list" aria-label="From questions to published results">
         {[
-          ["Ask", "Repeat the category’s buying questions across AI assistants."],
-          ["Count", "Read the answers and record which brands were named."],
+          ["Ask", "Use the fixed set of buying questions for the category."],
+          ["Repeat", "Ask each active assistant each question five times."],
+          ["Read", "Record brands, order and sources. Set aside unrecognised names."],
           ["Check", "Hold results that fail the publication checks."],
           ["Publish", "Keep passing results and their evidence in the public archive."],
         ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
           <span className="mono method-step" aria-hidden="true">{i + 1}</span>
           <h3 id={`process-${title.toLowerCase()}`}>{title}</h3><p>{detail}</p>
+          {i < 4 && <span className="method-arrow" aria-hidden="true">&rarr;</span>}
         </li>)}
       </ol>
       <div className="panel reveal method-source">
