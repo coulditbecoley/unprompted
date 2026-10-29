@@ -1899,6 +1899,12 @@ def test_a_permanent_failure_is_not_retried_three_times():
     # Unknown stays retryable: losing an answer is worse than wasting a call.
     assert Engine.is_retryable(Exception("something nobody has seen before"))
 
+    # urllib's HTTPError carries only a status (Gemini, Perplexity).
+    import io, urllib.error
+    http = lambda code: urllib.error.HTTPError("https://x", code, "msg", {}, io.BytesIO())
+    assert not Engine.is_retryable(http(400)) and not Engine.is_retryable(http(404))
+    assert Engine.is_retryable(http(429)) and Engine.is_retryable(http(503)) and Engine.is_retryable(http(408))
+
 
 def test_a_permanent_failure_stops_after_one_attempt():
     from unprompted.engines.base import Engine
@@ -1922,8 +1928,9 @@ def test_a_permanent_failure_stops_after_one_attempt():
     assert answer.error and "usage limits" in answer.error
 
 
-def test_a_transient_failure_still_gets_its_retries():
+def test_a_transient_failure_still_gets_its_retries(monkeypatch):
     from unprompted.engines.base import Engine
+    monkeypatch.setattr("unprompted.engines.base.time.sleep", lambda s: None)  # 6s of real backoff otherwise
 
     calls = []
 
@@ -2341,3 +2348,18 @@ def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
     assert seen["argv"] == ["/bin/claude", *ALLOWED_CLIS["claude"]] and seen["input"] == "untrusted prompt"
     assert seen["files"] == [] and "shell" not in seen
     assert "sk-should-not-leak" not in str(seen["env"])
+
+
+def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
+    from unprompted.engines import base
+    slept = []
+    monkeypatch.setattr(base.time, "sleep", slept.append)
+
+    class Limited(base.Engine):
+        name, key_names = "limited", ()
+        def _one_call(self, question):
+            raise RuntimeError("429 Too Many Requests")
+    engine = Limited()
+    engine.api_key = "x"
+    engine.ask_one("q1", "Which?", 0)
+    assert slept == [base.RATE_LIMIT_BACKOFF_SECONDS, 2 * base.RATE_LIMIT_BACKOFF_SECONDS]

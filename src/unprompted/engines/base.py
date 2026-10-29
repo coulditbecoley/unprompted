@@ -20,6 +20,13 @@ SYSTEM_PROMPT = (
 
 MAX_ATTEMPTS = 3
 BACKOFF_SECONDS = 2.0
+RATE_LIMIT_BACKOFF_SECONDS = 15.0
+
+
+def is_rate_limit(exc: Exception) -> bool:
+    status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    text = str(exc).lower()
+    return status == 429 or "ratelimit" in type(exc).__name__.lower() or "rate_limit" in text or "429" in text
 
 # Every wait and every new paid request in one weekly run shares this clock.
 # Task Scheduler stops the run at 8 hours, and a run killed there commits
@@ -123,8 +130,14 @@ class Engine:
         if any(p in text for p in ("quota", "billing", "credit balance", "usage limit", "spending limit")):
             return False
         # Rate limits are the one 4xx worth waiting out.
-        if "ratelimit" in name or "rate_limit" in text or "429" in text:
+        if is_rate_limit(exc):
             return True
+        # A typed status where there is one: urllib's HTTPError (Gemini,
+        # Perplexity) says only "HTTP Error 400: Bad Request", which no phrase
+        # below matches, so a malformed request was tried three times.
+        status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+        if isinstance(status, int) and 400 <= status < 500 and status != 408:
+            return False
 
         permanent = (
             "authenticationerror", "permissiondeniederror", "notfounderror",
@@ -182,7 +195,10 @@ class Engine:
                 if not self.is_retryable(exc):
                     break
                 if attempt < MAX_ATTEMPTS - 1:
-                    time.sleep(BACKOFF_SECONDS * (attempt + 1))
+                    # A rate limit needs longer than a reset connection: two and
+                    # four seconds just spent the retries inside the same window.
+                    pause = RATE_LIMIT_BACKOFF_SECONDS if is_rate_limit(exc) else BACKOFF_SECONDS
+                    time.sleep(pause * (attempt + 1))
 
         return EngineAnswer(
             engine=self.name,
