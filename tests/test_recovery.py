@@ -519,7 +519,9 @@ def test_fully_cached_restart_publishes_above_budget_without_paid_calls(tmp_path
     batch = SimpleNamespace(id="offline", processing_status="ended")
     reply = MessageBatchIndividualResponse.model_validate({"custom_id": "x0", "result": {
         "type": "succeeded", "message": {"id": "offline", "type": "message", "role": "assistant", "model": "offline",
-        "content": [{"type": "text", "text": '{"refused":false,"brands":[{"name":"Alpha","position":1,"sentiment":"positive"},{"name":"Beta","position":2,"sentiment":"positive"}]}'}],
+        # A thinking block first, as on 2026-09-14: the text block must still be read.
+        "content": [{"type": "thinking", "thinking": "...", "signature": "s"},
+                    {"type": "text", "text": '{"refused":false,"brands":[{"name":"Alpha","position":1,"sentiment":"positive"},{"name":"Beta","position":2,"sentiment":"positive"}]}'}],
         "usage": {"input_tokens": 1000, "output_tokens": 50}, "stop_reason": "end_turn", "stop_sequence": None}}})
     batches = SimpleNamespace(create=lambda **kw: calls.append("extract") or batch,
                               retrieve=lambda key: batch, results=lambda key: [reply])
@@ -796,6 +798,32 @@ def test_local_harness_model_change_refuses_before_paid_calls(tmp_path, monkeypa
     with pytest.raises(ValueError, match="harness: model-a -> model-b"):
         run.run_category("alpha", "2026-09-14")
     assert len(calls) == asked
+
+
+def test_local_harness_argument_change_refuses_before_paid_calls(tmp_path, monkeypatch):
+    # Tool policy is part of what a harness row measures (2026-10-29), so its
+    # arguments are frozen with the model and a change needs a version bump.
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "git_sha", lambda: "sha")
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("aliases: {}")
+    spec = {"category": "alpha", "method_version": 1, "runs_per_question": 1,
+            "questions": [{"id": "q1", "text": "Which brand?"}]}
+    monkeypatch.setattr(run, "load_questions", lambda category: spec)
+    harness = SimpleNamespace(name="harness", grounds=False, is_configured=True,
+                              provider=SimpleNamespace(args=("-p", "--old")),
+                              identify=lambda: {"model": "model-a", "version": "1.0"},
+                              ask_one=lambda qid, text, index: pytest.fail("paid call"))
+    monkeypatch.setattr(run, "all_engines", lambda: {"harness": harness})
+    monkeypatch.setattr(run, "resolve_extractor", lambda: SimpleNamespace(id="fake", label="fake"))
+    prior = {"questions": spec, "engines": {"harness": {"model": "model-a", "grounds": False, "args": ["-p", "--old"]}},
+             "aliases": {"aliases": {}}, "system_prompt": run.SYSTEM_PROMPT, "extraction_prompt": run.EXTRACT_PROMPT,
+             "extractor": {"id": "fake", "model": ""}}
+    write_json(tmp_path / "data/runs/2026-09-07/alpha.json",
+               {"category": "alpha", "run_date": "2026-09-07", "method_version": 1, "methodology": prior})
+    harness.provider.args = ("-p", "--new")
+    with pytest.raises(ValueError, match="Changed: engines"):
+        run.run_category("alpha", "2026-09-14")
 
 
 def test_harness_model_is_read_from_real_cli_output():

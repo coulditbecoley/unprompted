@@ -84,7 +84,7 @@ export const KNOWN_CLIS: Array<{
     command: "claude",
     // Mirrors ALLOWED_CLIS in src/unprompted/cli_provider.py, which explains
     // each flag: no user settings, web search and fetch only, model pinned.
-    args: ["-p", "--strict-mcp-config", "--setting-sources", "project", "--model", "claude-opus-5-5", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--disallowedTools", "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate"],
+    args: ["-p", "--safe-mode", "--strict-mcp-config", "--setting-sources", "project", "--model", "claude-opus-5-5", "--permission-mode", "dontAsk", "--tools", "WebSearch,WebFetch", "--allowedTools", "WebSearch,WebFetch", "--disallowedTools", "Bash,PowerShell,Edit,Write,NotebookEdit,Agent,RemoteTrigger,CronCreate"],
     versionArgs: ["--version"],
   },
   {

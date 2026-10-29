@@ -6,7 +6,9 @@ a stub, because "one dead engine must not cost the week" is a real guarantee.
 
 from __future__ import annotations
 
+import os
 import sys
+from types import SimpleNamespace
 from datetime import date
 from pathlib import Path
 
@@ -1266,7 +1268,7 @@ class _FakeBatches:
                 continue
             usage = type("U", (), {"input_tokens": 11, "output_tokens": 22})()
             message = type(
-                "M", (), {"content": [type("T", (), {"text": text})()], "usage": usage}
+                "M", (), {"content": [type("T", (), {"type": "text", "text": text})()], "usage": usage}
             )()
             yield type(
                 "E",
@@ -2301,3 +2303,34 @@ def test_the_claude_engine_never_inherits_the_operators_permissions():
     assert pairs["--model"].startswith("claude-")
     providers = json.loads((Path(__file__).resolve().parents[1] / "providers.json").read_text(encoding="utf-8"))["providers"]
     assert all(p["args"] == list(args) for p in providers if p.get("command") == "claude")
+
+
+def test_the_claude_canary_stops_a_harness_that_can_write(monkeypatch, tmp_path):
+    import re as _re
+    from unprompted import cli_provider
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+
+    def obeys(prompt, cwd, extra=()):
+        Path(_re.search(r"create the file (\S+)", prompt).group(1)).write_text("canary")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: obeys(*a, **k))
+    with pytest.raises(cli_provider.ProviderError, match="isolation no longer holds"):
+        claude.qualify()
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: None)
+    claude.qualify()  # refused: nothing written, nothing raised
+
+
+def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
+    from unprompted import cli_provider
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
+    seen = {}
+
+    def fake_run(argv, **kw):
+        seen.update(argv=argv, files=os.listdir(kw["cwd"]), **kw)
+        return SimpleNamespace(returncode=0, stdout="An answer.", stderr="")
+    monkeypatch.setattr(cli_provider.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(cli_provider.subprocess, "run", fake_run)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    assert claude.ask("untrusted prompt") == "An answer."
+    assert seen["argv"] == ["/bin/claude", *ALLOWED_CLIS["claude"]] and seen["input"] == "untrusted prompt"
+    assert seen["files"] == [] and "shell" not in seen
+    assert "sk-should-not-leak" not in str(seen["env"])

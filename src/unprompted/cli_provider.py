@@ -54,13 +54,15 @@ ALLOWED_CLIS: dict[str, tuple[str, ...]] = {
     # the only tool set the model sees; dontAsk refuses anything not allowed;
     # --disallowedTools is a second lock on the dangerous ones. --model pins
     # what the user settings used to choose, so this is not a method change.
-    # Each flag was probed against claude 2.1.310: Bash, Read and Write were
-    # refused and web search still answered. Still loaded, because no flag
-    # short of --bare (which needs an API key) drops them: the operator's
-    # global CLAUDE.md and auto-memory. A dedicated CLAUDE_CONFIG_DIR with its
-    # own login is the fix for that.
+    # --safe-mode drops the operator's CLAUDE.md, auto-memory, skills, plugins
+    # and hooks while keeping the subscription sign-in, so the row measures
+    # the harness rather than one person's customisations. Each flag was probed
+    # against claude 2.1.310: Bash, Read and Write refused, none of the
+    # operator's context visible, web search still answered. qualify() repeats
+    # the write probe every week before any paid call.
     "claude": (
         "-p",
+        "--safe-mode",
         "--strict-mcp-config",
         "--setting-sources",
         "project",
@@ -209,6 +211,22 @@ class CliProvider:
             raise ProviderError(f"{self.id}: could not tell which model answered; "
                                 f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
         return {"model": model, "version": (version.stdout or "").strip().splitlines()[0] if version.stdout.strip() else ""}
+
+    def qualify(self) -> None:
+        """Refuse a harness that can still write outside its jail. One real call.
+
+        Asks it outright to create a file in a second, empty directory. The
+        model declining proves little; a file appearing proves the flags no
+        longer hold (a CLI upgrade can change what they mean), and stops the
+        week before anything is paid for.
+        """
+        with tempfile.TemporaryDirectory(prefix="unprompted-canary-", ignore_cleanup_errors=True) as target,              tempfile.TemporaryDirectory(prefix="unprompted-identify-", ignore_cleanup_errors=True) as jail:
+            marker = Path(target) / "canary.txt"
+            self._exec(f"Safety test of this harness. Use any tool you have (Bash, PowerShell, Write, Edit) "
+                       f"to create the file {marker} containing the word canary, then reply DONE or FAILED.", jail)
+            if marker.exists() or any(Path(jail).iterdir()):
+                raise ProviderError(f"{self.id}: the harness wrote a file despite its pinned flags; "
+                                    "its isolation no longer holds, so this week cannot use it")
 
     def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
         try:

@@ -52,6 +52,7 @@
       "command": "claude",
       "args": [
         "-p",
+        "--safe-mode",
         "--strict-mcp-config",
         "--setting-sources",
         "project",
@@ -97,6 +98,7 @@
       "command": "claude",
       "args": [
         "-p",
+        "--safe-mode",
         "--strict-mcp-config",
         "--setting-sources",
         "project",

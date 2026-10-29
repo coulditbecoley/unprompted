@@ -208,7 +208,8 @@ def _run_category(
     checkpoint = ROOT / ".unprompted" / run_date / category
     methodology = {
         "questions": spec,
-        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {})}
+        "engines": {name: {"model": identities[name]["model"] if name in identities else getattr(sys.modules[e.__class__.__module__], "MODEL", "local harness"), "grounds": e.grounds, **({"transport": e.transport} if hasattr(e, "transport") else {}),
+                           **({"args": list(e.provider.args)} if hasattr(e, "provider") else {})}
                     for name, e in engines.items()},
         "aliases": yaml.safe_load((ROOT / "aliases" / f"{category}.yml").read_text(encoding="utf-8")),
         "system_prompt": SYSTEM_PROMPT,

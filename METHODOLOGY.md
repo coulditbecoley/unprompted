@@ -333,6 +333,23 @@ Saved batch IDs are bound to their exact inputs and extraction configuration;
 unrecognized or mismatched checkpoints require reconciliation, never automatic
 resubmission. Budget totals remain usage estimates, not provider invoices.
 
+### Local Claude Code engine isolated (October 29, 2026)
+
+Until this week the Claude Code row ran with the operator's own Claude Code
+setup: their settings, permission mode, instructions file, memory, plugins and
+hooks. A test showed that setup let a prompt run shell commands, and a web page
+the engine reads could in principle have done the same. From the November 2
+week the harness runs in safe mode with no user settings, its only tools are
+web search and web fetch, everything else is refused, and the model is pinned
+to `claude-opus-5-5`, the model it already reported. Each run first asks the
+harness to write a file and stops before any paid call if one appears. The
+harness's arguments are now part of the frozen engine configuration, so a later
+change to them is caught like any other unversioned change.
+
+The model is unchanged, but what surrounds it is not, so every category takes a
+method version bump: coding moves to version 5, images and writing to version 6.
+Week-over-week movement is not reported across the change.
+
 ### Model upgrade (September 28, 2026)
 
 From the September 28 week the hosted engines move to current models: Claude
