@@ -2452,22 +2452,55 @@ def test_analytics_validation_rejects_values_the_readers_trip_over(record):
     assert not sa.well_formed(json.loads(record))
 
 
-def test_readiness_checks_the_coming_monday_and_opens_one_issue(monkeypatch, capsys):
+def test_readiness_targets_the_right_monday_and_never_overlaps_the_run():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import scripts.readiness as rd  # noqa: PLC0415
-    assert rd.next_monday(date(2026, 11, 1)) == date(2026, 11, 2)   # Sunday -> tomorrow
-    assert rd.next_monday(date(2026, 11, 2)) == date(2026, 11, 9)   # Monday -> next week
+    from datetime import datetime as dt
+    assert rd.target_monday(dt(2026, 11, 1, 18)) == date(2026, 11, 2)   # Sunday evening -> tomorrow
+    assert rd.target_monday(dt(2026, 11, 2, 9)) == date(2026, 11, 2)    # a late start Monday morning
+    assert rd.target_monday(dt(2026, 11, 2, 12)) is None                # too close to 13:00: skip
+    assert rd.target_monday(dt(2026, 11, 4, 10)) == date(2026, 11, 9)   # midweek -> next Monday
+
+
+def _readiness(monkeypatch, replies):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.readiness as rd  # noqa: PLC0415
     calls = []
     def fake(argv, **kw):
         calls.append(argv)
-        if argv[:3] == ["gh", "issue", "list"]:
-            return SimpleNamespace(stdout="[]", returncode=0)
-        if argv[:3] == ["gh", "issue", "create"]:
-            return SimpleNamespace(stdout="", returncode=0)
-        return SimpleNamespace(returncode=2, stderr="", stdout=json.dumps({"issues": ["codex: model `x` changed\nnow"], "engines_identified": {}}))
+        reply = replies(argv)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
     monkeypatch.setattr(rd.subprocess, "run", fake)
+    monkeypatch.setattr(rd, "target_monday", lambda now: date(2026, 11, 2))
     monkeypatch.setattr(rd.sys, "argv", ["readiness"])
+    return rd, calls
+
+
+def test_readiness_opens_one_stable_issue_and_reports_github_failures(monkeypatch):
+    found = SimpleNamespace(returncode=2, stderr="", stdout=json.dumps({"issues": ["codex: model `x` changed" + chr(10) + "now"]}))
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else
+                           SimpleNamespace(returncode=0, stdout="[]", stderr="") )
     assert rd.main() == 2
-    assert "--qualify" in calls[0] and any(c[:3] == ["gh", "issue", "create"] for c in calls)
-    body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
-    assert "- `codex: model x changed now`" in body
+    create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
+    assert create[create.index("--title") + 1] == "Monday readiness: problems before 2026-11-02"
+    assert "- `codex: model x changed now`" in create[-1]
+    # Already open under the same title: not opened twice.
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else SimpleNamespace(
+        returncode=0, stdout=json.dumps([{"title": "Monday readiness: problems before 2026-11-02"}]), stderr=""))
+    assert rd.main() == 2 and not any(c[:3] == ["gh", "issue", "create"] for c in calls)
+    # GitHub refuses: reported, exit 1, and a failed lookup is not taken as "none open".
+    rd, calls = _readiness(monkeypatch, lambda a: found if "--qualify" in a else SimpleNamespace(
+        returncode=1, stdout="", stderr="auth required"))
+    assert rd.main() == 1 and not any(c[:3] == ["gh", "issue", "create"] for c in calls)
+
+
+def test_readiness_turns_a_hung_or_unstartable_check_into_an_issue(monkeypatch):
+    import subprocess  # noqa: PLC0415
+    for failure in (subprocess.TimeoutExpired("run", 1), OSError("no python")):
+        rd, calls = _readiness(monkeypatch, lambda a, f=failure: f if "--qualify" in a else
+                               SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+        assert rd.main() == 1
+        create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
+        assert "readiness check itself failed" in create[-1]
