@@ -120,6 +120,7 @@ const KNOWN = [
   "/questions",
   "/categories",
   "/methodology",
+  "/standings/",
   "/admin",
   "/api/",
   "/feed.xml",

@@ -669,6 +669,8 @@ def main() -> int:
     # Held for the whole week: the daily sync's pull and the readiness check
     # wait on it, so inputs cannot change between categories. The wait covers a
     # pull, or a readiness check (30-minute limit), already in flight.
+    from .engines import base
+    base.BOOKED_MONTH = None if args.ignore_budget else args.date[:7]
     with run_lock(ROOT / ".unprompted", "week.lock", wait=35 * 60):
         return _measure(args, categories)
 

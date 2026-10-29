@@ -1011,24 +1011,33 @@ def test_a_paid_reread_dated_in_another_month_is_refused(tmp_path, monkeypatch, 
 
 
 def test_categories_are_not_started_once_the_month_turns(tmp_path, monkeypatch):
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)  # restored after: main() sets it
     started = []
-    monkeypatch.setattr(run, "ROOT", tmp_path)
-    monkeypatch.setattr(run, "load_local_env", lambda: None)
-    monkeypatch.setattr(run, "all_categories", lambda: ["alpha"])
-    monkeypatch.setattr(run, "run_category", lambda *a, **k: started.append(a))
-    monkeypatch.setattr("unprompted.engines.anthropic_batch.collect_outstanding", lambda *a: ([], []))
-    today = run.date.today().isoformat()
-    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today, "--summary-file", str(tmp_path / "s.json")])
     real = run.date
-    class NextMonth(real):
+    today = real.today()
+
+    class Clock(real):
+        shift = 0
         @classmethod
         def today(cls):
             from datetime import timedelta
-            return real.fromisoformat(today) + timedelta(days=40)
-    monkeypatch.setattr(run, "date", NextMonth)
-    with pytest.raises(SystemExit):  # entry check: the date is now in another month
-        run.main()
-    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today, "--ignore-budget"])
+            return today + timedelta(days=cls.shift)
+
+    def category(name, *a, **k):
+        started.append(name)
+        Clock.shift = 40  # midnight passes while the first category runs
+        with pytest.raises(TimeoutError, match="month changed"):
+            base.refuse_new_paid_work("a retry")  # no new paid work inside it either
+        raise RuntimeError("stop")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta"])
+    monkeypatch.setattr(run, "run_category", category)
     monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    monkeypatch.setattr(run, "date", Clock)
+    monkeypatch.setattr(base, "datetime", type("Now", (), {"now": staticmethod(lambda: __import__("datetime").datetime.combine(Clock.today(), __import__("datetime").time()))}))
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today.isoformat(), "--summary-file", str(tmp_path / "s.json")])
     run.main()
-    assert started  # --ignore-budget knowingly accepts it
+    assert started == ["alpha"]
+    assert json.loads((tmp_path / "s.json").read_text())["categories"]["beta"]["outcome"] == "not_started"

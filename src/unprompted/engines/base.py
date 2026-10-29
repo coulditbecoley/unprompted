@@ -63,10 +63,26 @@ def wait_deadline(max_wait: float) -> float:
     return min(time.monotonic() + max_wait, _PROCESS_STARTED + RUN_SECONDS)
 
 
-def refuse_new_paid_work(what: str) -> None:
-    """Nothing new is paid for once the run's clock is spent: it could not be collected."""
+# The month this run's spend is booked to (its --date), set by run.py; None
+# when the operator accepted spend outside the check with --ignore-budget.
+BOOKED_MONTH: str | None = None
+
+
+def paid_work_refusal() -> str | None:
+    """Why no new paid request may start now, or None."""
     if run_time_left() <= 0:
-        raise TimeoutError(f"{what} not started: the weekly run's {RUN_SECONDS // 3600}-hour budget is spent")
+        return f"the weekly run's {RUN_SECONDS // 3600}-hour budget is spent"
+    if BOOKED_MONTH and datetime.now().date().isoformat()[:7] != BOOKED_MONTH:
+        return "the month changed during the run, and its spend is booked to the previous month"
+    return None
+
+
+def refuse_new_paid_work(what: str) -> None:
+    """Nothing new is paid for once the run's clock is spent (it could not be
+    collected) or the month has turned (it would be booked outside the check)."""
+    why = paid_work_refusal()
+    if why:
+        raise TimeoutError(f"{what} not started: {why}")
 
 
 def utc_now() -> str:
@@ -181,7 +197,7 @@ class Engine:
 
         text, sources, usage, error, metadata = "", [], {}, None, None
         for attempt in range(MAX_ATTEMPTS):
-            if attempt and run_time_left() <= 0:
+            if attempt and paid_work_refusal():
                 break  # a retry is new paid work too; keep the last error
             try:
                 # An adapter may add a fourth item: provider metadata for this call.
