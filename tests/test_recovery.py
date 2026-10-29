@@ -852,7 +852,10 @@ def test_hold_reasons_cannot_end_the_github_output_block(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "format_report", lambda d: "")
     monkeypatch.setattr(run, "cost_of_run", lambda d: (None, 0.0))
     monkeypatch.setattr(run.sys, "argv", ["run"])
+    monkeypatch.setattr(run.sys, "argv", ["run", "--summary-file", str(tmp_path / "s.json")])
     assert run.main() == run.HELD_EXIT_CODE
+    held = json.loads((tmp_path / "s.json").read_text())["categories"]["alpha"]
+    assert held["outcome"] == "held" and held["dollars"] == 0.0 and held["minutes"] >= 0
     text = output.read_text()
     marker = text.split("reasons<<", 1)[1].split("\n", 1)[0]
     assert marker.startswith("EOF_") and text.rstrip().endswith(marker)

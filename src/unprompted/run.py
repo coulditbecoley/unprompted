@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
@@ -682,6 +683,7 @@ def _measure(args, categories: list[str]) -> int:
             outcomes.append(f"{category}: not started — run time budget nearly spent")
             continue
         print(f"\nunprompted: {category} for {args.date}", file=sys.stderr)
+        started = time.monotonic()
         try:
             record, reasons = run_category(
                 category, args.date, dry_run=args.dry_run, ignore_budget=args.ignore_budget
@@ -700,24 +702,29 @@ def _measure(args, categories: list[str]) -> int:
             print(f"\nFAILED: {category}: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc()
             held[category] = [f"the run raised {type(exc).__name__}: {exc}"]
-            results[category] = {"outcome": "failed", "reasons": held[category]}
+            results[category] = {"outcome": "failed", "reasons": held[category],
+                                 "minutes": round((time.monotonic() - started) / 60, 1)}
             outcomes.append(f"{category}: failed or refused — {type(exc).__name__}: {exc}")
             continue
 
         print("\nCOST", file=sys.stderr)
         print(format_report(record.to_dict()), file=sys.stderr)
-        total += cost_of_run(record.to_dict())[1]
+        dollars = cost_of_run(record.to_dict())[1]
+        total += dollars
+        # Cost and wall time beside the outcome: the budget and the run clock's
+        # 90-minute reserve can be checked against real weeks without the log.
+        spent = {"dollars": round(dollars, 2), "minutes": round((time.monotonic() - started) / 60, 1)}
 
         if reasons:
             held[category] = reasons
-            results[category] = {"outcome": "held", "reasons": reasons}
+            results[category] = {"outcome": "held", "reasons": reasons, **spent}
             outcomes.append(f"{category}: held — {'; '.join(reasons)}")
             print(f"\nHELD: {category} will not publish:", file=sys.stderr)
             for reason in reasons:
                 print(f"  - {reason}", file=sys.stderr)
         else:
             outcomes.append(f"{category}: passed local publication checks")
-            results[category] = {"outcome": "passed", "reasons": []}
+            results[category] = {"outcome": "passed", "reasons": [], **spent}
             print(f"\n{category}: all checks passed.", file=sys.stderr)
 
     if len(categories) > 1:
