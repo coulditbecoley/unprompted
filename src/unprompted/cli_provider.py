@@ -137,7 +137,8 @@ def _end_tree(pid: int) -> None:
     """End a process and its children. On Windows the child is a .CMD shim, and
     killing only that leaves the real harness running and holding the pipes."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True)
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
+                       timeout=30, check=True)
     else:
         try:
             os.killpg(pid, signal.SIGKILL)
@@ -284,11 +285,17 @@ class CliProvider:
         try:
             stdout, stderr = process.communicate(prompt, timeout=TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired as exc:
-            _end_tree(process.pid)
             try:
+                _end_tree(process.pid)
                 stdout, _ = process.communicate(timeout=30)
-            except subprocess.TimeoutExpired as drain:
-                stdout = drain.output or exc.output or ""
+            except (OSError, subprocess.SubprocessError) as cleanup:
+                try:
+                    process.kill()
+                    process.wait(timeout=5)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                # Do not retry a probe while its previous harness may still be alive.
+                raise ProviderError(f"{self.id}: timeout cleanup failed: {cleanup}") from cleanup
             if isinstance(stdout, bytes):
                 stdout = stdout.decode("utf-8", errors="replace")
             raise CliTimeout(f"{self.id}: timed out after {TIMEOUT_SECONDS}s", stdout=stdout) from exc

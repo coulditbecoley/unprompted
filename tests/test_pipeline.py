@@ -2465,6 +2465,88 @@ def test_timeout_keeps_partial_output_for_the_isolation_check(monkeypatch, tmp_p
     assert caught.value.stdout == "CANARY-token"
 
 
+@pytest.mark.parametrize("failure", ["kill", "drain"])
+def test_a_probe_never_retries_when_timeout_cleanup_is_unconfirmed(monkeypatch, tmp_path, failure):
+    import subprocess
+    from unprompted import cli_provider
+    started = []
+
+    class FakePopen:
+        pid = 123
+
+        def __init__(self, *args, **kwargs):
+            started.append(self)
+
+        def communicate(self, *args, **kwargs):
+            if args or failure == "drain":
+                raise subprocess.TimeoutExpired("offline", 1)
+            return "", ""
+
+        def kill(self):
+            pass
+
+        def wait(self, timeout):
+            return 0
+
+    def end_tree(pid):
+        if failure == "kill":
+            raise subprocess.CalledProcessError(1, "taskkill")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(cli_provider, "_end_tree", end_tree)
+    monkeypatch.setattr(cli_provider.time, "sleep", lambda seconds: None)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(cli_provider.ProviderError, match="cleanup") as caught:
+        claude._probe("probe", str(tmp_path))
+    assert not isinstance(caught.value, cli_provider.CliTimeout)
+    assert len(started) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
+def test_tree_cleanup_is_bounded_and_checks_taskkill_failure(monkeypatch):
+    import subprocess
+    from unprompted import cli_provider
+    seen = {}
+
+    def taskkill(argv, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr(cli_provider.subprocess, "run", taskkill)
+    with pytest.raises(subprocess.CalledProcessError):
+        cli_provider._end_tree(123)
+    assert seen["timeout"] == 30 and seen["check"] is True
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
+def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, capsys):
+    import subprocess
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from scripts import timed
+    waits = []
+
+    class FakePopen:
+        pid = 123
+
+        def wait(self, timeout):
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired("offline", timeout)
+
+        def kill(self):
+            pass
+
+    def taskkill(argv, **kwargs):
+        assert kwargs["timeout"] == 30 and kwargs["check"] is True
+        raise subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **kw: FakePopen())
+    monkeypatch.setattr(timed.subprocess, "run", taskkill)
+    assert timed.run(1, ["offline"]) == 125
+    assert waits == [1, 5]
+    assert "cleanup failed" in capsys.readouterr().err
+
+
 def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
     from unprompted.engines import base
     slept = []
