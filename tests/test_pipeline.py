@@ -2388,8 +2388,8 @@ def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch
     assert not marker.exists()
 
 
-def test_a_probe_outlasts_a_stall_but_never_retries_a_real_failure(monkeypatch):
-    # 2026-11-02: a 23-minute machine stall timed out the probes and lost the week.
+def test_probe_retries_only_timeouts_and_stops_after_three_attempts(monkeypatch):
+    # This checks retry control flow, not survival of a real machine stall.
     from unprompted import cli_provider
     claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
     slept, calls = [], []
@@ -2545,6 +2545,50 @@ def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, ca
     assert timed.run(1, ["offline"]) == 125
     assert waits == [1, 5]
     assert "cleanup failed" in capsys.readouterr().err
+
+
+def test_cli_call_respects_the_remaining_weekly_clock(monkeypatch, tmp_path):
+    from unprompted import cli_provider
+    from unprompted.engines import base
+    started, limits = [], []
+
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, *args, **kwargs):
+            started.append(args)
+
+        def communicate(self, prompt, timeout):
+            limits.append(timeout)
+            return "OK", ""
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(base, "run_time_left", lambda: 7)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    assert claude._exec("probe", str(tmp_path)).stdout == "OK"
+    assert limits == [7]
+    monkeypatch.setattr(base, "run_time_left", lambda: 0)
+    with pytest.raises(TimeoutError, match="budget is spent"):
+        claude._exec("probe", str(tmp_path))
+    assert len(started) == 1
+
+
+def test_probe_does_not_sleep_past_the_weekly_deadline(monkeypatch, tmp_path):
+    from unprompted import cli_provider
+    from unprompted.engines import base
+    slept = []
+    monkeypatch.setattr(base, "run_time_left", lambda: 10)
+    monkeypatch.setattr(cli_provider.time, "sleep", slept.append)
+
+    def timeout(self, *args):
+        raise cli_provider.CliTimeout("timed out")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", timeout)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(TimeoutError, match="time left"):
+        claude._probe("probe", str(tmp_path))
+    assert slept == []
 
 
 def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):

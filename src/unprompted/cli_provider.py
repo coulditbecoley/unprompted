@@ -30,13 +30,13 @@ ROOT = Path(__file__).resolve().parents[2]
 REGISTRY = ROOT / "providers.json"
 
 # A CLI answering a reading task should never take this long. The cap keeps one
-# wedged process from stalling a 225-call run behind it. It was 180 until
-# 2026-11-02, when a 23-minute machine-wide stall made one-word calls take 2-3
-# minutes each (5 seconds normally), and the startup probes lost the whole week.
+# wedged process from stalling a 225-call run behind it. Startup probes exceeded
+# the previous 180s limit on 2026-11-02; the underlying cause is not established.
 TIMEOUT_SECONDS = 300
 # The startup probes decide a whole week, and a stall passes, so a timeout is
 # tried again. Only a timeout: a harness that broke isolation or failed to start
-# gives the same answer twice. A wedged harness still fails, within about 19 minutes.
+# gives the same answer twice. Three attempts plus pauses take 19 minutes,
+# excluding process startup and cleanup, and share the weekly run's deadline.
 PROBE_ATTEMPTS = 3
 PROBE_PAUSE_SECONDS = 120
 
@@ -269,6 +269,11 @@ class CliProvider:
                                     f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
 
     def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
+        # Imported here because engines also construct CliProviders.
+        from .engines.base import refuse_new_paid_work, run_time_left
+
+        refuse_new_paid_work(f"{self.id} CLI call")
+        timeout = min(TIMEOUT_SECONDS, max(0, run_time_left()))
         argv = [self.resolve(), *self.args, *extra]
         process = subprocess.Popen(
             argv,
@@ -283,7 +288,7 @@ class CliProvider:
             start_new_session=os.name != "nt",
         )
         try:
-            stdout, stderr = process.communicate(prompt, timeout=TIMEOUT_SECONDS)
+            stdout, stderr = process.communicate(prompt, timeout=timeout)
         except subprocess.TimeoutExpired as exc:
             try:
                 _end_tree(process.pid)
@@ -298,11 +303,13 @@ class CliProvider:
                 raise ProviderError(f"{self.id}: timeout cleanup failed: {cleanup}") from cleanup
             if isinstance(stdout, bytes):
                 stdout = stdout.decode("utf-8", errors="replace")
-            raise CliTimeout(f"{self.id}: timed out after {TIMEOUT_SECONDS}s", stdout=stdout) from exc
+            raise CliTimeout(f"{self.id}: timed out after {timeout:g}s", stdout=stdout) from exc
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
     def _probe(self, prompt: str, cwd: str, extra: tuple[str, ...] = (), *,
                check: Callable[[str], None] | None = None) -> subprocess.CompletedProcess:
+        from .engines.base import run_time_left
+
         for attempt in range(1, PROBE_ATTEMPTS + 1):
             try:
                 result = self._exec(prompt, cwd, extra)
@@ -311,6 +318,8 @@ class CliProvider:
                     check(exc.stdout)  # a timeout cannot erase evidence that isolation failed
                 if attempt == PROBE_ATTEMPTS:
                     raise
+                if run_time_left() <= PROBE_PAUSE_SECONDS:
+                    raise TimeoutError(f"{self.id}: not enough run time left for a probe retry") from exc
                 print(f"  {exc}; attempt {attempt} of {PROBE_ATTEMPTS}, trying again in "
                       f"{PROBE_PAUSE_SECONDS}s", file=sys.stderr)
                 time.sleep(PROBE_PAUSE_SECONDS)
