@@ -2352,16 +2352,77 @@ def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-not-leak")
     seen = {}
 
-    def fake_run(argv, **kw):
-        seen.update(argv=argv, files=os.listdir(kw["cwd"]), **kw)
-        return SimpleNamespace(returncode=0, stdout="An answer.", stderr="")
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, argv, **kw):
+            seen.update(argv=argv, files=os.listdir(kw["cwd"]), **kw)
+
+        def communicate(self, prompt, timeout):
+            seen["input"] = prompt
+            return "An answer.", ""
     monkeypatch.setattr(cli_provider.shutil, "which", lambda name: f"/bin/{name}")
-    monkeypatch.setattr(cli_provider.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", FakePopen)
     claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
     assert claude.ask("untrusted prompt") == "An answer."
     assert seen["argv"] == ["/bin/claude", *ALLOWED_CLIS["claude"]] and seen["input"] == "untrusted prompt"
     assert seen["files"] == [] and "shell" not in seen
     assert "sk-should-not-leak" not in str(seen["env"])
+
+
+def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch):
+    # On Windows the child is a .CMD shim, and the harness under it holds the pipes.
+    import sys, time
+    from unprompted import cli_provider
+    marker = tmp_path / "survivor"
+    child = f"import time; time.sleep(4); open({str(marker)!r}, 'w').write('x')"
+    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(30)"
+    provider = cli_provider.CliProvider("slow", "Slow", "claude", ("-c", parent))
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: sys.executable)
+    monkeypatch.setattr(cli_provider, "TIMEOUT_SECONDS", 1)
+    started = time.monotonic()
+    with pytest.raises(cli_provider.CliTimeout):
+        provider._exec("", str(tmp_path))
+    assert time.monotonic() - started < 15
+    time.sleep(5)
+    assert not marker.exists()
+
+
+def test_a_probe_outlasts_a_stall_but_never_retries_a_real_failure(monkeypatch):
+    # 2026-11-02: a 23-minute machine stall timed out the probes and lost the week.
+    from unprompted import cli_provider
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    slept, calls = [], []
+    monkeypatch.setattr(cli_provider.time, "sleep", slept.append)
+
+    def stalls_twice(self, *a, **k):
+        calls.append(a)
+        if len(calls) < 3:
+            raise cli_provider.CliTimeout("claude-code: timed out")
+        return SimpleNamespace(returncode=0, stdout="FAILED", stderr="")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", stalls_twice)
+    claude.qualify()
+    assert len(calls) == 3 and slept == [cli_provider.PROBE_PAUSE_SECONDS] * 2
+
+    calls.clear()
+
+    def always_stalls(self, *a, **k):
+        calls.append(a)
+        raise cli_provider.CliTimeout("claude-code: timed out")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", always_stalls)
+    with pytest.raises(cli_provider.CliTimeout):
+        claude.qualify()  # a truly wedged harness still fails
+    assert len(calls) == cli_provider.PROBE_ATTEMPTS
+
+    calls.clear()
+
+    def refuses(self, *a, **k):
+        calls.append(a)
+        raise cli_provider.ProviderError("claude-code: not a timeout")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", refuses)
+    with pytest.raises(cli_provider.ProviderError, match="not a timeout"):
+        claude.qualify()
+    assert len(calls) == 1
 
 
 def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
