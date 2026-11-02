@@ -2370,20 +2370,29 @@ def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
     assert "sk-should-not-leak" not in str(seen["env"])
 
 
-def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch):
+@pytest.mark.parametrize("shim", [False, pytest.param(True, marks=pytest.mark.skipif(os.name != "nt", reason="Windows CMD shim"))])
+def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch, shim):
     # On Windows the child is a .CMD shim, and the harness under it holds the pipes.
     import sys, time
     from unprompted import cli_provider
     marker = tmp_path / "survivor"
     child = f"import time; time.sleep(4); open({str(marker)!r}, 'w').write('x')"
-    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(30)"
-    provider = cli_provider.CliProvider("slow", "Slow", "claude", ("-c", parent))
-    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: sys.executable)
+    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); print('CANARY-offline-token', flush=True); time.sleep(30)"
+    executable, args = sys.executable, ("-c", parent)
+    if shim:
+        script = tmp_path / "parent.py"
+        script.write_text(parent, encoding="utf-8")
+        wrapper = tmp_path / "harness.cmd"
+        wrapper.write_text(f'@"{sys.executable}" "{script}"\n', encoding="utf-8")
+        executable, args = str(wrapper), ()
+    provider = cli_provider.CliProvider("slow", "Slow", "claude", args)
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: executable)
     monkeypatch.setattr(cli_provider, "TIMEOUT_SECONDS", 1)
     started = time.monotonic()
-    with pytest.raises(cli_provider.CliTimeout):
+    with pytest.raises(cli_provider.CliTimeout) as caught:
         provider._exec("", str(tmp_path))
     assert time.monotonic() - started < 15
+    assert "CANARY-offline-token" in caught.value.stdout
     time.sleep(5)
     assert not marker.exists()
 
