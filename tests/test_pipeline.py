@@ -2713,3 +2713,18 @@ def test_readiness_keeps_the_runs_warnings(monkeypatch, capsys):
     assert "probe searched 1 time" in capsys.readouterr().out
     body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
     assert "Also noted" in body and "probe searched 1 time" in body
+
+
+@pytest.mark.parametrize("code, payload", [
+    (124, {"issues": []}), (125, {"issues": []}), (1, {"issues": []}),
+    (0, []), (0, None), (0, {}), (0, {"issues": "broken"}),
+    (0, {"issues": [42]}), (2, {"issues": []}),
+])
+def test_readiness_rejects_incomplete_or_failed_check_output(monkeypatch, code, payload):
+    reply = SimpleNamespace(returncode=code, stdout=json.dumps(payload), stderr="offline failure")
+    rd, calls = _readiness(monkeypatch, lambda a: reply if "--qualify" in a else
+                           SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    result, failure = rd.qualify("2026-11-02")
+    assert result is None and failure
+    assert rd.main() == 1
+    assert any(c[:3] == ["gh", "issue", "create"] for c in calls)

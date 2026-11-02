@@ -33,6 +33,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from unprompted.storage import run_lock  # noqa: E402 - stdlib-only module
 
+# A total health-check deadline, not a promise to exhaust every CLI retry.
+# Keep below the weekly lock wait (35 minutes) and the Monday noon cut-off.
 LIMIT_SECONDS = 1800
 
 
@@ -61,7 +63,13 @@ def qualify(monday: str) -> tuple[dict | None, str]:
     except (OSError, subprocess.SubprocessError) as exc:
         return None, f"could not start: {type(exc).__name__}: {exc}"
     try:
+        if done.returncode not in (0, 2):
+            raise ValueError("check did not complete")
         result = json.loads(done.stdout)
+        if (not isinstance(result, dict) or not isinstance(result.get("issues"), list)
+                or not all(isinstance(issue, str) for issue in result["issues"])
+                or (done.returncode == 2 and not result["issues"])):
+            raise ValueError("invalid preflight result")
         # The run's own WARNING lines (for example a probe that searched) are
         # kept: they go to stderr, which a successful check would otherwise drop.
         result["warnings"] = [line.strip() for line in done.stderr.splitlines() if "WARNING" in line]
