@@ -1,6 +1,30 @@
 {
-  "at": "2026-10-26T17:00:44+00:00",
-  "detail": "ai-coding-assistants: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nai-image-generators: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nai-writing-tools: failed or refused \u2014 ValueError: unaccounted Claude batch: collect C:\\Users\\coley\\Code\\unprompted\\.unprompted\\2026-10-19\\ai-image-generators\\claude-batch\\state.json before new paid work\nCommit and push follow; deployment is not verified.",
+  "at": "2026-11-02T18:24:17+00:00",
+  "categories": {
+    "ai-coding-assistants": {
+      "minutes": 6.0,
+      "outcome": "failed",
+      "reasons": [
+        "the run raised SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s"
+      ]
+    },
+    "ai-image-generators": {
+      "minutes": 6.7,
+      "outcome": "failed",
+      "reasons": [
+        "the run raised SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s"
+      ]
+    },
+    "ai-writing-tools": {
+      "minutes": 5.9,
+      "outcome": "failed",
+      "reasons": [
+        "the run raised SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s"
+      ]
+    }
+  },
+  "detail": "ai-coding-assistants: failed or refused \u2014 SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s\nai-image-generators: failed or refused \u2014 SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s\nai-writing-tools: failed or refused \u2014 SystemExit: claude-code could not report which model it uses, so this week could not say what that row measured:\nclaude-code: timed out after 180s\nCommit and push follow; deployment is not verified.",
   "exit_code": 2,
+  "run_date": "2026-11-02",
   "status": "held"
 }
