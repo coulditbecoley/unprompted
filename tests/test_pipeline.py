@@ -2425,6 +2425,46 @@ def test_a_probe_outlasts_a_stall_but_never_retries_a_real_failure(monkeypatch):
     assert len(calls) == 1
 
 
+def test_canary_failure_on_a_timed_out_attempt_cannot_be_retried(monkeypatch):
+    from unprompted import cli_provider
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    calls = []
+    monkeypatch.setattr(cli_provider.secrets, "token_hex", lambda n: "offline-canary-token")
+    monkeypatch.setattr(cli_provider.time, "sleep", lambda seconds: None)
+
+    def leaks_then_refuses(self, *args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise cli_provider.CliTimeout("timed out", stdout="CANARY-offline-canary-token")
+        return SimpleNamespace(returncode=0, stdout="FAILED", stderr="")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", leaks_then_refuses)
+    with pytest.raises(cli_provider.ProviderError, match="isolation no longer holds"):
+        claude.qualify()
+    assert len(calls) == 1
+
+
+def test_timeout_keeps_partial_output_for_the_isolation_check(monkeypatch, tmp_path):
+    import subprocess
+    from unprompted import cli_provider
+
+    class FakePopen:
+        pid = 123
+
+        def communicate(self, *args, **kwargs):
+            if args:
+                raise subprocess.TimeoutExpired("offline", 1, output=b"CANARY-token")
+            return "CANARY-token", ""
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", lambda *a, **kw: FakePopen())
+    monkeypatch.setattr(cli_provider, "_end_tree", lambda pid: None)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(cli_provider.CliTimeout) as caught:
+        claude._exec("probe", str(tmp_path))
+    assert caught.value.stdout == "CANARY-token"
+
+
 def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
     from unprompted.engines import base
     slept = []
