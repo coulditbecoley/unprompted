@@ -15,13 +15,17 @@ by their `type: unprompted-week` frontmatter) and never deletes anything.
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
-from unprompted.storage import run_lock  # noqa: E402 - stdlib-only module
+sys.path.insert(0, str(REPO / "scripts"))
+from unprompted.storage import LockBusy, record_status, run_lock  # noqa: E402 - stdlib-only module
+from timed import run as timed_run  # noqa: E402
+
+STATUS = REPO / ".unprompted" / "status"
+PULL_SECONDS = 300
 DEFAULT_VAULT = Path.home() / "FenrirVault"
 FOLDER = Path("Projects") / "Unprompted" / "Weeks"
 STAMP = "type: unprompted-week"
@@ -38,27 +42,38 @@ def pretty(slug: str) -> str:
     )
 
 
-def pull() -> None:
+def pull() -> str:
     """Fast-forward only. A dirty or diverged repo is a human's problem.
 
     Holds week.lock for the whole pull and skips it while a weekly run holds
     that lock: a pull then could swap in new aliases or code between two
     categories of the same week.
     """
+    """Returns "updated", "skipped" (a run holds the week) or "failed"."""
     try:
-        with run_lock(REPO / ".unprompted", "week.lock"):
-            result = subprocess.run(
-                ["git", "pull", "--ff-only"],
-                cwd=REPO,
-                capture_output=True,
-                text=True,
-            )
-    except OSError:
+        lock = run_lock(REPO / ".unprompted", "week.lock")
+        lock.__enter__()
+    except LockBusy:
         print("a weekly run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
-        return
-    print(result.stdout.strip() or result.stderr.strip())
-    if result.returncode != 0:
-        print("pull failed, syncing whatever is already local", file=sys.stderr)
+        return "skipped"  # the run is the one updating this checkout
+    except OSError as exc:
+        print(f"could not take week.lock: {exc}", file=sys.stderr)
+        return "failed"  # the lock file itself is unusable: not a busy week
+    try:
+        # Bounded, whole tree ended at the limit: an unbounded pull here once
+        # could hold week.lock past Monday's start (2026-11-03 audit). A git
+        # that cannot start is a failure, not a busy week.
+        code = timed_run(PULL_SECONDS, ["git", "-C", str(REPO), "pull", "--ff-only"])
+    except OSError as exc:
+        print(f"pull could not start: {exc}", file=sys.stderr)
+        code = -1
+    finally:
+        lock.__exit__(None, None, None)
+    if code != 0:
+        # 124 timed out, 125 cleanup not confirmed: reported, never retried here.
+        print(f"pull failed (exit {code}), syncing whatever is already local", file=sys.stderr)
+        return "failed"
+    return "updated"
 
 
 def sync(vault: Path) -> list[Path]:
@@ -141,14 +156,19 @@ def main() -> int:
 
     if not args.vault.is_dir():
         print(f"no vault at {args.vault}", file=sys.stderr)
+        record_status(STATUS, "sync_vault", False, f"no vault at {args.vault}")
         return 1
 
-    if not args.no_pull:
-        pull()
-
-    written = sync(args.vault)
+    pulled = "skipped" if args.no_pull else pull()
+    try:
+        written = sync(args.vault)
+    except OSError as exc:
+        record_status(STATUS, "sync_vault", False, f"{type(exc).__name__}: {exc}")
+        raise
     print(f"{len(written)} note(s) updated")
-    return 0
+    ok = pulled != "failed"
+    record_status(STATUS, "sync_vault", ok, "" if ok else "git pull failed", pull=pulled, notes_written=len(written))
+    return 0 if ok else 2
 
 
 if __name__ == "__main__":

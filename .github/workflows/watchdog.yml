@@ -24,6 +24,12 @@ on:
     # deadline reports a slow week as a dead one, and an alarm that cries wolf
     # gets muted, which costs more than the delay does.
     - cron: "0 9 * * 2"
+    # Monday heartbeat checks (scripts/heartbeat.py writes vars.UNPROMPTED_HEARTBEAT
+    # at the run's start and end). Each runs in both UTC slots because of DST and
+    # acts only after its New York gate: started by 14:15, finished by 21:30.
+    # Odd minutes stay clear of the top-of-hour cron rush.
+    - cron: "17 18,19 * * 1"
+    - cron: "43 1,2 * * 2"
   workflow_dispatch:
     inputs:
       date:
@@ -50,7 +56,14 @@ jobs:
           # needs a secret: the check reads the repository it just checked out.
           GH_TOKEN: ${{ github.token }}
           CHECK_DATE: ${{ inputs.date }}
+          # Passed as data, never interpolated into the script below.
+          HEARTBEAT: ${{ vars.UNPROMPTED_HEARTBEAT }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           args=()
           if [ -n "$CHECK_DATE" ]; then args+=(--date "$CHECK_DATE"); fi
+          case "$SCHEDULE" in
+            "17 18,19 * * 1") args+=(--mode start) ;;
+            "43 1,2 * * 2") args+=(--mode finish) ;;
+          esac
           python scripts/watchdog.py --issue "${args[@]}"

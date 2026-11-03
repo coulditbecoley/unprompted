@@ -13,6 +13,7 @@ import json
 import secrets
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -46,6 +47,26 @@ HELD_EXIT_CODE = 2
 # is roughly 2.5 hours, which would blow the CI timeout and delay the chart for
 # no reason. Kept modest so we stay well inside every provider's rate limits.
 CATEGORY_RESERVE_SECONDS = 90 * 60
+# No new paid category below this much free space on the checkout's volume. A
+# full disk breaks the atomic checkpoint writes the paid answers depend on.
+# Already-paid batches are still collected first; nothing is ever deleted to
+# make room.
+MIN_FREE_BYTES = 5 * 2**30
+# Seconds per phase of the last weekly run, for /admin and the heartbeat. Only
+# diagnostic: failing to write it never affects the run.
+_PHASES: list[dict] = []
+
+
+def _phase(name: str, started: float, **detail) -> None:
+    _PHASES.append({"phase": name, "seconds": round(time.monotonic() - started, 1), **detail})
+
+
+def _write_phases(run_date: str) -> None:
+    try:
+        write_json(ROOT / ".unprompted" / "status" / "phases.json",
+                   {"run_date": run_date, "phases": _PHASES}, replace=True)
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"could not record phase timings: {type(exc).__name__}", file=sys.stderr)
 MAX_WORKERS = 6
 
 
@@ -689,8 +710,13 @@ def main() -> int:
     # pull, or readiness's computed probe budget plus wrapper cleanup, already in flight.
     from .engines.base import booked_to
     booked = None if args.ignore_budget else args.date[:7]
+    waited = time.monotonic()
     with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=readiness_limit_seconds() + 5 * 60):
-        return _measure(args, categories)
+        _phase("week_lock_wait", waited)
+        try:
+            return _measure(args, categories)
+        finally:
+            _write_phases(args.date)
 
 
 def _measure(args, categories: list[str]) -> int:
@@ -700,6 +726,7 @@ def _measure(args, categories: list[str]) -> int:
     results: dict[str, dict] = {}
     total = 0.0
 
+    collecting = time.monotonic()
     if not args.dry_run:
         # A batch stranded by an earlier week otherwise refuses every category
         # (2026-10-26). Download only; whatever fails stays on disk, the budget
@@ -722,8 +749,15 @@ def _measure(args, categories: list[str]) -> int:
                 results[category] = {"outcome": "not_run", "reasons": held[category] + failed}
                 outcomes.append(f"{category}: not run — outstanding batch recovery failed")
             categories = []
+    _phase("collect_outstanding_batches", collecting)
 
     for category in categories:
+        if shutil.disk_usage(ROOT).free < MIN_FREE_BYTES:
+            held[category] = [f"not started: less than {MIN_FREE_BYTES // 2**30} GiB free on the checkout's drive, "
+                              "so new paid answers could not be stored safely"]
+            results[category] = {"outcome": "not_started", "reasons": held[category]}
+            outcomes.append(f"{category}: not started — disk nearly full")
+            continue
         if not args.ignore_budget and date.today().isoformat()[:7] != args.date[:7]:
             # The month turned during the run (a Monday that is the last of the
             # month): later categories would spend outside this month's check.
@@ -762,6 +796,7 @@ def _measure(args, categories: list[str]) -> int:
             results[category] = {"outcome": "failed", "reasons": held[category],
                                  "minutes": round((time.monotonic() - started) / 60, 1)}
             outcomes.append(f"{category}: failed or refused — {type(exc).__name__}: {exc}")
+            _phase(category, started, outcome="failed")
             continue
 
         print("\nCOST", file=sys.stderr)
@@ -788,6 +823,7 @@ def _measure(args, categories: list[str]) -> int:
             outcomes.append(f"{category}: passed local publication checks")
             results[category] = {"outcome": "passed", "reasons": [], **spent}
             print(f"\n{category}: all checks passed.", file=sys.stderr)
+        _phase(category, started, outcome=results[category]["outcome"])
 
     if len(categories) > 1:
         print(f"\nWEEK TOTAL ${total:.2f}", file=sys.stderr)

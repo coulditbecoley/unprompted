@@ -17,17 +17,19 @@ def provider():
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
-@pytest.mark.parametrize("code", [128, 1, 5])
-def test_taskkill_accepts_only_already_exited(monkeypatch, code):
+@pytest.mark.parametrize("code", [0, 128, 255, 1])
+def test_taskkill_exit_codes_never_decide_cleanup_the_drain_does(monkeypatch, code):
+    # 255 appeared under load on 2026-11-03 for a tree whose shim had already gone.
     def kill(argv, **kwargs):
-        assert kwargs["timeout"] == cli.TREE_KILL_SECONDS
-        raise subprocess.CalledProcessError(code, argv)
+        assert kwargs["timeout"] == cli.TREE_KILL_SECONDS and "check" not in kwargs
+        return subprocess.CompletedProcess(argv, code)
     monkeypatch.setattr(cli.subprocess, "run", kill)
-    if code == 128:
-        cli._end_tree(123)
-    else:
-        with pytest.raises(subprocess.CalledProcessError):
-            cli._end_tree(123)
+    cli._end_tree(123)
+    def hung(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+    monkeypatch.setattr(cli.subprocess, "run", hung)
+    with pytest.raises(subprocess.TimeoutExpired):
+        cli._end_tree(123)  # a taskkill that itself hangs is still a failure
 
 
 def test_slow_successful_cleanup_remains_a_retryable_timeout(monkeypatch, tmp_path):
@@ -62,7 +64,7 @@ def test_timed_tolerates_an_already_exited_child_and_allows_slow_reaping(monkeyp
             return 0
     def kill(argv, **kwargs):
         assert kwargs["timeout"] == cli.TREE_KILL_SECONDS
-        raise subprocess.CalledProcessError(128, argv)
+        return subprocess.CompletedProcess(argv, 255)
     monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **k: Child())
     monkeypatch.setattr(timed.subprocess, "run", kill)
     assert timed.run(1, ["offline"]) == 124

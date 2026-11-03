@@ -7,6 +7,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+class LockBusy(OSError):
+    """Another process holds the lock (as opposed to the lock file being unusable)."""
+
+
 def write_json(path: Path, value: object, *, replace: bool = False) -> None:
     write_text(path, json.dumps(value, indent=2, sort_keys=True) + "\n", replace=replace)
 
@@ -53,9 +57,9 @@ def run_lock(root: Path, name: str = "run.lock", wait: float = 0.0):
                     import fcntl
                     fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except OSError:
+            except OSError as exc:
                 if time.monotonic() >= deadline:
-                    raise
+                    raise LockBusy(*exc.args) from exc
                 time.sleep(1)
         try:
             yield
@@ -65,3 +69,37 @@ def run_lock(root: Path, name: str = "run.lock", wait: float = 0.0):
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+def record_status(folder: Path, name: str, ok: bool, error: str = "", **detail: object) -> dict:
+    """Write `<folder>/<name>.json`: when this job last ran and when it last worked.
+
+    A failure keeps the previous last_success, so a stale success is visible as
+    stale (readiness and the mid-week check alarm on age), instead of every
+    attempt looking like progress. Never raises: a status that cannot be written
+    must not turn a working job into a failing one.
+    """
+    path = folder / f"{name}.json"
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(previous, dict):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    kept = previous.get("last_success")
+    try:
+        if time.strptime(kept, "%Y-%m-%dT%H:%M:%SZ") > time.gmtime():
+            kept = None  # from the future: unknown, never a fake success
+    except (TypeError, ValueError):
+        kept = None  # missing or damaged
+    reserved = {"name", "last_attempt", "ok", "error", "last_success"}
+    status = {**{k: v for k, v in detail.items() if k not in reserved},
+              "name": name, "last_attempt": now, "ok": ok, "error": error[-500:],
+              "last_success": now if ok else kept}
+    try:
+        write_json(path, status, replace=True)
+    except OSError as exc:
+        import sys
+        print(f"could not record {name} status: {type(exc).__name__}", file=sys.stderr)
+    return status

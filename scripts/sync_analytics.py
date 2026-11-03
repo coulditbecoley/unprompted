@@ -14,6 +14,14 @@ Three things are written, and the order matters:
     Analytics/Audience Index.md  every day plus all-time totals, derived from
                                  every JSON file present.
 
+Separately, the event journal (`<namespace>:events`, a Redis stream the site
+never trims) is copied out page by page:
+
+    Analytics/events/<date>/<first-id>-<last-id>.jsonl   immutable segments,
+                                 one event per line, deduplicated by event id.
+    Analytics/events/cursor.json the last stream id exported. Advanced only
+                                 after its segment is installed.
+
 Derived files are rebuilt from the JSON on every run, so a change to how a note
 reads is one run away from applying to the whole history. The JSON is only ever
 written for a day that is still in Redis, and never overwritten with less than
@@ -29,12 +37,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -99,10 +109,184 @@ def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            flat = json.loads(response.read()).get("result") or []
+            body = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise Unreachable(f"{day}: {exc}") from exc
-    return {flat[i]: int(flat[i + 1]) for i in range(0, len(flat) - 1, 2)}
+    # Upstash answers HTTP 200 with {"error": ...} for a rejected command. Read as
+    # "no result" that was archived as a day nothing happened: the silent loss
+    # Unreachable exists to prevent.
+    if not isinstance(body, dict) or "error" in body:
+        raise Unreachable(f"{day}: Redis returned an error: {str(body.get('error') if isinstance(body, dict) else body)[:200]}")
+    flat = body.get("result")
+    if flat is None:
+        return {}  # expired, or never written
+    if not isinstance(flat, list) or len(flat) % 2:
+        raise Unreachable(f"{day}: unexpected reply shape from Redis")
+    counters = {}
+    for field, value in zip(flat[::2], flat[1::2]):
+        try:
+            counters[str(field)] = int(value)
+        except (TypeError, ValueError):
+            raise Unreachable(f"{day}: non-numeric counter {str(field)[:60]!r}") from None
+        if counters[str(field)] < 0:
+            raise Unreachable(f"{day}: negative counter {str(field)[:60]!r}")
+    return counters
+
+
+def namespace() -> str:
+    """The key prefix the site writes under, derived exactly as lib/analytics.ts does."""
+    ns = os.environ.get("ANALYTICS_NAMESPACE") or "a"
+    if ns != "a" and not re.fullmatch(r"test-[a-z0-9-]{8,64}", ns):
+        raise Unreachable(f"invalid ANALYTICS_NAMESPACE {ns[:80]!r}")
+    return ns
+
+
+def command(url: str, token: str, *args: object) -> object:
+    """One Redis command over the REST API, as strict as fetch_day."""
+    request = urllib.request.Request(
+        url, data=json.dumps([str(a) for a in args]).encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            body = json.loads(response.read())
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise Unreachable(f"{args[0]}: {exc}") from exc
+    if not isinstance(body, dict) or "error" in body or "result" not in body:
+        raise Unreachable(f"{args[0]}: Redis returned an error: {str(body.get('error') if isinstance(body, dict) else body)[:200]}")
+    return body["result"]
+
+
+# -- the event journal --------------------------------------------------------
+
+PAGE = 500  # entries per XRANGE; fixed so a rerun re-reads the same ranges
+ZERO = (0, 0)
+
+
+def sid(text: object) -> tuple[int, int]:
+    """A stream id as an exact (ms, seq) pair: never a float, never a string compare."""
+    m = re.fullmatch(r"(\d+)-(\d+)", str(text))
+    if not m:
+        raise Unreachable(f"malformed stream id {str(text)[:60]!r}")
+    return int(m[1]), int(m[2])
+
+
+def fmt(pair: tuple[int, int]) -> str:
+    return f"{pair[0]}-{pair[1]}"
+
+
+def entries(reply: object) -> list[tuple[tuple[int, int], dict[str, str]]]:
+    """An XRANGE/XREVRANGE reply, validated: [[id, [field, value, ...]], ...]."""
+    if not isinstance(reply, list):
+        raise Unreachable("unexpected stream reply shape from Redis")
+    out = []
+    for item in reply:
+        if not (isinstance(item, list) and len(item) == 2 and isinstance(item[1], list) and len(item[1]) % 2 == 0):
+            raise Unreachable("unexpected stream entry shape from Redis")
+        flat = item[1]
+        out.append((sid(item[0]), {str(k): str(v) for k, v in zip(flat[::2], flat[1::2])}))
+    return out
+
+
+def event(stream_id: tuple[int, int], fields: dict[str, str]) -> dict:
+    """One journal entry back in the feed's shape (lib/analytics.ts writes absent = null)."""
+    out: dict = {"stream_id": fmt(stream_id), "id": fields.get("id")}
+    for name in ("path", "agent", "vendor", "purpose", "event", "referrer"):
+        out[name] = fields.get(name)
+    try:
+        out["at"] = int(fields["at"])
+    except (KeyError, ValueError):
+        out["at"] = None
+    out["missing"] = fields.get("missing") == "true"
+    for name, value in fields.items():  # anything newer than this exporter, kept raw
+        out.setdefault(name, value)
+    return out
+
+
+def _install(path: Path, text: str) -> None:
+    """Flush and atomically move into place; a crash leaves the old file or none."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+
+
+def archived_ids(events_dir: Path) -> set[str]:
+    """Every logical event id already in a segment. A damaged segment is reported, not skipped."""
+    # ponytail: reads every segment each run; an index file if this ever gets slow (millions of events).
+    seen: set[str] = set()
+    for path in sorted(events_dir.glob("*/*.jsonl")):
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            try:
+                row = json.loads(line)
+                seen.add(row["id"] or row["stream_id"])
+            except (ValueError, KeyError, TypeError):
+                raise Unreachable(f"corrupt segment {path.parent.name}/{path.name} line {n}") from None
+    return seen
+
+
+def export_events(url: str, token: str, out_dir: Path, ns: str) -> tuple[int, str]:
+    """Copy `${ns}:events` into immutable vault segments; return (exported, last stream id).
+
+    Segment first, cursor second: a crash between them re-reads the same range on
+    the next run, and every event in it is skipped by its logical id. Nothing is
+    ever deleted from the stream here.
+    """
+    key = f"{ns}:events"
+    events_dir = out_dir / "events"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    cursor_path = events_dir / "cursor.json"
+    cursor, exported = ZERO, 0
+    if cursor_path.exists():
+        try:
+            saved = json.loads(cursor_path.read_text(encoding="utf-8"))
+            if saved["namespace"] != ns:
+                raise Unreachable(f"cursor belongs to namespace {saved['namespace']!r}, not {ns!r}")
+            cursor, exported = sid(saved["last_id"]), int(saved.get("exported", 0))
+        except (ValueError, KeyError, TypeError) as exc:
+            raise Unreachable(f"damaged cursor {cursor_path}: {exc}") from None
+
+    latest = entries(command(url, token, "XREVRANGE", key, "+", "-", "COUNT", 1))
+    high = latest[0][0] if latest else ZERO  # finite high-water mark for this run
+    if cursor > high:
+        raise Unreachable(f"stream reset: cursor {fmt(cursor)} is past the stream's last id {fmt(high)}; "
+                          f"not moving the cursor -- investigate before exporting")
+
+    seen = archived_ids(events_dir)
+    fresh = 0
+    while cursor < high:
+        page = entries(command(url, token, "XRANGE", key, f"({fmt(cursor)}", fmt(high), "COUNT", PAGE))
+        if not page:
+            break
+        ids = [i for i, _ in page]
+        if ids[0] <= cursor or ids != sorted(set(ids)) or ids[-1] > high:
+            raise Unreachable(f"stream returned out-of-range ids after {fmt(cursor)}")
+        rows = []
+        for stream_id, fields in page:
+            row = event(stream_id, fields)
+            logical = row["id"] or row["stream_id"]
+            if logical in seen:
+                continue  # a retried XADD, or a range already archived before a crash
+            seen.add(logical)
+            rows.append(row)
+        if rows:
+            first, last = ids[0], ids[-1]
+            day = datetime.fromtimestamp(first[0] / 1000, timezone.utc).date().isoformat()
+            path = events_dir / day / f"{fmt(first)}-{fmt(last)}.jsonl"
+            path.parent.mkdir(exist_ok=True)
+            text = "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows)
+            if path.exists() and path.read_text(encoding="utf-8") != text:
+                raise Unreachable(f"segment {day}/{path.name} exists with different contents; not overwriting")
+            if not path.exists():
+                _install(path, text)
+            fresh += len(rows)
+        cursor = ids[-1]
+        exported += len(rows)
+        _install(cursor_path, json.dumps({"namespace": ns, "last_id": fmt(cursor), "exported": exported}) + "\n")
+    return fresh, fmt(cursor)
 
 
 def split(counters: dict[str, int], kind: str) -> dict[str, int]:
@@ -419,7 +603,7 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     index.write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
+def _main(detail: dict) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault", type=Path, default=DEFAULT_VAULT)
     parser.add_argument(
@@ -435,7 +619,6 @@ def main() -> int:
         return 1
 
     load_local_env()
-    import os
 
     url = (os.environ.get("KV_REST_API_URL") or "").rstrip("/")
     token = os.environ.get("KV_REST_API_TOKEN") or ""
@@ -451,7 +634,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     meta = registry()
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()  # the site counts days in UTC
     fresh = 0
     unreachable = 0
     for offset in range(args.days):
@@ -498,6 +681,18 @@ def main() -> int:
     write_index(out_dir, meta)
     print(f"{fresh} day(s) archived, {written} note(s) written to {out_dir}")
 
+    # The journal: every accepted event, not just the counters and the last 200.
+    stream_failed = False
+    try:
+        count, last = export_events(url, token, out_dir, namespace())
+        detail.update(events_exported=count, stream_last_id=last)
+        print(f"{count} event(s) exported, stream through {last}")
+    except Unreachable as exc:
+        stream_failed = True
+        print(f"FAILED: event journal export: {exc}", file=sys.stderr)
+
+    if stream_failed and not unreachable:
+        return 1
     if unreachable:
         print(
             f"FAILED: {unreachable} day(s) could not be read from Redis. Nothing "
@@ -507,6 +702,22 @@ def main() -> int:
         )
         return 1
     return 0
+
+
+def main() -> int:
+    """_main, with its outcome recorded for readiness and the mid-week check."""
+    from unprompted.storage import record_status
+    status_dir = Path(__file__).resolve().parents[1] / ".unprompted" / "status"
+    detail: dict = {}
+    try:
+        code = _main(detail)
+    except Exception as exc:
+        record_status(status_dir, "sync_analytics", False, f"{type(exc).__name__}: {exc}", **detail)
+        raise
+    record_status(status_dir, "sync_analytics", code == 0, "" if code == 0 else f"exit {code}", **detail,
+                  # UTC, the day boundary the site counts by (lib/analytics.ts).
+                  covered_through=datetime.now(timezone.utc).date().isoformat() if code == 0 else None)
+    return code
 
 
 if __name__ == "__main__":

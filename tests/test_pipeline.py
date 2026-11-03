@@ -2555,12 +2555,11 @@ def test_tree_cleanup_is_bounded_and_checks_taskkill_failure(monkeypatch):
 
     def taskkill(argv, **kwargs):
         seen.update(kwargs)
-        raise subprocess.CalledProcessError(1, argv)
+        return subprocess.CompletedProcess(argv, 1)
 
     monkeypatch.setattr(cli_provider.subprocess, "run", taskkill)
-    with pytest.raises(subprocess.CalledProcessError):
-        cli_provider._end_tree(123)
-    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and seen["check"] is True
+    cli_provider._end_tree(123)  # its exit code is not the proof; the caller's drain is
+    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and "check" not in seen
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
@@ -2581,13 +2580,13 @@ def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, ca
             pass
 
     def taskkill(argv, **kwargs):
-        assert kwargs["timeout"] == 60 and kwargs["check"] is True
-        raise subprocess.CalledProcessError(1, argv)
+        assert kwargs["timeout"] == 60 and "check" not in kwargs
+        return subprocess.CompletedProcess(argv, 1)
 
     monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **kw: FakePopen())
     monkeypatch.setattr(timed.subprocess, "run", taskkill)
     assert timed.run(1, ["offline"]) == 125
-    assert waits == [1, 5]
+    assert waits == [1, 120, 5]  # the drain, not taskkill's code, decides; then the last-resort kill
     assert "cleanup failed" in capsys.readouterr().err
 
 
@@ -2677,17 +2676,52 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
     import scripts.sync_vault as sv  # noqa: PLC0415
     from unprompted.storage import run_lock
     monkeypatch.setattr(sv, "REPO", tmp_path)
-    monkeypatch.setattr(sv.subprocess, "run", lambda *a, **k: pytest.fail("pulled during a run"))
+    monkeypatch.setattr(sv, "timed_run", lambda *a, **k: pytest.fail("pulled during a run"))
     with run_lock(tmp_path / ".unprompted", "week.lock"):
-        sv.pull()
+        assert sv.pull() == "skipped"  # not failed: the run owns the checkout
     # And the pull itself holds the week: a weekly run cannot start inside it.
-    def git(*a, **k):
+    def git(seconds, argv):
+        assert seconds == sv.PULL_SECONDS and argv[-2:] == ["pull", "--ff-only"]
         with pytest.raises(OSError):
             with run_lock(tmp_path / ".unprompted", "week.lock"):
                 pass
-        return SimpleNamespace(stdout="", stderr="", returncode=0)
-    monkeypatch.setattr(sv.subprocess, "run", git)
-    sv.pull()
+        return 0
+    monkeypatch.setattr(sv, "timed_run", git)
+    assert sv.pull() == "updated"
+    # A git that cannot start is a failure, not a busy week, and the lock is released.
+    def missing(seconds, argv):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(sv, "timed_run", missing)
+    assert sv.pull() == "failed"
+    with run_lock(tmp_path / ".unprompted", "week.lock"):
+        pass
+
+
+def test_a_hung_daily_pull_is_bounded_reported_and_does_not_stop_the_sync(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    monkeypatch.setattr(sv, "STATUS", tmp_path / "status")
+    monkeypatch.setattr(sv, "timed_run", lambda seconds, argv: 124)  # the limit ended it
+    monkeypatch.setattr(sys, "argv", ["sync_vault.py", "--vault", str(vault)])
+    assert sv.main() == 2
+    status = json.loads((tmp_path / "status/sync_vault.json").read_text())
+    assert status["ok"] is False and status["last_success"] is None and "pull" in status["error"]
+    assert (vault / sv.FOLDER / "Weeks Index.md").exists()  # the notes were still synced
+
+
+def test_a_failure_keeps_the_last_success_so_staleness_shows(tmp_path):
+    from unprompted.storage import record_status
+    first = record_status(tmp_path, "job", True)
+    later = record_status(tmp_path, "job", False, "boom")
+    assert later["last_success"] == first["last_success"] and later["ok"] is False and later["error"] == "boom"
+    (tmp_path / "job.json").write_text("not json")
+    assert record_status(tmp_path, "job", False, "again")["last_success"] is None  # damaged file, no crash
+    (tmp_path / "job.json").write_text('{"last_success": "2999-01-01T00:00:00Z"}')
+    assert record_status(tmp_path, "job", False)["last_success"] is None  # a future success is not kept
+    assert record_status(tmp_path, "job", False, ok_count=1, last_success="forged")["last_success"] is None
 
 
 @pytest.mark.parametrize("damaged", ["[1, 2]", '"text"', '{"views": "many", "_agents": []}'])
@@ -2746,6 +2780,7 @@ def _readiness(monkeypatch, replies):
     monkeypatch.setattr(rd.subprocess, "run", fake)
     monkeypatch.setattr(rd, "target_monday", lambda now: date(2026, 11, 2))
     monkeypatch.setattr(rd.sys, "argv", ["readiness"])
+    monkeypatch.setattr(rd, "house_checks", lambda: [])  # tested on its own below
     return rd, calls
 
 
@@ -2782,7 +2817,7 @@ def test_readiness_holds_the_week_for_the_whole_check(monkeypatch, tmp_path):
     rd, calls = _readiness(monkeypatch, lambda a: SimpleNamespace(returncode=0, stdout="[]", stderr=""))
     monkeypatch.setattr(rd, "REPO", tmp_path)
     inside = []
-    def qualify(monday):
+    def qualify(monday, paid=True):
         try:
             with run_lock(tmp_path / ".unprompted", "week.lock"):
                 inside.append("a run could start")
@@ -2816,3 +2851,78 @@ def test_readiness_rejects_incomplete_or_failed_check_output(monkeypatch, code, 
     assert result is None and failure
     assert rd.main() == 1
     assert any(c[:3] == ["gh", "issue", "create"] for c in calls)
+
+
+@pytest.mark.parametrize("reply, expected", [
+    ({"result": ["v", "3", "g:Bot", "1"]}, {"v": 3, "g:Bot": 1}),
+    ({"result": None}, {}),                       # expired or never written
+    ({"error": "WRONGPASS invalid token"}, None),  # HTTP 200 error envelope: never an empty day
+    ({"result": ["v"]}, None),                     # odd field count
+    ({"result": ["v", "many"]}, None),
+    ({"result": ["v", "-2"]}, None),
+    (["not", "an", "object"], None),
+])
+def test_a_redis_error_reply_is_never_archived_as_an_empty_day(monkeypatch, reply, expected):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import io
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    class Reply(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(sa.urllib.request, "urlopen", lambda *a, **k: Reply(json.dumps(reply).encode()))
+    if expected is None:
+        with pytest.raises(sa.Unreachable):
+            sa.fetch_day("https://kv.invalid", "t", "2026-11-03")
+    else:
+        assert sa.fetch_day("https://kv.invalid", "t", "2026-11-03") == expected
+
+
+def test_only_a_held_lock_counts_as_busy(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    from unprompted.storage import LockBusy, run_lock
+    with run_lock(tmp_path, "week.lock"):
+        with pytest.raises(LockBusy):
+            with run_lock(tmp_path, "week.lock"):
+                pass
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    (tmp_path / ".unprompted").write_text("a file where the folder should be")  # lock cannot even be opened
+    assert sv.pull() == "failed"
+
+
+def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypatch, tmp_path):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.readiness as rd  # noqa: PLC0415
+    from unprompted.storage import record_status
+    monkeypatch.setattr(rd, "REPO", tmp_path)
+    status = tmp_path / ".unprompted" / "status"
+    ok = SimpleNamespace(returncode=0, stdout="active", stderr="")
+    monkeypatch.setattr(rd.subprocess, "run", lambda argv, **k: ok)
+    monkeypatch.setattr(rd.shutil, "disk_usage", lambda p: SimpleNamespace(free=50 * 2**30))
+    for name in rd.STALE_HOURS:
+        record_status(status, name, True)
+    assert rd.house_checks() == []
+    # Every failure is named.
+    bad = SimpleNamespace(returncode=1, stdout="disabled_inactivity", stderr="")
+    monkeypatch.setattr(rd.subprocess, "run", lambda argv, **k: bad)
+    monkeypatch.setattr(rd.shutil, "disk_usage", lambda p: SimpleNamespace(free=3 * 2**30))
+    (status / "backup.json").write_text(json.dumps({"last_success": "2026-01-01T00:00:00Z", "error": "E: missing"}))
+    (status / "sync_analytics.json").unlink()
+    record_status(status, "alert", False, "x", alert_status="failed")
+    (tmp_path / ".unprompted" / "publish-intent.json").write_text(json.dumps({"state": "committed", "commit": "a" * 40}))
+    found = " | ".join(rd.house_checks())
+    for text in ("not signed in", "push --dry-run", "GiB free", "backup last succeeded", "E: missing",
+                 "sync_analytics has never recorded", "not pushed yet", "could not be delivered", "watchdog"):
+        assert text in found, text
+
+
+def test_the_mid_week_check_calls_no_provider_and_files_its_own_issue(monkeypatch):
+    rd, calls = _readiness(monkeypatch, lambda a: SimpleNamespace(
+        returncode=0, stdout=json.dumps({"issues": []}) if "unprompted.run" in a else "[]", stderr=""))
+    monkeypatch.setattr(rd, "house_checks", lambda: ["backup last succeeded long ago"])
+    monkeypatch.setattr(rd.sys, "argv", ["readiness", "--free"])
+    assert rd.main() == 2
+    run = next(c for c in calls if "unprompted.run" in c)
+    assert "--preflight" in run and "--qualify" not in run  # configuration only, nothing paid
+    create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
+    assert create[create.index("--title") + 1] == "Mid-week check: problems before 2026-11-02"

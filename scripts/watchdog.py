@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
-from datetime import date, datetime, timedelta, timezone
+import urllib.request
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -194,13 +196,106 @@ def open_issue(title: str, body: str) -> None:
         print(f"  could not open an issue: {exc}", file=sys.stderr)
 
 
+# The run starts Mondays 13:00 on the measuring machine's clock (New York).
+# GitHub cron is UTC and drifts with DST, so each check runs in both UTC slots
+# and acts only once local time has passed its gate.
+
+
+def new_york(now: datetime) -> datetime:
+    """`now` as New York wall-clock time (naive), by the US rule since 2007.
+
+    ponytail: the rule itself rather than zoneinfo, which has no data on Windows
+    without the tzdata package. Breaks only if Congress changes DST again.
+    """
+    year = now.year
+    march = datetime(year, 3, 8) + timedelta(days=(6 - datetime(year, 3, 8).weekday()) % 7)   # 2nd Sunday
+    november = datetime(year, 11, 1) + timedelta(days=(6 - datetime(year, 11, 1).weekday()) % 7)  # 1st Sunday
+    utc = now.astimezone(timezone.utc).replace(tzinfo=None)
+    summer = march + timedelta(hours=7) <= utc < november + timedelta(hours=6)  # 02:00 local, in UTC
+    return utc - timedelta(hours=4 if summer else 5)
+GATES = {"start": time(14, 15), "finish": time(21, 30)}
+SITE = "https://unprompted.report"
+
+
+def heartbeat_alarm(mode: str, heartbeat: str, now: datetime) -> tuple[str, str] | None:
+    """(title, body) when this week's heartbeat is missing or unfinished, else None.
+
+    `heartbeat` is the UNPROMPTED_HEARTBEAT repository variable written by
+    scripts/heartbeat.py. Missing or unreadable counts as missing: an unknown
+    state is not a healthy one.
+    """
+    local = new_york(now)
+    monday = local.date() - timedelta(days=local.weekday())
+    if local < datetime.combine(monday, GATES[mode]):
+        return None  # too early for this check; the later UTC slot will look
+    try:
+        beat = json.loads(heartbeat or "")
+        beat = beat if isinstance(beat, dict) else {}
+    except ValueError:
+        beat = {}
+    this_week = beat.get("week") == monday.isoformat()
+    if mode == "start" and this_week:
+        return None
+    if mode == "finish" and this_week and beat.get("phase") == "finished":
+        return None
+    seen = (f"The last heartbeat was for week `{str(beat.get('week'))[:10]}`, phase `{str(beat.get('phase'))[:10]}`, "
+            f"at `{str(beat.get('at'))[:20]}`." if beat else "No readable heartbeat exists.")
+    if mode == "start":
+        title = f"Weekly run has not started: {monday}"
+        lead = f"It is past {GATES['start']:%H:%M} New York time and the run for **{monday}** has not reported starting."
+        steps = ["Is the measuring PC on, awake and signed in? The task starts when it next can (StartWhenAvailable).",
+                 "Task Scheduler: **Unprompted weekly run**, last result.",
+                 "If the PC was off, it runs on its own once it is back; nothing needs re-running by hand."]
+    else:
+        title = f"Weekly run has not finished: {monday}"
+        lead = f"It is past {GATES['finish']:%H:%M} New York time and the run for **{monday}** has not reported finishing."
+        steps = ["A run that started late may still be going: check `.unprompted/logs/weekly.log` on the PC.",
+                 "If it stopped, its own alert (a 'Weekly run FAILED' issue) usually says why.",
+                 "Paid answers are checkpointed; never delete `.unprompted`."]
+    body = "\n".join([lead, "", seen, "", "Worth checking:", "", *[f"- {s}" for s in steps], "",
+                      "_Opened by `scripts/watchdog.py --mode " + mode + "` on GitHub, independent of the PC._"])
+    return title, body
+
+
+def stale_site(categories: list[str]) -> list[str]:
+    """Categories whose newest archived reading the live site is not serving yet."""
+    lines = []
+    for category in categories:
+        readings = sorted(d.name for d in RUNS.iterdir() if (d / f"{category}.json").exists()) if RUNS.exists() else []
+        if not readings:
+            continue
+        try:
+            with urllib.request.urlopen(f"{SITE}/standings/{category}.json", timeout=30) as response:
+                served = json.loads(response.read()).get("reading")
+        except (OSError, ValueError, AttributeError) as exc:
+            print(f"  could not read the live {category} standings: {exc}", file=sys.stderr)
+            continue
+        if served != readings[-1]:
+            lines.append(f"`{category}`: the site serves reading `{str(served)[:10]}`, the archive's newest is `{readings[-1]}`")
+    return lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Did this week's run happen?")
     parser.add_argument("--date", help="pretend today is this date (YYYY-MM-DD)")
     parser.add_argument(
         "--issue", action="store_true", help="open a GitHub issue when a week is missing"
     )
+    parser.add_argument("--mode", choices=["archive", "start", "finish"], default="archive",
+                        help="archive: Tuesday reconciliation (default); start/finish: Monday heartbeat checks")
     args = parser.parse_args()
+
+    if args.mode != "archive":
+        alarm = heartbeat_alarm(args.mode, os.environ.get("HEARTBEAT", ""), datetime.now(timezone.utc))
+        if alarm is None:
+            print(f"{args.mode}: fine or not due yet", file=sys.stderr)
+            return 0
+        print(alarm[0], file=sys.stderr)
+        if args.issue:
+            open_issue(*alarm)
+        else:
+            print(alarm[1], file=sys.stderr)
+        return 1
 
     today = date.fromisoformat(args.date) if args.date else datetime.now(timezone.utc).date()
     monday = most_recent_monday(today, datetime.combine(today, datetime.max.time(), tzinfo=timezone.utc) if args.date else None)
@@ -231,7 +326,22 @@ def main() -> int:
         unpublished = [c for c in produced if not measured_in(RUNS, monday, c)]
         if not unpublished:
             print("the week is in the archive.", file=sys.stderr)
-            return 0
+            # In the archive is not on the site: a failed or stale deployment
+            # left the old week up while every check here stayed green.
+            stale = [] if args.date else stale_site(produced)
+            if not stale:
+                return 0
+            title = f"Site is not serving the latest week: {monday}"
+            body = "\n".join(["The archive has the week but the live site does not show it yet:", "",
+                              *[f"- {line}" for line in stale], "",
+                              "Check the latest Vercel deployment of main. The standings are cached for at most an hour.",
+                              "", "_Opened by `scripts/watchdog.py`._"])
+            print(f"\n{title}", file=sys.stderr)
+            if args.issue:
+                open_issue(title, body)
+            else:
+                print(body, file=sys.stderr)
+            return 1
         this_week = monday.isoformat() <= status.get("at", "")[:10] < (monday + timedelta(days=7)).isoformat()
         status = status if this_week else {}
         detail = status.get("detail", "")

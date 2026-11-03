@@ -28,6 +28,7 @@ process.env.ANALYTICS_NAMESPACE = "test-routes-offline";
 const calls = [];
 let remote = "old content";
 let unavailable = false;
+let failing = null; // a command name whose pipeline entry answers with an error
 globalThis.fetch = async (url, init = {}) => {
   const address = String(url);
   if (address.startsWith("https://redis.invalid")) {
@@ -36,7 +37,8 @@ globalThis.fetch = async (url, init = {}) => {
     const commands = Array.isArray(body[0]) ? body : [body];
     calls.push(...commands);
     if (commands.some(c => String(c[0]).toLowerCase().startsWith("eval"))) throw new Error("limiter unavailable in this fixture");
-    return Response.json(commands.map(c => ({ result: String(c[0]).toLowerCase() === "hgetall" ? [] : 1 })));
+    return Response.json(commands.map(c => String(c[0]).toLowerCase() === failing ? { error: "ERR simulated" }
+      : { result: String(c[0]).toLowerCase() === "hgetall" ? [] : 1 }));
   }
   if (address.startsWith("https://api.github.com/repos/coulditbecoley/unprompted/contents/")) {
     calls.push([init.method ?? "GET", address]);
@@ -617,6 +619,35 @@ test("route integration: analytics and stale editor protection", async (t) => {
     assert.deepEqual(increments(), ["b:cursor (ai-coding-assistants)", "r:chatgpt.com", "t:human", "v:/brand/ai-coding-assistants/cursor"]);
     assert.ok(!JSON.stringify(calls).includes("private"));
     assert.ok(calls.filter(c => String(c[0]).toLowerCase() === "hincrby").every(c => c[1].startsWith("test-routes-offline:")));
+  });
+  await t.test("every event is journalled untrimmed under the namespace with its own uuid", async () => {
+    calls.length = 0;
+    await track(request("/api/track", { path: "/" }));
+    await track(request("/api/track", { path: "/" }));
+    const adds = calls.filter(c => String(c[0]).toLowerCase() === "xadd");
+    assert.equal(adds.length, 2);
+    const uuids = adds.map(c => {
+      assert.equal(c[1], "test-routes-offline:events");
+      assert.equal(c[2], "*");
+      assert.ok(!c.some(x => /^(maxlen|minid)$/i.test(String(x))));
+      const fields = Object.fromEntries(c.slice(3).reduce((acc, x, i, all) => (i % 2 ? acc : [...acc, [x, all[i + 1]]]), []));
+      assert.equal(fields.path, "/");
+      assert.equal(fields.missing, "false");
+      assert.ok(!("agent" in fields)); // null fields are omitted, not stored as "null"
+      return fields.id;
+    });
+    for (const id of uuids) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.notEqual(uuids[0], uuids[1]);
+    assert.ok(!calls.some(c => /^(xtrim|xdel)$/i.test(String(c[0]))));
+  });
+  await t.test("a failed journal command warns once and never fails the request", async t => {
+    const warn = t.mock.method(console, "warn", () => {});
+    failing = "xadd";
+    try {
+      for (let i = 0; i < 3; i++) assert.equal((await track(request("/api/track", { path: "/" }))).status, 204);
+    } finally { failing = null; }
+    assert.equal(warn.mock.callCount(), 1);
+    assert.match(String(warn.mock.calls[0].arguments[0]), /ERR simulated/);
   });
   await t.test("operator, cross-origin and malformed events do not count", async () => {
     calls.length = 0;

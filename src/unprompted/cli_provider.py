@@ -139,12 +139,13 @@ def _end_tree(pid: int) -> None:
     """End a process and its children. On Windows the child is a .CMD shim, and
     killing only that leaves the real harness running and holding the pipes."""
     if os.name == "nt":
-        try:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
-                           timeout=TREE_KILL_SECONDS, check=True)
-        except subprocess.CalledProcessError as exc:
-            if exc.returncode != 128:  # Already exited; draining below still confirms completion.
-                raise
+        # Exit code ignored on purpose: taskkill reports 128 or 255 whenever any
+        # process in the tree had already gone (common, and frequent under load:
+        # 2026-11-03 tests). The caller's drain is the proof that matters: it only
+        # completes once every process holding the pipes has exited, and it fails
+        # safely (no retry) when one has not. A hung taskkill still raises.
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
+                       timeout=TREE_KILL_SECONDS)
     else:
         try:
             os.killpg(pid, signal.SIGKILL)

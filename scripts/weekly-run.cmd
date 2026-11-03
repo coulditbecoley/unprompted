@@ -19,13 +19,13 @@ if not exist "%UNPROMPTED_PYTHON%" (
   echo ABORT: create .venv and install requirements.lock before scheduling.
   REM No Python yet, so this one goes to the old log location by hand.
   echo %DATE% %TIME% ABORT: .venv missing, nothing measured >> "%TEMP%\unprompted-weekly.log"
-  exit /b 1
+  goto :alert_without_python
 )
 
 REM The log lives with the checkpoints it explains (gitignored), not in %TEMP%,
 REM which Windows may clear; it is rotated once it passes 20 MB.
 set "LOG=%CD%\.unprompted\logs\weekly.log"
-"%UNPROMPTED_PYTHON%" -c "import os, pathlib; p = pathlib.Path(os.environ['LOG']); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.replace(p.with_suffix('.log.1'))" 2>nul
+"%UNPROMPTED_PYTHON%" -c "import os, pathlib, datetime, uuid; p = pathlib.Path(os.environ['LOG']); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.rename(p.with_name('weekly-' + datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='microseconds').replace(':', '').replace('-', '').replace('+0000', 'Z') + '-' + uuid.uuid4().hex[:8] + '.log'))" 2>nul
 REM Read from the environment, never pasted into Python source: a checkout
 REM path with an apostrophe would break the literal. If the folder cannot be
 REM made, log where it used to go rather than lose every line.
@@ -42,6 +42,16 @@ set "RUN_BRANCH="
 for /f "delims=" %%B in ('git branch --show-current') do set "RUN_BRANCH=%%B"
 if not "%RUN_BRANCH%"=="main" (
   echo ABORT: checkout must be on main before scheduled measurement. >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "The checkout was not on main, so nothing was measured. Switch the checkout back to main." >> "%LOG%" 2>&1
+  exit /b 1
+)
+REM Finish an earlier week whose push failed before measuring a new one. Only
+REM that recorded commit is ever pushed; anything unclear stops here with an
+REM alert, never a paid run on top of an unpublished one.
+"%UNPROMPTED_PYTHON%" scripts\publish.py pending --wait 600 >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo ABORT: an earlier week is still unpublished, see publish.py output above >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "An earlier measured week could not be published (see .unprompted\status\publish.json and the log), so no new week was measured on top of it." >> "%LOG%" 2>&1
   exit /b 1
 )
 "%UNPROMPTED_PYTHON%" scripts\timed.py 600 git pull --ff-only origin main >> "%LOG%" 2>&1
@@ -55,6 +65,7 @@ REM Never include someone else's staged work in the measurement commit.
 git diff --cached --quiet
 if errorlevel 1 (
   echo ABORT: staged changes exist; finish that commit before scheduling. >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Staged changes were waiting in the checkout, so nothing was measured rather than sweep them into the bot commit. Commit or unstage them." >> "%LOG%" 2>&1
   exit /b 1
 )
 
@@ -99,6 +110,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Tell GitHub the run is alive, so the off-host watchdog can tell "never
+REM started" from "still running" on Monday rather than on Tuesday. Never blocks.
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py started >> "%LOG%" 2>&1
 set "UNPROMPTED_WEEKLY_RUN=1"
 "%UNPROMPTED_PYTHON%" -m unprompted.run --category all --summary-file .unprompted\weekly-summary.json >> "%LOG%" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
@@ -110,6 +124,7 @@ REM this machine only. Anything else is a real failure and nothing is committed.
 if not "%RUN_EXIT%"=="0" if not "%RUN_EXIT%"=="2" (
   echo ABORT: pipeline exited %RUN_EXIT%, nothing committed >> "%LOG%"
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code %RUN_EXIT% --detail "The pipeline exited %RUN_EXIT%, which is neither published nor held. Nothing was committed and completed engine answers remain in the local checkpoint directory." >> "%LOG%" 2>&1
+  "%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code %RUN_EXIT% >> "%LOG%" 2>&1
   exit /b %RUN_EXIT%
 )
 
@@ -130,70 +145,23 @@ if "%RUN_EXIT%"=="2" (
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status published --exit-code 0 --summary-file .unprompted\weekly-summary.json --detail "Every category measured and passed local checks. Commit and push follow; deployment is not verified." >> "%LOG%" 2>&1
 )
 
-REM Written with labels rather than one parenthesised block on purpose: cmd
-REM expands %VAR% for a whole block when it parses it, so a variable set inside
-REM the block reads as empty and the SHA comparison below would silently never
-REM fire -- the exact class of bug this section exists to remove.
-REM Checked, because a failed stage is indistinguishable from a clean week
-REM once it has happened: `git diff --staged --quiet` then finds nothing staged,
-REM the branch below logs "No new data to commit", and the task exits zero
-REM having published nothing at all. Same class as the PUSHED line above.
-REM The message says what happened: a held week committed as "published"
-REM misled anyone reading git log (2026-10-26).
+REM Commit, push and confirm the remote has it: scripts\publish.py, under the
+REM same locks as every other job, with bounded retries on one deadline. A push
+REM that still fails leaves the commit recorded in .unprompted\publish-intent.json,
+REM and the next start or the daily sync pushes exactly that commit. The commit
+REM message says what happened: a held week committed as "published" misled
+REM anyone reading git log (2026-10-26).
 set "COMMIT_MSG=Run: measured and published"
 if "%RUN_EXIT%"=="2" set "COMMIT_MSG=Run: measured; one or more categories held, see data/last-run.json"
-git add data reports >> "%LOG%" 2>&1
-if errorlevel 1 goto :stage_failed
-git diff --staged --quiet
-if errorlevel 1 goto :publish
-echo No new data to commit. >> "%LOG%"
+"%UNPROMPTED_PYTHON%" scripts\publish.py final --message "%COMMIT_MSG%" --wait 600 >> "%LOG%" 2>&1
+if errorlevel 1 goto :publish_failed
 goto :published
 
-:publish
-git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "%COMMIT_MSG%" >> "%LOG%" 2>&1
-if errorlevel 1 goto :commit_failed
-"%UNPROMPTED_PYTHON%" scripts\timed.py 900 git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 push origin HEAD:main >> "%LOG%" 2>&1
-if errorlevel 1 goto :push_failed
-
-REM Confirm the remote actually has it. Neither commit nor push returns non-zero
-REM for every kind of failure, and PUSHED used to be printed unconditionally: a
-REM network or auth failure looked identical to a real publication in both the
-REM log and Task Scheduler's last result.
-set "LOCAL_SHA="
-set "REMOTE_SHA="
-for /f %%H in ('git rev-parse HEAD') do set "LOCAL_SHA=%%H"
-"%UNPROMPTED_PYTHON%" scripts\timed.py 180 git ls-remote origin refs/heads/main > "%TEMP%\unprompted-remote.txt" 2>> "%LOG%"
-if errorlevel 1 goto :sha_mismatch
-for /f "usebackq" %%H in ("%TEMP%\unprompted-remote.txt") do set "REMOTE_SHA=%%H"
-if "%LOCAL_SHA%"=="" goto :sha_mismatch
-if "%REMOTE_SHA%"=="" goto :sha_mismatch
-if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch
-echo PUSHED %LOCAL_SHA%, exit %RUN_EXIT% >> "%LOG%"
-goto :published
-
-:stage_failed
-echo FAILED: git add failed, so nothing could be committed. The week is >> "%LOG%"
-echo         measured and on this machine only. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git add failed, so the measured week could not be committed. It is on this machine only." >> "%LOG%" 2>&1
-exit /b 3
-
-:commit_failed
-echo FAILED: git commit failed. The week is measured but not committed. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git commit failed. The week is measured but not committed, and exists on this machine only." >> "%LOG%" 2>&1
-exit /b 3
-
-:push_failed
-echo FAILED: git push failed. The commit is on this machine only and the site >> "%LOG%"
-echo         will not update. Fix the remote and push by hand. Do not re-run >> "%LOG%"
-echo         the week: the data already exists and data/runs is append-only. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git push failed. The commit is local only and the site will not update. Push by hand; do not re-run the week." >> "%LOG%" 2>&1
-exit /b 3
-
-:sha_mismatch
-echo FAILED: push reported success but the remote and this machine disagree. >> "%LOG%"
-echo         local  %LOCAL_SHA% >> "%LOG%"
-echo         remote %REMOTE_SHA% >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The push reported success but the remote and this machine disagree on the commit, so the site may not have updated." >> "%LOG%" 2>&1
+:publish_failed
+echo FAILED: the week is measured but not published; see publish.py output above. >> "%LOG%"
+"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The week is measured but not published (see .unprompted\status\publish.json). A committed week is pushed automatically by the next start or daily sync; anything else needs a look. Do not re-run the week." >> "%LOG%" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\backup.py --deadline 1200 >> "%LOG%" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code 3 >> "%LOG%" 2>&1
 exit /b 3
 
 :published
@@ -208,6 +176,15 @@ if errorlevel 1 set "SYNC_FAILED=1"
 if errorlevel 1 set "SYNC_FAILED=1"
 if defined SYNC_FAILED echo WARNING: vault or analytics sync failed after publishing; the week itself is published. >> "%LOG%"
 
+REM Evidence backup (append-only, never deletes) before the shadow reader, which
+REM can run long, and before the heartbeat, which reports its result.
+"%UNPROMPTED_PYTHON%" scripts\backup.py --deadline 1200 >> "%LOG%" 2>&1
+
+REM 4 only for an otherwise clean week: a held week stays 2.
+set "FINAL_EXIT=%RUN_EXIT%"
+if "%RUN_EXIT%"=="0" if defined SYNC_FAILED set "FINAL_EXIT=4"
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code %FINAL_EXIT% >> "%LOG%" 2>&1
+
 REM Shadow second reader. Jev re-reads the stored answers of the date this run
 REM measured and writes only to the gitignored audit\jev-shadow. It runs after
 REM the week is pushed, stops within a time budget that keeps clear of the
@@ -215,6 +192,20 @@ REM task's 8-hour limit, and its exit code is ignored. It does not report into
 REM data\last-run.json or the notification.
 "%UNPROMPTED_PYTHON%" scripts\compare_jev.py weekly >> "%LOG%" 2>&1
 
-REM 4 only for an otherwise clean week: a held week stays 2.
-if "%RUN_EXIT%"=="0" if defined SYNC_FAILED exit /b 4
-exit /b %RUN_EXIT%
+exit /b %FINAL_EXIT%
+
+:alert_without_python
+REM Every early exit used to be silent here: no Python means no notify.py, and
+REM the off-host watchdog only looks on Tuesday. gh is a separate program, so
+REM it can still open the issue. The body goes through a file, never the
+REM command line, so nothing in it can become cmd syntax.
+set "ALERT_BODY=%TEMP%\unprompted-alert.txt"
+> "%ALERT_BODY%" echo The weekly run could not start: .venv\Scripts\python.exe is missing in %CD%.
+>> "%ALERT_BODY%" echo Nothing was measured. Recreate it: python -m venv .venv, then .venv\Scripts\pip install -r requirements.lock
+>> "%ALERT_BODY%" echo.
+>> "%ALERT_BODY%" echo _Opened by scripts/weekly-run.cmd without Python._
+set "ALERT_DAY="
+for /f %%D in ('powershell -NoProfile -Command "(Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')"') do set "ALERT_DAY=%%D"
+call gh issue create --title "Weekly run FAILED: %ALERT_DAY%" --body-file "%ALERT_BODY%" >> "%TEMP%\unprompted-weekly.log" 2>&1
+if errorlevel 1 echo %DATE% %TIME% ALERT UNDELIVERED: gh could not open the issue >> "%TEMP%\unprompted-weekly.log"
+exit /b 1

@@ -22,12 +22,10 @@ def run(seconds: float, command: list[str]) -> int:
     except subprocess.TimeoutExpired:
         try:
             if os.name == "nt":
-                try:
-                    subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True,
-                                   timeout=60, check=True)
-                except subprocess.CalledProcessError as exc:
-                    if exc.returncode != 128:  # Already exited; still confirm below.
-                        raise
+                # Exit code ignored: taskkill says 128 or 255 when part of the
+                # tree had already gone. The wait below is the proof.
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True,
+                               timeout=60)
             else:
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
