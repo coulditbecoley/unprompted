@@ -318,7 +318,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <h1 className="sr-only">Admin dashboard</h1>
       <section aria-labelledby="needs-you-heading">
         <h2 className="zone" id="needs-you-heading">Needs you</h2>
-        {needs.length ? <ul>{needs.map(need => <li key={need.id} style={{ marginBottom: 14, overflowWrap: "anywhere" }}>
+        {needs.length ? <ul className="admin-needs">{needs.map(need => <li key={need.id}>
           <strong><a href={need.href}>{need.title}</a></strong>
           {need.details.map((detail, i) => <p key={i} style={{ margin: "4px 0" }}>{detail}</p>)}
         </li>)}</ul> : <p>Nothing needs attention in the committed report for {needsDate}.</p>}
@@ -337,7 +337,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         the name of the page -- a visual decision should not take a structural
         one with it.
       */}
-      <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
+      <nav className="admin-nav" aria-label="Jump to a section">
+        <a href="#needs-you-heading">Needs you</a>
+        <a href="#latest-run-heading">Latest run</a>
+        <a href="#run-history-heading">Run history</a>
+        <a href="#operations-heading">Operations</a>
+        <a href="#cost-heading">Cost and health</a>
+        <a href="#audience-heading">Audience</a>
+        <a href="#curation-heading">Curation</a>
+      </nav>
       <RunStatus last={lastRun} />
 
       <section aria-labelledby="run-history-heading" style={{ marginBottom: 26 }}>
@@ -368,7 +376,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           Latest {weeks.length} dates with a recorded reading. A week that wrote nothing, or an earlier failure replaced by a later report, leaves no row or shows &ldquo;No record&rdquo;.
         </p>
       </section>
-      <h2 className="zone">Operations</h2>
+      <h2 className="zone" id="operations-heading">Operations</h2>
+      <nav className="admin-nav" id="category-nav" aria-label="Category for State, Quarantine and the editors">
+        <span className="admin-nav-label">Showing</span>
+        {CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}#category-nav`} aria-current={c.slug === category ? "page" : undefined}>{c.label}</a>)}
+      </nav>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
@@ -587,7 +599,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         table style. A dashboard with two ways of drawing a row of figures reads
         as two dashboards.
       */}
-      <div className="cmp-grid" style={{ marginBottom: 26 }}>
+      <div className="cmp-grid" id="cost-heading" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
           <TrimTop />
           <h3 style={{ marginTop: 6 }}>
@@ -725,7 +737,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         but it was previously eleven headings deep in a flat list, which made
         the operational status above it hard to find at all.
       */}
-      <h2 className="zone">Audience</h2>
+      <h2 className="zone" id="audience-heading">Audience</h2>
       <AdminAnalytics current={audience} previous={previousAudience} />
 
       {/*
@@ -733,7 +745,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         because "is the automatic flow actually working" is a different question
         from "what is the method", and it is the one asked most often.
       */}
-      <h2 className="zone">Curation</h2>
+      <h2 className="zone" id="curation-heading">Curation</h2>
       <p className="section-lead" style={{ marginTop: -4 }}>
         Every change below becomes a commit on the public repository. Editing the
         questions, the run count or the engine list changes what the numbers

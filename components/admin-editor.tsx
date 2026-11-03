@@ -99,7 +99,7 @@ export function AdminEditor({
       </section>}
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
-        <button type="button" disabled={!dirty || status === "saving"} onClick={() => setReviewed(body)}>REVIEW CHANGES</button>
+        <button type="button" className="mono admin-secondary" disabled={!dirty || status === "saving"} onClick={() => setReviewed(body)}>REVIEW CHANGES</button>
         <button
           type="button"
           onClick={save}
