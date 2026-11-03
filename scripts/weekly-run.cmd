@@ -110,6 +110,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM Tell GitHub the run is alive, so the off-host watchdog can tell "never
+REM started" from "still running" on Monday rather than on Tuesday. Never blocks.
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py started >> "%LOG%" 2>&1
 set "UNPROMPTED_WEEKLY_RUN=1"
 "%UNPROMPTED_PYTHON%" -m unprompted.run --category all --summary-file .unprompted\weekly-summary.json >> "%LOG%" 2>&1
 set RUN_EXIT=%ERRORLEVEL%
@@ -121,6 +124,7 @@ REM this machine only. Anything else is a real failure and nothing is committed.
 if not "%RUN_EXIT%"=="0" if not "%RUN_EXIT%"=="2" (
   echo ABORT: pipeline exited %RUN_EXIT%, nothing committed >> "%LOG%"
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code %RUN_EXIT% --detail "The pipeline exited %RUN_EXIT%, which is neither published nor held. Nothing was committed and completed engine answers remain in the local checkpoint directory." >> "%LOG%" 2>&1
+  "%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code %RUN_EXIT% >> "%LOG%" 2>&1
   exit /b %RUN_EXIT%
 )
 
@@ -156,6 +160,7 @@ goto :published
 :publish_failed
 echo FAILED: the week is measured but not published; see publish.py output above. >> "%LOG%"
 "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The week is measured but not published (see .unprompted\status\publish.json). A committed week is pushed automatically by the next start or daily sync; anything else needs a look. Do not re-run the week." >> "%LOG%" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code 3 >> "%LOG%" 2>&1
 exit /b 3
 
 :published
@@ -170,6 +175,11 @@ if errorlevel 1 set "SYNC_FAILED=1"
 if errorlevel 1 set "SYNC_FAILED=1"
 if defined SYNC_FAILED echo WARNING: vault or analytics sync failed after publishing; the week itself is published. >> "%LOG%"
 
+REM 4 only for an otherwise clean week: a held week stays 2.
+set "FINAL_EXIT=%RUN_EXIT%"
+if "%RUN_EXIT%"=="0" if defined SYNC_FAILED set "FINAL_EXIT=4"
+"%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code %FINAL_EXIT% >> "%LOG%" 2>&1
+
 REM Shadow second reader. Jev re-reads the stored answers of the date this run
 REM measured and writes only to the gitignored audit\jev-shadow. It runs after
 REM the week is pushed, stops within a time budget that keeps clear of the
@@ -177,9 +187,7 @@ REM task's 8-hour limit, and its exit code is ignored. It does not report into
 REM data\last-run.json or the notification.
 "%UNPROMPTED_PYTHON%" scripts\compare_jev.py weekly >> "%LOG%" 2>&1
 
-REM 4 only for an otherwise clean week: a held week stays 2.
-if "%RUN_EXIT%"=="0" if defined SYNC_FAILED exit /b 4
-exit /b %RUN_EXIT%
+exit /b %FINAL_EXIT%
 
 :alert_without_python
 REM Every early exit used to be silent here: no Python means no notify.py, and

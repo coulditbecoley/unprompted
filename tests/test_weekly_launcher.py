@@ -54,6 +54,11 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
         "p.parent.mkdir(exist_ok=True);p.write_text(status)\n")
     for name in ("sync_vault.py", "sync_analytics.py"):
         (repo / "scripts" / name).write_text("# Offline no-op\n")
+    # Heartbeat: records each call instead of setting a GitHub variable.
+    (repo / "scripts/heartbeat.py").write_text(
+        "from pathlib import Path\nimport sys\n"
+        "p=Path('.unprompted/heartbeats');p.parent.mkdir(exist_ok=True)\n"
+        "p.write_text((p.read_text() if p.exists() else '')+' '.join(sys.argv[1:])+'\\n')\n")
     # The shadow Jev step: records that it ran, then fails, to prove a failure changes nothing.
     (repo / "scripts/compare_jev.py").write_text(
         "from pathlib import Path\n"
@@ -76,6 +81,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert invocations.read_text() == "run\n"
     assert (repo / ".unprompted/jev-hook").read_text() == "jev\n"      # ran after publishing; its failure changed nothing
     assert (repo / ".unprompted/weekly-started").exists()               # the start marker the budget uses
+    assert (repo / ".unprompted/heartbeats").read_text() == "started\nfinished --exit-code 0\n"
     (repo / "staged.txt").write_text("operator work")
     git("add", "staged.txt")
     attempt = repo / ".unprompted/attempt.json"
@@ -195,3 +201,71 @@ def test_installer_registers_readiness_with_its_own_budget_and_refuses_a_bad_one
     garbage.write_text("@echo not-a-number\n")
     refused = install(garbage)
     assert refused.returncode != 0 and "nothing registered" in refused.stderr + refused.stdout
+
+
+def _watchdog():
+    sys.path.insert(0, str(ROOT))
+    from scripts import watchdog
+    return watchdog
+
+
+@pytest.mark.parametrize("utc, mode, due", [
+    ("2026-11-09T19:17:00", "start", True),    # winter: 14:17 New York, past the 14:15 gate
+    ("2026-11-09T18:17:00", "start", False),   # 13:17 New York: too early, the next slot looks
+    ("2026-07-13T18:17:00", "start", True),    # summer: 14:17 New York
+    ("2026-11-10T02:43:00", "finish", True),   # Monday 21:43 New York, Tuesday in UTC
+    ("2026-11-10T01:43:00", "finish", False),  # 20:43 New York
+    ("2026-07-14T01:43:00", "finish", True),   # summer: 21:43 New York
+])
+def test_heartbeat_checks_follow_new_york_time_across_dst(utc, mode, due):
+    from datetime import datetime, timezone
+    wd = _watchdog()
+    now = datetime.fromisoformat(utc).replace(tzinfo=timezone.utc)
+    alarm = wd.heartbeat_alarm(mode, "", now)
+    assert (alarm is not None) == due
+
+
+def test_heartbeat_checks_judge_this_weeks_beat_only():
+    from datetime import datetime, timezone
+    wd = _watchdog()
+    late = datetime(2026, 11, 10, 2, 43, tzinfo=timezone.utc)  # Monday 2026-11-09, 21:43 New York
+    beat = lambda **kw: json.dumps({"week": "2026-11-09", "phase": "started", **kw})
+    assert wd.heartbeat_alarm("start", beat(), late) is None
+    assert "has not finished" in wd.heartbeat_alarm("finish", beat(), late)[0]
+    assert wd.heartbeat_alarm("finish", beat(phase="finished", exit_code=2), late) is None
+    last_week = json.dumps({"week": "2026-11-02", "phase": "finished"})
+    title, body = wd.heartbeat_alarm("start", last_week, late)
+    assert title == "Weekly run has not started: 2026-11-09" and "2026-11-02" in body
+    for junk in ("not json", "[]", '{"week": 5}'):
+        assert wd.heartbeat_alarm("start", junk, late) is not None  # unknown is not healthy
+
+
+def test_the_site_check_names_a_category_the_live_site_has_not_caught_up_on(tmp_path, monkeypatch):
+    import io
+    wd = _watchdog()
+    runs = tmp_path / "runs"
+    for day in ("2026-11-02", "2026-11-09"):
+        (runs / day).mkdir(parents=True)
+        (runs / day / "alpha.json").write_text("{}")
+    (runs / "2026-11-09" / "beta.json").write_text("{}")
+    monkeypatch.setattr(wd, "RUNS", runs)
+    served = {"alpha": "2026-11-02", "beta": "2026-11-09"}
+    class Reply(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    def fake(url, timeout):
+        return Reply(json.dumps({"reading": served[url.rsplit("/", 1)[1][:-5]]}).encode())
+    monkeypatch.setattr(wd.urllib.request, "urlopen", fake)
+    lines = wd.stale_site(["alpha", "beta"])
+    assert len(lines) == 1 and "`alpha`" in lines[0] and "2026-11-09" in lines[0]
+
+
+def test_new_york_time_matches_the_us_dst_rule():
+    from datetime import datetime, timezone
+    wd = _watchdog()
+    utc = lambda s: datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+    assert wd.new_york(utc("2026-03-08T06:59:00")).hour == 1   # 01:59 EST, just before the switch
+    assert wd.new_york(utc("2026-03-08T07:00:00")).hour == 3   # 03:00 EDT
+    assert wd.new_york(utc("2026-11-01T05:59:00")).hour == 1   # 01:59 EDT
+    assert wd.new_york(utc("2026-11-01T06:00:00")).hour == 1   # 01:00 EST again
+    assert wd.new_york(utc("2027-03-14T12:00:00")).hour == 8   # second Sunday of March 2027
