@@ -52,7 +52,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
         "status=sys.argv[sys.argv.index('--status')+1]\n"
         "p=Path('.unprompted/attempt.json') if status=='failed' else Path('data/last-run.json')\n"
         "p.parent.mkdir(exist_ok=True);p.write_text(status)\n")
-    for name in ("sync_vault.py", "sync_analytics.py"):
+    for name in ("sync_vault.py", "sync_analytics.py", "backup.py"):
         (repo / "scripts" / name).write_text("# Offline no-op\n")
     # The shadow Jev step: records that it ran, then fails, to prove a failure changes nothing.
     (repo / "scripts/compare_jev.py").write_text(

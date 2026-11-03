@@ -24,9 +24,22 @@ REM must not also cost the history.
 "%SYNC_PYTHON%" scripts\sync_analytics.py >> "%TEMP%\unprompted-sync.log" 2>&1
 set "ANALYTICS_EXIT=%ERRORLEVEL%"
 
-REM Both outcomes count. Task Scheduler showed 0 whenever the last line worked,
+"%SYNC_PYTHON%" scripts\backup.py >> "%TEMP%\unprompted-sync.log" 2>&1
+set "BACKUP_EXIT=%ERRORLEVEL%"
+set "RESTORE_EXIT=0"
+set "WEEKDAY="
+"%SYNC_PYTHON%" -c "import datetime; raise SystemExit(datetime.date.today().weekday())"
+set "WEEKDAY=%ERRORLEVEL%"
+if "%WEEKDAY%"=="6" (
+  "%SYNC_PYTHON%" scripts\backup.py --restore-check >> "%TEMP%\unprompted-sync.log" 2>&1
+  call set "RESTORE_EXIT=%%ERRORLEVEL%%"
+)
+
+REM All outcomes count. Task Scheduler showed 0 whenever the last line worked,
 REM so a failing vault sync looked healthy. Each step also writes its own status
 REM file under .unprompted\status, which readiness and the mid-week check read.
 if not "%PUBLISH_EXIT%"=="0" exit /b %PUBLISH_EXIT%
 if not "%VAULT_EXIT%"=="0" exit /b %VAULT_EXIT%
-exit /b %ANALYTICS_EXIT%
+if not "%ANALYTICS_EXIT%"=="0" exit /b %ANALYTICS_EXIT%
+if not "%BACKUP_EXIT%"=="0" exit /b %BACKUP_EXIT%
+exit /b %RESTORE_EXIT%
