@@ -19,7 +19,7 @@ if not exist "%UNPROMPTED_PYTHON%" (
   echo ABORT: create .venv and install requirements.lock before scheduling.
   REM No Python yet, so this one goes to the old log location by hand.
   echo %DATE% %TIME% ABORT: .venv missing, nothing measured >> "%TEMP%\unprompted-weekly.log"
-  exit /b 1
+  goto :alert_without_python
 )
 
 REM The log lives with the checkpoints it explains (gitignored), not in %TEMP%,
@@ -42,6 +42,7 @@ set "RUN_BRANCH="
 for /f "delims=" %%B in ('git branch --show-current') do set "RUN_BRANCH=%%B"
 if not "%RUN_BRANCH%"=="main" (
   echo ABORT: checkout must be on main before scheduled measurement. >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "The checkout was not on main, so nothing was measured. Switch the checkout back to main." >> "%LOG%" 2>&1
   exit /b 1
 )
 "%UNPROMPTED_PYTHON%" scripts\timed.py 600 git pull --ff-only origin main >> "%LOG%" 2>&1
@@ -55,6 +56,7 @@ REM Never include someone else's staged work in the measurement commit.
 git diff --cached --quiet
 if errorlevel 1 (
   echo ABORT: staged changes exist; finish that commit before scheduling. >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Staged changes were waiting in the checkout, so nothing was measured rather than sweep them into the bot commit. Commit or unstage them." >> "%LOG%" 2>&1
   exit /b 1
 )
 
@@ -218,3 +220,19 @@ REM data\last-run.json or the notification.
 REM 4 only for an otherwise clean week: a held week stays 2.
 if "%RUN_EXIT%"=="0" if defined SYNC_FAILED exit /b 4
 exit /b %RUN_EXIT%
+
+:alert_without_python
+REM Every early exit used to be silent here: no Python means no notify.py, and
+REM the off-host watchdog only looks on Tuesday. gh is a separate program, so
+REM it can still open the issue. The body goes through a file, never the
+REM command line, so nothing in it can become cmd syntax.
+set "ALERT_BODY=%TEMP%\unprompted-alert.txt"
+> "%ALERT_BODY%" echo The weekly run could not start: .venv\Scripts\python.exe is missing in %CD%.
+>> "%ALERT_BODY%" echo Nothing was measured. Recreate it: python -m venv .venv, then .venv\Scripts\pip install -r requirements.lock
+>> "%ALERT_BODY%" echo.
+>> "%ALERT_BODY%" echo _Opened by scripts/weekly-run.cmd without Python._
+set "ALERT_DAY="
+for /f %%D in ('powershell -NoProfile -Command "(Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')"') do set "ALERT_DAY=%%D"
+call gh issue create --title "Weekly run FAILED: %ALERT_DAY%" --body-file "%ALERT_BODY%" >> "%TEMP%\unprompted-weekly.log" 2>&1
+if errorlevel 1 echo %DATE% %TIME% ALERT UNDELIVERED: gh could not open the issue >> "%TEMP%\unprompted-weekly.log"
+exit /b 1

@@ -34,7 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -451,7 +451,7 @@ def _main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     meta = registry()
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()  # the site counts days in UTC
     fresh = 0
     unreachable = 0
     for offset in range(args.days):
@@ -519,7 +519,8 @@ def main() -> int:
         record_status(status_dir, "sync_analytics", False, f"{type(exc).__name__}: {exc}")
         raise
     record_status(status_dir, "sync_analytics", code == 0, "" if code == 0 else f"exit {code}",
-                  covered_through=date.today().isoformat() if code == 0 else None)
+                  # UTC, the day boundary the site counts by (lib/analytics.ts).
+                  covered_through=datetime.now(timezone.utc).date().isoformat() if code == 0 else None)
     return code
 
 

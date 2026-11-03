@@ -73,8 +73,11 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert (repo / ".unprompted/weekly-started").exists()               # the start marker the budget uses
     (repo / "staged.txt").write_text("operator work")
     git("add", "staged.txt")
+    attempt = repo / ".unprompted/attempt.json"
+    attempt.unlink(missing_ok=True)
     launch(1)
     assert invocations.read_text() == "run\n"
+    assert attempt.read_text() == "failed"  # staged work used to stop the week silently
     git("reset", "--", "staged.txt")
     (repo / "staged.txt").unlink()
     (repo / "data/test.json").write_text("uncommitted data")
@@ -86,8 +89,10 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert invocations.read_text() == "run\n"
     git("restore", "scripts/sync_vault.py")
     git("switch", "-c", "feature")
+    attempt.unlink()
     launch(1)
     assert invocations.read_text() == "run\n"
+    assert attempt.read_text() == "failed"  # so did a checkout left on another branch
     git("switch", "main")
     # Fetch remains valid while the push endpoint is unavailable: no paid calls.
     git("config", "remote.origin.pushurl", str(tmp_path / "unavailable.git"))
@@ -101,6 +106,20 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert git("status", "--porcelain") == ""
     assert git("rev-parse", "HEAD") == git("ls-remote", "origin", "refs/heads/main").split()[0]
     assert (repo / ".unprompted/jev-hook").read_text() == "jev\njev\n"
+
+    # No .venv: no Python, so no notify.py. gh still opens the issue directly.
+    bin_dir = tmp_path / "fake bin"
+    bin_dir.mkdir()
+    (bin_dir / "gh.cmd").write_text('@echo %* > "%TEMP%\\gh-called.txt"\n')
+    env["PATH"] = f"{bin_dir};{env['PATH']}"
+    (repo / ".venv").rename(repo / ".venv-away")
+    result = subprocess.run(["cmd.exe", "/d", "/c", "scripts\\weekly-run.cmd"],
+                            cwd=repo, env=env, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 1
+    called = (Path(env["TEMP"]) / "gh-called.txt").read_text()
+    assert "issue create" in called and "Weekly run FAILED" in called and "--body-file" in called
+    assert "missing" in (Path(env["TEMP"]) / "unprompted-alert.txt").read_text()
+    assert invocations.read_text() == "run\nrun\n"  # nothing measured
 
 
 def test_watchdog_requires_this_weeks_measurement_not_a_reread(tmp_path, monkeypatch):

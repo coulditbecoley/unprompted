@@ -30,7 +30,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from unprompted.storage import write_json
+from unprompted.storage import record_status, write_json
 
 REPO = Path(__file__).resolve().parents[1]
 STATUS_FILE = REPO / "data" / "last-run.json"
@@ -84,14 +84,14 @@ def existing_issue(title: str) -> bool:
         return False
 
 
-def open_issue(status: str, detail: str, exit_code: int) -> None:
-    """The half that reaches a phone."""
+def open_issue(status: str, detail: str, exit_code: int) -> bool:
+    """The half that reaches a phone. True once an issue for this exists."""
     day = datetime.now(timezone.utc).date().isoformat()
     title = f"Weekly run {HEADLINE.get(status, status)}: {day}"
 
     if existing_issue(title):
         print(f"  issue already open: {title}", file=sys.stderr)
-        return
+        return True
 
     body = "\n".join(
         [
@@ -121,10 +121,11 @@ def open_issue(status: str, detail: str, exit_code: int) -> None:
         )
         if made.returncode == 0:
             print(f"  opened {made.stdout.strip()}", file=sys.stderr)
-        else:
-            print(f"  could not open an issue: {made.stderr.strip()}", file=sys.stderr)
+            return True
+        print(f"  could not open an issue: {made.stderr.strip()}", file=sys.stderr)
     except Exception as exc:  # noqa: BLE001
         print(f"  could not open an issue: {exc}", file=sys.stderr)
+    return False
 
 
 def main() -> int:
@@ -158,7 +159,14 @@ def main() -> int:
         print(f"  could not write the status file: {exc}", file=sys.stderr)
 
     if args.status in NEEDS_A_HUMAN and not args.no_issue:
-        open_issue(args.status, args.detail, args.exit_code)
+        delivered = open_issue(args.status, args.detail, args.exit_code)
+        # An alert nobody received is itself a failure, recorded where the
+        # mid-week check and the heartbeat read it. Exit 3 tells the launcher;
+        # the launcher never lets it stop publication.
+        record_status(REPO / ".unprompted" / "status", "alert", delivered,
+                      "" if delivered else "the GitHub issue could not be opened", alert_status=args.status)
+        if not delivered:
+            return 3
 
     return 0
 

@@ -42,25 +42,35 @@ def pretty(slug: str) -> str:
     )
 
 
-def pull() -> bool:
+def pull() -> str:
     """Fast-forward only. A dirty or diverged repo is a human's problem.
 
     Holds week.lock for the whole pull and skips it while a weekly run holds
     that lock: a pull then could swap in new aliases or code between two
     categories of the same week.
     """
+    """Returns "updated", "skipped" (a run holds the week) or "failed"."""
     try:
-        with run_lock(REPO / ".unprompted", "week.lock"):
-            # Bounded, whole tree ended at the limit: an unbounded pull here once
-            # could hold week.lock past Monday's start (2026-11-03 audit).
-            code = timed_run(PULL_SECONDS, ["git", "-C", str(REPO), "pull", "--ff-only"])
+        lock = run_lock(REPO / ".unprompted", "week.lock")
+        lock.__enter__()
     except OSError:
         print("a weekly run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
-        return True  # not a failure: the run is the one updating this checkout
+        return "skipped"  # the run is the one updating this checkout
+    try:
+        # Bounded, whole tree ended at the limit: an unbounded pull here once
+        # could hold week.lock past Monday's start (2026-11-03 audit). A git
+        # that cannot start is a failure, not a busy week.
+        code = timed_run(PULL_SECONDS, ["git", "-C", str(REPO), "pull", "--ff-only"])
+    except OSError as exc:
+        print(f"pull could not start: {exc}", file=sys.stderr)
+        code = -1
+    finally:
+        lock.__exit__(None, None, None)
     if code != 0:
         # 124 timed out, 125 cleanup not confirmed: reported, never retried here.
         print(f"pull failed (exit {code}), syncing whatever is already local", file=sys.stderr)
-    return code == 0
+        return "failed"
+    return "updated"
 
 
 def sync(vault: Path) -> list[Path]:
@@ -146,15 +156,16 @@ def main() -> int:
         record_status(STATUS, "sync_vault", False, f"no vault at {args.vault}")
         return 1
 
-    pulled = True if args.no_pull else pull()
+    pulled = "skipped" if args.no_pull else pull()
     try:
         written = sync(args.vault)
     except OSError as exc:
         record_status(STATUS, "sync_vault", False, f"{type(exc).__name__}: {exc}")
         raise
     print(f"{len(written)} note(s) updated")
-    record_status(STATUS, "sync_vault", pulled, "" if pulled else "git pull failed", notes_written=len(written))
-    return 0 if pulled else 2
+    ok = pulled != "failed"
+    record_status(STATUS, "sync_vault", ok, "" if ok else "git pull failed", pull=pulled, notes_written=len(written))
+    return 0 if ok else 2
 
 
 if __name__ == "__main__":

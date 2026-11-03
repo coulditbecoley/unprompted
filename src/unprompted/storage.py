@@ -83,10 +83,16 @@ def record_status(folder: Path, name: str, ok: bool, error: str = "", **detail: 
     except (OSError, ValueError):
         previous = {}
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    status = {"name": name, "last_attempt": now, "ok": ok, "error": error[-500:],
-              "last_success": now if ok else previous.get("last_success"), **detail}
+    kept = previous.get("last_success")
+    if not (isinstance(kept, str) and len(kept) == 20 and kept <= now):
+        kept = None  # damaged or from the future: unknown, never a fake success
+    reserved = {"name", "last_attempt", "ok", "error", "last_success"}
+    status = {**{k: v for k, v in detail.items() if k not in reserved},
+              "name": name, "last_attempt": now, "ok": ok, "error": error[-500:],
+              "last_success": now if ok else kept}
     try:
         write_json(path, status, replace=True)
-    except OSError:
-        pass
+    except OSError as exc:
+        import sys
+        print(f"could not record {name} status: {type(exc).__name__}", file=sys.stderr)
     return status

@@ -2679,7 +2679,7 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
     monkeypatch.setattr(sv, "REPO", tmp_path)
     monkeypatch.setattr(sv, "timed_run", lambda *a, **k: pytest.fail("pulled during a run"))
     with run_lock(tmp_path / ".unprompted", "week.lock"):
-        assert sv.pull() is True  # skipped, not failed: the run owns the checkout
+        assert sv.pull() == "skipped"  # not failed: the run owns the checkout
     # And the pull itself holds the week: a weekly run cannot start inside it.
     def git(seconds, argv):
         assert seconds == sv.PULL_SECONDS and argv[-2:] == ["pull", "--ff-only"]
@@ -2688,7 +2688,14 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
                 pass
         return 0
     monkeypatch.setattr(sv, "timed_run", git)
-    assert sv.pull() is True
+    assert sv.pull() == "updated"
+    # A git that cannot start is a failure, not a busy week, and the lock is released.
+    def missing(seconds, argv):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(sv, "timed_run", missing)
+    assert sv.pull() == "failed"
+    with run_lock(tmp_path / ".unprompted", "week.lock"):
+        pass
 
 
 def test_a_hung_daily_pull_is_bounded_reported_and_does_not_stop_the_sync(tmp_path, monkeypatch):
@@ -2713,6 +2720,9 @@ def test_a_failure_keeps_the_last_success_so_staleness_shows(tmp_path):
     assert later["last_success"] == first["last_success"] and later["ok"] is False and later["error"] == "boom"
     (tmp_path / "job.json").write_text("not json")
     assert record_status(tmp_path, "job", False, "again")["last_success"] is None  # damaged file, no crash
+    (tmp_path / "job.json").write_text('{"last_success": "2999-01-01T00:00:00Z"}')
+    assert record_status(tmp_path, "job", False)["last_success"] is None  # a future success is not kept
+    assert record_status(tmp_path, "job", False, ok_count=1, last_success="forged")["last_success"] is None
 
 
 @pytest.mark.parametrize("damaged", ["[1, 2]", '"text"', '{"views": "many", "_agents": []}'])
