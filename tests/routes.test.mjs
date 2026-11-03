@@ -273,7 +273,7 @@ test("admin latest-run panel and tile share the committed report, including lega
       html,
       needs: html.match(/<section aria-labelledby="needs-you-heading">([\s\S]*?)<\/section>/)?.[1],
       quarantine: html.match(/<section class="cmp-pick" aria-labelledby="quarantine-heading">([\s\S]*?)<\/section>/)?.[1],
-      tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)[1],
+      tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)?.[1],
       panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
     };
   };
@@ -281,6 +281,49 @@ test("admin latest-run panel and tile share the committed report, including lega
     if (p !== statusPath) return originalRead(p, ...args);
     if (value instanceof Error) throw value;
     return typeof value === "string" ? value : JSON.stringify(value);
+  });
+
+  await t.test("admin keeps the report visible and disables editors when configuration is missing or corrupt", async t => {
+    for (const [file, bad] of [
+      ["questions/ai-writing-tools.yml", null], ["questions/ai-writing-tools.yml", "null"],
+      ["aliases/ai-writing-tools.yml", "canonical: []"], ["aliases/ai-writing-tools.yml", "[invalid"],
+      ["providers.json", null], ["providers.json", "not json"], ["providers.json", '{"providers":[null]}'],
+      ["data/rates.json", null], ["data/rates.json", "{}"],
+    ]) {
+      await t.test(`${file}: ${bad}`, async t => {
+        t.mock.method(fs, "readFileSync", (p, ...args) => {
+          if (path.resolve(String(p)) !== path.resolve(data.REPO_ROOT, file)) return originalRead(p, ...args);
+          if (bad === null) throw new Error("ENOENT");
+          return bad;
+        });
+        const { html } = await render();
+        assert.match(html, /role="alert"/);
+        assert.match(html, /Editors and totals are unavailable/);
+        assert.match(html, /id="latest-run-heading"/);
+        assert.doesNotMatch(html, /COMMIT TO REPO|\$0\.00|NaN/);
+      });
+    }
+  });
+
+  await t.test("admin headings, forms and scroll regions have accessible names and honest scope", async () => {
+    modules["@/lib/admin-edit"] = await import("../lib/admin-edit.ts");
+    modules["@/components/admin-editor"] = compile("components/admin-editor");
+    modules["@/components/provider-manager"] = compile("components/provider-manager");
+    try {
+      const { html } = await render(compile("app/admin/page").default);
+      const levels = [...html.matchAll(/<h([1-6])(?:\s|>)/g)].map(m => Number(m[1]));
+      assert.equal(levels[0], 1);
+      for (let i = 1; i < levels.length; i++) assert.ok(levels[i] <= levels[i - 1] + 1);
+      assert.match(html, /<h2[^>]*id="cost-heading"/);
+      assert.match(html, /table aria-label="Recorded run history by category"/);
+      for (const tag of html.match(/<(?:input|select|textarea)\b[^>]*>/g)) assert.match(tag, /aria-label="[^"]+"/);
+      assert.match(html, /aria-pressed="(?:true|false)"/);
+      assert.match(html, /They do not verify credentials/);
+      assert.doesNotMatch(html, /ALL REACHABLE|UNREACHABLE|AT TODAY|THIS MACHINE/);
+    } finally {
+      delete modules["@/components/admin-editor"];
+      delete modules["@/components/provider-manager"];
+    }
   });
 
   await t.test("current held report uses its run date, not its timestamp or published archive", async t => {
@@ -746,6 +789,60 @@ test("editor diff shows replacements, insertions, deletions and newline changes"
   assert.equal(editDiff("a\nold\nz\n", "a\nz\n"), "- old");
   assert.equal(editDiff("a", "a\n"), "+ ");
   assert.equal(editDiff("a\r\n", "a\n"), "");
+});
+
+test("admin text and input boundaries retain contrast in every theme", () => {
+  const css = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const themes = [...css.matchAll(/:root[^{}]*\{([^}]+)\}/g)].map(m => Object.fromEntries(
+    [...m[1].matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})\b/g)].map(v => [v[1], v[2]]),
+  )).filter(t => t.bg);
+  const luminance = hex => {
+    const rgb = hex.slice(1).match(/../g).map(n => parseInt(n, 16) / 255).map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4);
+    return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+  };
+  const ratio = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+  assert.equal(themes.length, 3);
+  for (const theme of themes) for (const bg of ["bg", "surface", "surface-2"]) {
+    for (const fg of ["fg", "fg-2", "fg-3", "warn", "up", "down"]) assert.ok(ratio(theme[fg], theme[bg]) >= 4.5, `${fg}/${bg} ${ratio(theme[fg], theme[bg])}`);
+    assert.ok(ratio(theme.focus, theme[bg]) >= 3);
+  }
+  assert.match(css, /\.admin-page \.q-chip b\s*\{ opacity: 1;/);
+  assert.match(css, /\.admin-page :is\(input, select, textarea\).*border-color: var\(--fg-3\)/);
+});
+
+test("admin components handle a failed scan and invalid audience timestamps", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const nativeRequire = createRequire(import.meta.url);
+  let states = [], cursor = 0;
+  const compile = (name, modules, fetch) => {
+    const source = fs.readFileSync(new URL(`../components/${name}.tsx`, import.meta.url), "utf8");
+    const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+    const exports = {};
+    runInNewContext(compiled, { exports, fetch, require: id => modules[id] ?? nativeRequire(id) });
+    return exports;
+  };
+  const provider = compile("provider-manager", { react: { useState: initial => {
+    const i = cursor++;
+    if (!(i in states)) states[i] = initial;
+    return [states[i], value => { states[i] = value; }];
+  } } }, async () => Response.json({ error: "Not authorised" }, { status: 401 })).ProviderManager;
+  const props = { initial: [], initialRaw: '{"providers":[]}' };
+  let tree = provider(props);
+  const scan = tree.props.children[0].props.children[1].props.children[0];
+  await scan.props.onClick(); cursor = 0; tree = provider(props);
+  const providerHtml = renderToStaticMarkup(tree);
+  assert.match(providerHtml, /Provider scan unavailable/);
+  assert.doesNotMatch(providerHtml, /Nothing found/);
+  const fixture = { ...await totals(7, 1), status: "ok" };
+  const analytics = compile("admin-analytics", { "@/lib/analytics": {
+    feed: async () => [{ at: "broken", path: "/" }], daily: async () => [],
+    cadence: async () => [{ agent: "crawler", first: 0, last: Infinity }],
+  } }).AdminAnalytics;
+  const html = renderToStaticMarkup(await analytics({ current: fixture, previous: fixture }));
+  assert.match(html, /Timestamp unavailable/);
+  assert.match(html, /tabindex="0" role="region" aria-label="Audience activity by week"/);
 });
 
 test("editor requires current review, retains conflicts and resets errors on editing", async () => {

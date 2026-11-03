@@ -55,7 +55,7 @@ export function nextRunTile(): Tile {
   const now = new Date();
   const next = nextRun(now);
   return {
-    label: "Next run",
+    label: "Next scheduled run",
     value: relative(next, now),
     note: next.toLocaleString("en-GB", {
       timeZone: "America/New_York",
@@ -63,6 +63,6 @@ export function nextRunTile(): Tile {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }),
+    }) + " Eastern; schedule only",
   };
 }

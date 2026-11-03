@@ -54,7 +54,20 @@ const RUN_STATE_WORD = {
 const money = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+export default async function AdminPage(props: { searchParams: Promise<{ category?: string }> }) {
+  try { return await Dashboard(props); }
+  catch {
+    let last = null;
+    try { last = parseLastRun(fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8")); } catch { /* Report may also be unavailable. */ }
+    return <section className="shell section admin-page">
+      <h1>Admin dashboard</h1>
+      <p role="alert">Dashboard data or configuration is missing or invalid. Check the selected question bank, alias map, providers.json, data/rates.json and run archives in the repository. Editors and totals are unavailable until the files can be read safely.</p>
+      <RunStatus last={last} />
+    </section>;
+  }
+}
+
+async function Dashboard({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
   const selected = (await searchParams).category;
   const category = CATEGORIES.some(c => c.slug === selected) ? selected! : CATEGORY;
   const questionsPath = path.join(REPO_ROOT, "questions", `${category}.yml`);
@@ -62,7 +75,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   const questionsRaw = fs.readFileSync(questionsPath, "utf-8");
   const aliasesRaw = fs.readFileSync(aliasesPath, "utf-8");
-  const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number };
+  const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number; questions: unknown[] };
+  const aliasSpec = loadYaml(aliasesRaw) as { canonical: unknown };
+  if (!spec || !Number.isInteger(spec.method_version) || spec.method_version < 1
+      || !Number.isInteger(spec.runs_per_question) || spec.runs_per_question < 1
+      || !Array.isArray(spec.questions) || !spec.questions.length
+      || !aliasSpec?.canonical || typeof aliasSpec.canonical !== "object" || Array.isArray(aliasSpec.canonical)) {
+    throw new Error("Invalid editor configuration");
+  }
+  const providersRaw = fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8");
+  const registry = JSON.parse(providersRaw);
 
   const perCategory = CATEGORIES.map((c) => {
     let history: ReturnType<typeof loadHistory> = [];
@@ -88,19 +110,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
   const providers = loadProviders();
+  if (!Array.isArray(registry?.providers) || registry.providers.length !== providers.length
+      || providers.some(p => (p.args !== undefined && (!Array.isArray(p.args) || p.args.some(a => typeof a !== "string")))
+        || (p.command !== undefined && typeof p.command !== "string") || (p.env !== undefined && typeof p.env !== "string"))) {
+    throw new Error("Invalid provider registry");
+  }
   const withStatus = providers
     .filter((p) => p.enabled)
     .map((p) => ({ p, ...providerStatus(p) }));
   const engines = withStatus.filter(({ p }) => p.role === "engine");
   const extractors = withStatus.filter(({ p }) => p.role === "extractor");
-  // Registry order is priority, and only one extractor ever reads a run. Which
-  // one is not obvious from a list of enabled toggles, and getting it wrong is
-  // expensive rather than visible, so the dashboard names it.
+  // Web-host configuration is not evidence of which extractor the runner used.
   const activeExtractor = extractors.find(({ p, ready }) => p.kind === "api" && ready);
 
-  // Where the week actually runs. A local CLI engine cannot exist on a GitHub
-  // runner, so registering one moves the measurement onto this machine, and the
-  // dashboard should say so rather than leaving it to be inferred.
+  // Local engines require the operator's run machine; its scheduler is not observable here.
   const localEngines = engines.filter(({ p }) => p.kind === "cli");
   const held = loadHeld();
 
@@ -117,6 +140,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
      away, which meant the one question a spend limit makes urgent could only be
      answered by logging into three provider dashboards. */
   const rates = loadRates();
+  const validPrices = (prices: unknown) => prices && typeof prices === "object" && !Array.isArray(prices)
+    && Object.values(prices).every(p => p && [p.input_per_m, p.output_per_m, p.per_search].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0));
+  if (!rates || !validPrices(rates.engines) || !Array.isArray(rates.batch_billed_extractors)
+      || !Number.isFinite(rates.batch_discount) || rates.batch_discount < 0
+      || (rates.monthly_ceiling !== undefined && (!Number.isFinite(rates.monthly_ceiling) || rates.monthly_ceiling < 0))
+      || (rates.history !== undefined && (!Array.isArray(rates.history) || rates.history.some(h => !h || typeof h.until !== "string" || !validPrices(h.engines))))) {
+    throw new Error("Invalid rates");
+  }
   const { runs: allRuns, errors: archiveErrors } = loadAllRuns(true);
 
   // Priced once. Each run was previously parsed by loadAllRuns and then priced
@@ -206,26 +237,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const selectedQuarantine = latestOfCategory ? readingNames(latestOfCategory) : undefined;
   const selectedNames = selectedQuarantine?.names ?? [];
 
-  /*
-    Names frequent enough to have held the run they came from.
-
-    Three thresholds were tried here and all three were wrong. The raw 549 reads
-    as an emergency and is mostly a tail of things named once. An arbitrary
-    "three or more" invents its own urgency. And applying the checks' real 2%
-    floor -- but taking the denominator from the flagship category's latest
-    published run and applying it to counts pooled from every category -- gave
-    33 where the rule gives 24, because a 279-answer run's floor is six and this
-    was testing against five.
-
-    loadQuarantine decides it now, per run, because it is the only place that
-    still knows which run each count came from.
-
-    It is still a reading of the past, and the label says so. Quarantine files
-    are written when a run happens, so they reflect the alias map of that
-    moment; curating aliases afterwards does not rewrite them, and the count only
-    falls when the next run is measured against the corrected map. Showing this
-    as outstanding work would be wrong -- most of it is already fixed.
-  */
+  // Historical name counts do not establish whether later alias edits resolved them.
   const materialQuarantine = quarantine.filter((q) => q.material).length;
   const enginesReady = engines.filter((e) => e.ready).length;
 
@@ -245,10 +257,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     nextRunTile(),
     {
-      // Reachable is not the same as behaving. An engine can answer every probe
-      // and still have failed a third of the week it was asked to measure --
-      // which is exactly what happened on 2026-08-24 -- so the tile carries both.
-      label: "Engines",
+      // Local configuration and recorded error rates are separate evidence.
+      label: "Engines configured here",
       value: `${enginesReady}/${engines.length}`,
       note:
         enginesReady !== engines.length
@@ -264,7 +274,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       note: archiveErrors.length
         ? `${archiveErrors.length} file${archiveErrors.length === 1 ? "" : "s"} unreadable`
         : !costRecorded
-          ? "this run reported no usage"
+          ? (lastDate ? "no priced usage recorded" : "no readable runs")
           : spend.allDayUnpublished
             ? "published nothing"
             : spend.dayUnpublished > 0
@@ -275,7 +285,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       attention: archiveErrors.length > 0 || (costRecorded && spend.dayUnpublished > 0),
     },
     {
-      label: "Weeks recorded",
+      label: "Published readings",
       value: selectedArchive.error ? "unavailable" : String(history.length),
       note: `method v${spec.method_version}`,
     },
@@ -293,28 +303,26 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       label: "Signup reports",
       value: audience.status === "ok" ? String(signups) : audience.status,
       note:
-        signupTries > signups
+        audience.status !== "ok" ? "counts unavailable" : signupTries > signups
           ? `${signupTries} tried, 7d`
           : signups === 0
             ? "none yet, 7d"
             : "7 complete days",
     },
     {
-      label: "Held last run",
+      label: "Material names",
       value: quarantineErrors.length ? "incomplete" : String(materialQuarantine),
       note:
         quarantineErrors.length ? "review unreadable quarantine evidence" : materialQuarantine === 0
           ? "nothing material"
           : `of ${quarantine.length} names, at the map of that day`,
-      // Not marked. These are a record of the last run, not a queue: alias
-      // edits since then already cover most of them and the count only moves
-      // when the next Monday is measured.
+      // Recorded names are not proof of unresolved alias decisions.
       attention: quarantineErrors.length > 0,
     },
   ];
 
   return (
-    <section className="shell section">
+    <section className="shell section admin-page">
       <h1 className="sr-only">Admin dashboard</h1>
       <section aria-labelledby="needs-you-heading">
         <h2 className="zone" id="needs-you-heading">Needs you</h2>
@@ -326,17 +334,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
       <AdminMasthead tiles={tiles} />
 
-      {/*
-        The visible h1 is gone: the most valuable space on a dashboard is its
-        first screen, and this spent it on the word "Admin" at 40px over a note
-        about commit behaviour, neither of which is why anybody opens the page.
-        The note now lives beside the editors that do the committing.
-
-        The heading itself stays, unstyled and off-screen. Removing it outright
-        left the document starting at h2 and cost anyone navigating by headings
-        the name of the page -- a visual decision should not take a structural
-        one with it.
-      */}
       <nav className="admin-nav" aria-label="Jump to a section">
         <a href="#needs-you-heading">Needs you</a>
         <a href="#latest-run-heading">Latest run</a>
@@ -351,7 +348,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section aria-labelledby="run-history-heading" style={{ marginBottom: 26 }}>
         <h2 className="zone" id="run-history-heading">Run history</h2>
         <div style={{ overflowX: "auto" }} tabIndex={0} role="region" aria-labelledby="run-history-heading">
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <table aria-label="Recorded run history by category" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr>
                 <th scope="col" style={{ textAlign: "left", padding: "6px 12px 6px 0" }}>Date</th>
@@ -373,7 +370,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </table>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
-          Latest {weeks.length} dates with a recorded reading. A week that wrote nothing, or an earlier failure replaced by a later report, leaves no row or shows &ldquo;No record&rdquo;.
+          Latest {weeks.length} dates in readable archives or the latest report. Earlier failures replaced by a later report may be absent. ?No record? does not prove a run was skipped.
         </p>
       </section>
       <h2 className="zone" id="operations-heading">Operations</h2>
@@ -412,9 +409,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </small>
             </span>
             <span className={enginesReady === engines.length ? "" : "pending"}>
-              {enginesReady === engines.length
-                ? "ALL REACHABLE"
-                : `${engines.length - enginesReady} UNREACHABLE`}
+              {engines.length === 0 ? "NONE ENABLED" : enginesReady === engines.length
+                ? "CONFIGURED ON WEB HOST"
+                : `${engines.length - enginesReady} NOT CONFIGURED HERE`}
             </span>
           </div>
 
@@ -429,26 +426,25 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
           <div className="cmp-stat">
             <span>
-              Reads the week{" "}
+              Extractor configured here{" "}
               <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                {activeExtractor?.p.kind === "api" ? "API" : "LOCAL"}
+                {activeExtractor ? "API" : ""}
               </small>
             </span>
-            <span>{activeExtractor?.p.label ?? "NONE AVAILABLE"}</span>
+            <span>{activeExtractor?.p.label ?? "NONE CONFIGURED HERE"}</span>
           </div>
 
           <div className="cmp-stat">
-            <span style={{ color: "var(--fg-2)" }}>Fallbacks</span>
+            <span style={{ color: "var(--fg-2)" }}>Other extractor entries</span>
             <span style={{ color: "var(--fg-3)" }}>
               {extractors.filter(({ p }) => p.id !== activeExtractor?.p.id).length} configured
             </span>
           </div>
 
           <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-            Only the extractor named above reads the week: the first enabled one
-            this machine can reach, in registry order. The rest cost nothing
-            until it is unavailable. Keys are read from the environment and never
-            stored in the repo.
+            These checks inspect the web host?s environment and installed files only.
+            They do not verify credentials, model access or the run machine. Recorded
+            readings identify the extractor that actually ran.
           </p>
         </div>
 
@@ -515,7 +511,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <TrimTop />
           <div className="seq-row" style={{ gridTemplateColumns: "1fr auto" }}>
             <span className="seq-brand" style={{ gap: 3 }}>
-              Runs on
+              Configured launch location
               <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
                 {localEngines.length > 0
                   ? "scripts/weekly-run.cmd, Windows Task Scheduler, Mondays 13:00"
@@ -523,7 +519,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </small>
             </span>
             <span className="mono" style={{ fontSize: 11 }}>
-              {localEngines.length > 0 ? "THIS MACHINE" : "CLOUD"}
+              {localEngines.length > 0 ? "RUN MACHINE" : "CLOUD"}
             </span>
           </div>
 
@@ -532,7 +528,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="seq-brand" style={{ gap: 3 }}>
                 Why not the cloud
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {localEngines.map(({ p }) => p.label).join(", ")} sign in on this
+                  {localEngines.map(({ p }) => p.label).join(", ")} sign in on the run
                   machine, and a run refuses to start without every declared engine
                 </small>
               </span>
@@ -564,7 +560,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 {h.category}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
                   {h.date} · held, {h.errorRate === null ? "call error rate unavailable" : `${Math.round(h.errorRate * 100)}% of calls errored`} ·
-                  kept in data/held, never published
+                  original held evidence retained in data/held
                 </small>
                 <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
                   {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
@@ -585,7 +581,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 10 }}>
           A held run is the checks working, not a crash. Its answers are kept, so
           it can be re-read with <span className="mono">unprompted.reextract</span>{" "}
-          once the cause is fixed, without paying to ask anything again.
+          once the cause is fixed. Re-reading may incur extraction charges; it does not ask the engines again.
         </p>
       </section>
 
@@ -599,7 +595,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         table style. A dashboard with two ways of drawing a row of figures reads
         as two dashboards.
       */}
-      <div className="cmp-grid" id="cost-heading" style={{ marginBottom: 26 }}>
+      <h2 className="zone" id="cost-heading">Cost and health</h2>
+      <div className="cmp-grid" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
           <TrimTop />
           <h3 style={{ marginTop: 6 }}>
@@ -611,10 +608,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
           {!costRecorded ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              This run reported no usage, so it prices at nothing. That is a
-              missing measurement rather than a free week &mdash; runs archived
-              before usage was instrumented carry none, and the archive is
-              append-only, so they are never backfilled with a guess.
+              {lastDate ? "No priced usage is recorded for this date. This does not establish that the run was free." : "No readable run is available to price."}
             </p>
           ) : (
             <>
@@ -651,7 +645,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span style={{ color: "var(--fg-2)" }}>
                   Every recorded run{" "}
                   <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                    AT TODAY&rsquo;S RATES
+                    AT RECORDED-DATE RATES
                   </small>
                 </span>
                 <span style={{ color: "var(--fg-3)" }}>{money(archiveCost)}</span>
@@ -694,7 +688,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <span>
                     {h.engine}{" "}
                     <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                      {h.calls - h.errors} ANSWERED &middot; {h.errors} FAILED
+                      {h.calls - h.errors} WITHOUT ERROR &middot; {h.errors} FAILED
                       {h.errors > 0 && h.worstCategory ? ` \u00b7 WORST IN ${h.worstCategory}` : ""}
                     </small>
                   </span>
@@ -713,8 +707,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {worst.worstCategory ?? "a category"} on {lastDate}.
                     </strong>{" "}
                     A run that fails this check is meant to be held rather than
-                    published, so this one is worth a decision: it stands on the
-                    other engines, or it comes down.
+                    published. Review the recorded outcome and cause; do not treat
+                    the remaining engines as a comparable full run.
                   </>
                 ) : (
                   <>
@@ -740,11 +734,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <h2 className="zone" id="audience-heading">Audience</h2>
       <AdminAnalytics current={audience} previous={previousAudience} />
 
-      {/*
-        Where the week runs, and what came out of it. Split out from State
-        because "is the automatic flow actually working" is a different question
-        from "what is the method", and it is the one asked most often.
-      */}
       <h2 className="zone" id="curation-heading">Curation</h2>
       <p className="section-lead" style={{ marginTop: -4 }}>
         Every change below becomes a commit on the public repository. Editing the
@@ -753,7 +742,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         engine list moved without one is held rather than published.
       </p>
 
-      <ProviderManager initial={providers} initialRaw={fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8")} />
+      <ProviderManager initial={providers} initialRaw={providersRaw} />
 
       <AdminEditor
         key={`questions-${category}`}
