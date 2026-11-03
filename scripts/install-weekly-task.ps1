@@ -13,6 +13,13 @@
         Unregister-ScheduledTask -TaskName "Unprompted Monday readiness" -Confirm:$false
 #>
 
+param(
+    # Print the settings that would be registered, as JSON, and register nothing.
+    [switch]$DryRun,
+    # The interpreter that computes the readiness budget; the repo's own .venv by default.
+    [string]$Python
+)
+
 $ErrorActionPreference = "Stop"
 
 $taskName = "Unprompted weekly run"
@@ -52,6 +59,32 @@ $settings = New-ScheduledTaskSettingsSet `
 # That is what stopped 2026-09-21.
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 
+# Sunday 18:00: the weekly run's own first checks, the evening before, so a
+# drifted CLI model or a broken key is an issue to fix rather than a lost week.
+$readyName    = "Unprompted Monday readiness"
+$readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
+# Local 18:00 across DST, as for the weekly run above.
+$readyTrigger.StartBoundary = (Get-Date).Date.AddHours(18).ToString("yyyy-MM-dd'T'HH:mm:ss")
+$readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
+# The limit comes from the check's own budget (every allowed CLI retry, cleanup and
+# the issue), never a fixed number: a fixed 45 minutes let Windows end a slow check
+# before it could report. No fallback: a limit that cannot be computed stops here.
+if (-not $Python) { $Python = Join-Path $repo ".venv\Scripts\python.exe" }
+$limitText = & $Python (Join-Path $repo "scripts\readiness.py") --print-task-limit
+if ($LASTEXITCODE -ne 0 -or "$limitText".Trim() -notmatch '^\d+$' -or [int]"$limitText".Trim() -le 0) {
+    throw "could not compute the readiness time limit (got '$limitText'); nothing registered"
+}
+$readyLimit = New-TimeSpan -Seconds ([int]"$limitText".Trim())
+$readySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit $readyLimit -MultipleInstances IgnoreNew
+if ($DryRun) {
+    [pscustomobject]@{
+        weekly_limit_seconds    = [int][System.Xml.XmlConvert]::ToTimeSpan($settings.ExecutionTimeLimit).TotalSeconds
+        readiness_limit_seconds = [int]$readyLimit.TotalSeconds
+        weekly_start            = $trigger.StartBoundary
+        readiness_start         = $readyTrigger.StartBoundary
+    } | ConvertTo-Json -Compress
+    return
+}
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal | Out-Null
 } else {
@@ -65,14 +98,6 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     -Force | Out-Null
 }
 
-# Sunday 18:00: the weekly run's own first checks, the evening before, so a
-# drifted CLI model or a broken key is an issue to fix rather than a lost week.
-$readyName    = "Unprompted Monday readiness"
-$readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
-# Local 18:00 across DST, as for the weekly run above.
-$readyTrigger.StartBoundary = (Get-Date).Date.AddHours(18).ToString("yyyy-MM-dd'T'HH:mm:ss")
-$readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
-$readySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 45) -MultipleInstances IgnoreNew
 if (Get-ScheduledTask -TaskName $readyName -ErrorAction SilentlyContinue) {
     Set-ScheduledTask -TaskName $readyName -Trigger $readyTrigger -Action $readyAction -Settings $readySettings -Principal $principal | Out-Null
 } else {

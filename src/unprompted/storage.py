@@ -65,3 +65,28 @@ def run_lock(root: Path, name: str = "run.lock", wait: float = 0.0):
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+def record_status(folder: Path, name: str, ok: bool, error: str = "", **detail: object) -> dict:
+    """Write `<folder>/<name>.json`: when this job last ran and when it last worked.
+
+    A failure keeps the previous last_success, so a stale success is visible as
+    stale (readiness and the mid-week check alarm on age), instead of every
+    attempt looking like progress. Never raises: a status that cannot be written
+    must not turn a working job into a failing one.
+    """
+    path = folder / f"{name}.json"
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(previous, dict):
+            previous = {}
+    except (OSError, ValueError):
+        previous = {}
+    now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    status = {"name": name, "last_attempt": now, "ok": ok, "error": error[-500:],
+              "last_success": now if ok else previous.get("last_success"), **detail}
+    try:
+        write_json(path, status, replace=True)
+    except OSError:
+        pass
+    return status

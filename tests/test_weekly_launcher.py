@@ -143,3 +143,28 @@ def test_watchdog_requires_this_weeks_measurement_not_a_reread(tmp_path, monkeyp
     monkeypatch.setattr(wd.subprocess, "run", gh)
     wd.open_issue("Missing week", "Offline test")
     assert [args[2] for args in calls] == ["list", "create"]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="runs the real Task Scheduler installer in dry-run mode")
+def test_installer_registers_readiness_with_its_own_budget_and_refuses_a_bad_one(tmp_path):
+    sys.path.insert(0, str(ROOT))
+    from scripts import readiness
+
+    def install(python):
+        return subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                               str(ROOT / "scripts" / "install-weekly-task.ps1"), "-DryRun", "-Python", str(python)],
+                              capture_output=True, text=True, timeout=180)
+
+    done = install(sys.executable)
+    assert done.returncode == 0, done.stderr
+    settings = json.loads(done.stdout.strip().splitlines()[-1])
+    # Windows must never end the check before its own retries, cleanup and issue can finish.
+    assert settings["readiness_limit_seconds"] == readiness.task_limit_seconds()
+    assert settings["readiness_limit_seconds"] > readiness.LIMIT_SECONDS + readiness.WRAPPER_GRACE_SECONDS
+    assert settings["weekly_limit_seconds"] == 8 * 3600
+    assert settings["weekly_start"].endswith("T13:00:00") and settings["readiness_start"].endswith("T18:00:00")
+
+    garbage = tmp_path / "python.cmd"
+    garbage.write_text("@echo not-a-number\n")
+    refused = install(garbage)
+    assert refused.returncode != 0 and "nothing registered" in refused.stderr + refused.stdout

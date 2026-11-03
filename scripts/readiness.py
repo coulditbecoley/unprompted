@@ -38,6 +38,15 @@ from unprompted.cli_provider import CLEANUP_WAIT_SECONDS, TREE_KILL_SECONDS, rea
 LIMIT_SECONDS = readiness_limit_seconds()
 # timed.py may need a tree kill and a slow reap, plus process-start overhead.
 WRAPPER_GRACE_SECONDS = TREE_KILL_SECONDS + CLEANUP_WAIT_SECONDS + 60
+# Opening the issue afterwards, plus margin. The scheduled task's limit is built
+# from this, so Windows can never end the check before it reports (it was a fixed
+# 45 minutes while the check itself was allowed about three hours).
+NOTIFY_MARGIN_SECONDS = 10 * 60
+
+
+def task_limit_seconds() -> int:
+    """The Task Scheduler ExecutionTimeLimit install-weekly-task.ps1 registers."""
+    return LIMIT_SECONDS + WRAPPER_GRACE_SECONDS + NOTIFY_MARGIN_SECONDS
 
 
 def target_monday(now: datetime) -> date | None:
@@ -118,7 +127,11 @@ def open_issue(monday: str, issues: list[str], warnings: list[str] = ()) -> bool
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--no-issue", action="store_true", help="print the result without opening an issue")
+    parser.add_argument("--print-task-limit", action="store_true", help="print the scheduled task's time limit in seconds and exit")
     args = parser.parse_args()
+    if args.print_task_limit:
+        print(task_limit_seconds())
+        return 0
     monday = target_monday(datetime.now())
     if monday is None:
         print("Monday's run is due or under way; not checking now.")

@@ -2677,17 +2677,42 @@ def test_the_daily_sync_does_not_pull_under_a_running_week(tmp_path, monkeypatch
     import scripts.sync_vault as sv  # noqa: PLC0415
     from unprompted.storage import run_lock
     monkeypatch.setattr(sv, "REPO", tmp_path)
-    monkeypatch.setattr(sv.subprocess, "run", lambda *a, **k: pytest.fail("pulled during a run"))
+    monkeypatch.setattr(sv, "timed_run", lambda *a, **k: pytest.fail("pulled during a run"))
     with run_lock(tmp_path / ".unprompted", "week.lock"):
-        sv.pull()
+        assert sv.pull() is True  # skipped, not failed: the run owns the checkout
     # And the pull itself holds the week: a weekly run cannot start inside it.
-    def git(*a, **k):
+    def git(seconds, argv):
+        assert seconds == sv.PULL_SECONDS and argv[-2:] == ["pull", "--ff-only"]
         with pytest.raises(OSError):
             with run_lock(tmp_path / ".unprompted", "week.lock"):
                 pass
-        return SimpleNamespace(stdout="", stderr="", returncode=0)
-    monkeypatch.setattr(sv.subprocess, "run", git)
-    sv.pull()
+        return 0
+    monkeypatch.setattr(sv, "timed_run", git)
+    assert sv.pull() is True
+
+
+def test_a_hung_daily_pull_is_bounded_reported_and_does_not_stop_the_sync(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    monkeypatch.setattr(sv, "STATUS", tmp_path / "status")
+    monkeypatch.setattr(sv, "timed_run", lambda seconds, argv: 124)  # the limit ended it
+    monkeypatch.setattr(sys, "argv", ["sync_vault.py", "--vault", str(vault)])
+    assert sv.main() == 2
+    status = json.loads((tmp_path / "status/sync_vault.json").read_text())
+    assert status["ok"] is False and status["last_success"] is None and "pull" in status["error"]
+    assert (vault / sv.FOLDER / "Weeks Index.md").exists()  # the notes were still synced
+
+
+def test_a_failure_keeps_the_last_success_so_staleness_shows(tmp_path):
+    from unprompted.storage import record_status
+    first = record_status(tmp_path, "job", True)
+    later = record_status(tmp_path, "job", False, "boom")
+    assert later["last_success"] == first["last_success"] and later["ok"] is False and later["error"] == "boom"
+    (tmp_path / "job.json").write_text("not json")
+    assert record_status(tmp_path, "job", False, "again")["last_success"] is None  # damaged file, no crash
 
 
 @pytest.mark.parametrize("damaged", ["[1, 2]", '"text"', '{"views": "many", "_agents": []}'])

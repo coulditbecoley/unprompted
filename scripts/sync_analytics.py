@@ -419,7 +419,7 @@ def write_index(out_dir: Path, meta: dict[str, dict[str, str]]) -> None:
     index.write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
+def _main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault", type=Path, default=DEFAULT_VAULT)
     parser.add_argument(
@@ -507,6 +507,20 @@ def main() -> int:
         )
         return 1
     return 0
+
+
+def main() -> int:
+    """_main, with its outcome recorded for readiness and the mid-week check."""
+    from unprompted.storage import record_status
+    status_dir = Path(__file__).resolve().parents[1] / ".unprompted" / "status"
+    try:
+        code = _main()
+    except Exception as exc:
+        record_status(status_dir, "sync_analytics", False, f"{type(exc).__name__}: {exc}")
+        raise
+    record_status(status_dir, "sync_analytics", code == 0, "" if code == 0 else f"exit {code}",
+                  covered_through=date.today().isoformat() if code == 0 else None)
+    return code
 
 
 if __name__ == "__main__":
