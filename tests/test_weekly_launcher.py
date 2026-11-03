@@ -187,6 +187,9 @@ def test_installer_registers_readiness_with_its_own_budget_and_refuses_a_bad_one
     assert settings["readiness_limit_seconds"] > readiness.LIMIT_SECONDS + readiness.WRAPPER_GRACE_SECONDS
     assert settings["weekly_limit_seconds"] == 8 * 3600
     assert settings["weekly_start"].endswith("T13:00:00") and settings["readiness_start"].endswith("T18:00:00")
+    assert settings["midweek_start"].endswith("T09:00:00") and settings["midweek_limit_seconds"] == 1800
+    source = (ROOT / "scripts" / "install-weekly-task.ps1").read_text()
+    assert '"scripts\\readiness.py --free"' in source  # a stray \r once turned this path into "scripts<CR>eadiness"
 
     garbage = tmp_path / "python.cmd"
     garbage.write_text("@echo not-a-number\n")
