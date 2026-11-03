@@ -1043,6 +1043,28 @@ def test_categories_are_not_started_once_the_month_turns(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "s.json").read_text())["categories"]["beta"]["outcome"] == "not_started"
 
 
+def test_a_nearly_full_disk_starts_no_paid_category_and_timings_are_recorded(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unprompted.engines import base
+    monkeypatch.setattr(base, "BOOKED_MONTH", None)
+    monkeypatch.setattr(run, "_PHASES", [])
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "load_local_env", lambda: None)
+    monkeypatch.setattr(run, "all_categories", lambda: ["alpha", "beta"])
+    monkeypatch.setattr(run, "run_category", lambda *a, **k: pytest.fail("a paid category started on a full disk"))
+    monkeypatch.setattr(run, "run_time_left", lambda: 10 ** 6)
+    monkeypatch.setattr(run.shutil, "disk_usage", lambda path: SimpleNamespace(free=run.MIN_FREE_BYTES - 1))
+    today = run.date.today().isoformat()
+    monkeypatch.setattr(run.sys, "argv", ["run", "--date", today, "--summary-file", str(tmp_path / "s.json")])
+    assert run.main() == run.HELD_EXIT_CODE
+    outcomes = json.loads((tmp_path / "s.json").read_text())["categories"]
+    assert {c["outcome"] for c in outcomes.values()} == {"not_started"}
+    assert "GiB free" in outcomes["alpha"]["reasons"][0]
+    phases = json.loads((tmp_path / ".unprompted/status/phases.json").read_text())
+    assert phases["run_date"] == today
+    assert [p["phase"] for p in phases["phases"]] == ["week_lock_wait", "collect_outstanding_batches"]
+
+
 def test_the_booking_is_scoped_to_its_run(monkeypatch):
     from unprompted.engines import base
     monkeypatch.setattr(base, "BOOKED_MONTH", None)
