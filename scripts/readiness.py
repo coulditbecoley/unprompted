@@ -11,9 +11,9 @@ attempts); nothing is measured. On 2026-10-26 a Codex CLI update changed its
 default model and the run refused on the day; this finds that the evening
 before. Scheduled by scripts/install-weekly-task.ps1 (Sundays 18:00).
 
-A late start is handled on purpose: on a Monday before noon it checks that
-day's run; from noon on Monday, or while a weekly run holds week.lock, it does
-nothing, so it never overlaps a measurement.
+A late start is handled on purpose: Monday checks need enough time to finish
+before 13:00, and never start at or after noon. While a weekly run holds
+week.lock, readiness does nothing.
 
 Exit 0 ready or skipped, 2 issues found (an issue is opened unless
 --no-issue), 1 the check or the issue could not be completed.
@@ -32,15 +32,22 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 from unprompted.storage import run_lock  # noqa: E402 - stdlib-only module
+from unprompted.cli_provider import CLEANUP_WAIT_SECONDS, TREE_KILL_SECONDS, readiness_limit_seconds  # noqa: E402
 
-LIMIT_SECONDS = 1800
+# Cover every allowed local probe attempt, including version checks and cleanup.
+LIMIT_SECONDS = readiness_limit_seconds()
+# timed.py may need a tree kill and a slow reap, plus process-start overhead.
+WRAPPER_GRACE_SECONDS = TREE_KILL_SECONDS + CLEANUP_WAIT_SECONDS + 60
 
 
 def target_monday(now: datetime) -> date | None:
     """The Monday to check, or None when it is too close to (or past) its start."""
     today = now.date()
     if today.weekday() == 0:
-        return today if now.hour < 12 else None
+        cutoff = min(now.replace(hour=12, minute=0, second=0, microsecond=0),
+                     now.replace(hour=13, minute=0, second=0, microsecond=0)
+                     - timedelta(seconds=LIMIT_SECONDS + WRAPPER_GRACE_SECONDS))
+        return today if now < cutoff else None
     return today + timedelta(days=7 - today.weekday())
 
 
@@ -57,11 +64,17 @@ def qualify(monday: str) -> tuple[dict | None, str]:
     argv = [sys.executable, str(REPO / "scripts" / "timed.py"), str(LIMIT_SECONDS),
             sys.executable, "-m", "unprompted.run", "--preflight", "--qualify", "--date", monday]
     try:
-        done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, env=env, timeout=LIMIT_SECONDS + 120)
+        done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, env=env, timeout=LIMIT_SECONDS + WRAPPER_GRACE_SECONDS)
     except (OSError, subprocess.SubprocessError) as exc:
         return None, f"could not start: {type(exc).__name__}: {exc}"
     try:
+        if done.returncode not in (0, 2):
+            raise ValueError("check did not complete")
         result = json.loads(done.stdout)
+        if (not isinstance(result, dict) or not isinstance(result.get("issues"), list)
+                or not all(isinstance(issue, str) for issue in result["issues"])
+                or (done.returncode == 2 and not result["issues"])):
+            raise ValueError("invalid preflight result")
         # The run's own WARNING lines (for example a probe that searched) are
         # kept: they go to stderr, which a successful check would otherwise drop.
         result["warnings"] = [line.strip() for line in done.stderr.splitlines() if "WARNING" in line]
@@ -111,9 +124,8 @@ def main() -> int:
         print("Monday's run is due or under way; not checking now.")
         return 0
     # Held for the whole check, so no measurement can start inside it. A weekly
-    # run that arrives meanwhile waits (run.py allows 35 minutes, more than this
-    # check's 30-minute limit); the noon cut-off keeps that from ever reaching
-    # a scheduled Monday start.
+    # run that arrives meanwhile waits longer than this check and wrapper grace.
+    # The computed Monday cut-off leaves both finished before the scheduled start.
     try:
         with run_lock(REPO / ".unprompted", "week.lock"):
             result, failure = qualify(monday.isoformat())
