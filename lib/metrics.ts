@@ -713,6 +713,8 @@ export type Rates = {
   /** Registry ids whose extraction is billed through the Batch API, at half price. */
   batch_billed_extractors: string[];
   verified: string;
+  /** Dollars a calendar month may cost before the pre-flight refuses a category. */
+  monthly_ceiling?: number;
   engines: Record<string, { input_per_m: number; output_per_m: number; per_search: number }>;
   /** Earlier price lists, each with the last run date it priced. */
   history?: { until: string; engines: Rates["engines"] }[];
@@ -977,4 +979,25 @@ export function coverage(run: RunRecord): EngineCoverage[] {
 /** The engines that did not answer everything they were asked, worst first. */
 export function shortfall(run: RunRecord): EngineCoverage[] {
   return coverage(run).filter((c) => c.short);
+}
+
+/**
+ * What a date's spend bought, and where the month stands. Held readings count,
+ * as they do in budget.py: they were paid for. Only readings still unpublished
+ * count as buying nothing; a held reading later re-read and published did not.
+ */
+export function spendSummary(
+  priced: { date: string; category: string; dollars: number }[],
+  unpublished: ReadonlySet<string>,
+  date: string | null,
+  month: string,
+) {
+  const isUnpublished = (p: { date: string; category: string }) => unpublished.has(`${p.date}/${p.category}`);
+  const sum = (rows: { dollars: number }[]) => rows.reduce((total, p) => total + p.dollars, 0);
+  const day = priced.filter((p) => p.date === date);
+  return {
+    dayUnpublished: sum(day.filter(isUnpublished)),
+    allDayUnpublished: day.length > 0 && day.every(isUnpublished),
+    monthTotal: sum(priced.filter((p) => p.date.startsWith(month))),
+  };
 }

@@ -16,6 +16,7 @@ import {
   loadHistory,
   loadQuarantine,
   loadRates,
+  spendSummary,
   standings,
 } from "@/lib/data";
 import { CATEGORIES } from "@/lib/categories";
@@ -147,6 +148,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // confidently; "not recorded" is the honest reading.
   const costRecorded = weekCost > 0;
 
+  // Same counting as the pre-flight's budget check, from committed files. It
+  // cannot see spend sitting in the run machine's local checkpoints.
+  const ceiling = rates.monthly_ceiling ?? 0;
+  const month = new Date().toISOString().slice(0, 7);
+  const spend = spendSummary(
+    priced.map((p) => ({ date: p.run.run_date, category: p.run.category, dollars: p.cost.total })),
+    new Set(held.runs.filter((h) => !h.recoveredOn).map((h) => `${h.date}/${h.category}`)),
+    lastDate,
+    month,
+  );
+
   /* -- how the engines behaved ---------------------------------------------
      The same measurement checks.py rule 5 uses to hold a week, shown
      continuously instead of only when it fires. */
@@ -242,12 +254,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       value: costRecorded ? money(weekCost) : "not recorded",
       note: archiveErrors.length
         ? `${archiveErrors.length} file${archiveErrors.length === 1 ? "" : "s"} unreadable`
-        : costRecorded
-          ? `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`
-          : "this run reported no usage",
+        : !costRecorded
+          ? "this run reported no usage"
+          : spend.allDayUnpublished
+            ? "published nothing"
+            : spend.dayUnpublished > 0
+              ? `${money(spend.dayUnpublished)} published nothing`
+              : `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`,
       // An incomplete total presented as complete is the one thing a money tile
       // must never do.
-      attention: archiveErrors.length > 0,
+      attention: archiveErrors.length > 0 || (costRecorded && spend.dayUnpublished > 0),
     },
     {
       label: "Weeks recorded",
@@ -566,6 +582,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   </small>
                 </span>
                 <span>{money(weekCost)}</span>
+              </div>
+
+              {spend.dayUnpublished > 0 && (
+                <div className="cmp-stat">
+                  <span>Held, not published</span>
+                  <span className="pending">{money(spend.dayUnpublished)}</span>
+                </div>
+              )}
+
+              <div className="cmp-stat">
+                <span>
+                  This month{" "}
+                  <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
+                    {month} &middot; PUBLISHED AND HELD
+                  </small>
+                </span>
+                <span>{money(spend.monthTotal)}{ceiling > 0 ? ` of ${money(ceiling)}` : ""}</span>
               </div>
 
               <div className="cmp-stat">

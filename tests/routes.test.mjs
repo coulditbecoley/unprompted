@@ -535,3 +535,18 @@ test("every top-level page is known to the proxy, so its visits are not counted 
   const missing = pages.filter((page) => !known.some((prefix) => page === prefix || `${page}/`.startsWith(prefix)));
   assert.deepEqual(missing, []);
 });
+
+test("spend names what published nothing and counts held readings toward the month", async () => {
+  const { spendSummary } = await import("../lib/metrics.ts");
+  const priced = [
+    { date: "2026-10-28", category: "a", dollars: 10 },
+    { date: "2026-11-02", category: "a", dollars: 20 },
+    { date: "2026-11-02", category: "b", dollars: 30 },
+  ];
+  const all = spendSummary(priced, new Set(["2026-11-02/a", "2026-11-02/b"]), "2026-11-02", "2026-11");
+  assert.deepEqual(all, { dayUnpublished: 50, allDayUnpublished: true, monthTotal: 50 });
+  const some = spendSummary(priced, new Set(["2026-11-02/a"]), "2026-11-02", "2026-11");
+  assert.deepEqual(some, { dayUnpublished: 20, allDayUnpublished: false, monthTotal: 50 });
+  const none = spendSummary([], new Set(), null, "2026-11");
+  assert.deepEqual(none, { dayUnpublished: 0, allDayUnpublished: false, monthTotal: 0 });
+});
