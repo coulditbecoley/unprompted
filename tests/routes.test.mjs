@@ -195,6 +195,7 @@ test("admin server component remains readable when a published category is corru
   const data = await import("../lib/data.ts");
   const categories = await import("../lib/categories.ts");
   const providers = await import("../lib/providers.ts");
+  const schedule = await import("../lib/schedule.ts");
   const category = categories.DEFAULT_CATEGORY;
   const reading = data.loadHistory(category, true)[0];
   const heldReading = data.loadHeld().runs[0];
@@ -211,6 +212,7 @@ test("admin server component remains readable when a published category is corru
     if (id === "@/lib/data") return data;
     if (id === "@/lib/categories") return categories;
     if (id === "@/lib/providers") return providers;
+    if (id === "@/lib/schedule") return schedule;
     if (id === "@/lib/analytics") return { totals };
     // Exercise the page and its real archive readers; child widgets are outside this check.
     if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
@@ -239,13 +241,13 @@ test("admin latest-run panel and tile share the committed report, including lega
     "@/lib/analytics": { totals },
   };
   const nativeRequire = createRequire(import.meta.url);
-  const compile = file => {
+  const compile = (file, clock = Date) => {
     const source = fs.readFileSync(new URL(`../${file}.tsx`, import.meta.url), "utf8");
     const compiled = ts.transpileModule(source, { compilerOptions: {
       module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
     } }).outputText;
     const exports = {};
-    runInNewContext(compiled, { exports, process, console, require: id => {
+    runInNewContext(compiled, { exports, process, console, Date: clock, require: id => {
       if (modules[id]) return modules[id];
       if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
       return nativeRequire(id);
@@ -262,9 +264,10 @@ test("admin latest-run panel and tile share the committed report, including lega
     "ai-image-generators": { outcome: "held", dollars: 17.49, minutes: 17.1, reasons: ["Unknown name: Generative AI by Getty Images"] },
     "ai-writing-tools": { outcome: "held", dollars: 13.71, minutes: 15, reasons: ["Three names need a decision"] },
   } };
-  const render = async () => {
-    const html = renderToStaticMarkup(await page({ searchParams: Promise.resolve({ category: "ai-writing-tools" }) }));
+  const render = async (view = page) => {
+    const html = renderToStaticMarkup(await view({ searchParams: Promise.resolve({ category: "ai-writing-tools" }) }));
     return {
+      html,
       tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)[1],
       panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
     };
@@ -331,6 +334,23 @@ test("admin latest-run panel and tile share the committed report, including lega
     assert.match(panel, /Unknown|has not reported yet/);
     assert.match(panel, /valid reason/);
     assert.doesNotMatch(panel, /Invalid Date|\$12|>NaN<|>-1/);
+  });
+  await t.test("month spend survives a latest reading without usage and follows the runner's local month", async () => {
+    const reading = { category: "ai-writing-tools", engines: [], extractions: [] };
+    modules["@/lib/data"] = { ...data,
+      loadAllRuns: () => ({ runs: [{ ...reading, run_date: "2026-10-30" }, { ...reading, run_date: "2026-10-31" }], errors: [] }),
+      costOfRun: run => ({ total: run.run_date === "2026-10-30" ? 20 : 0, items: [] }),
+    };
+    class MonthBoundary extends Date {
+      constructor(...args) { super(...(args.length ? args : ["2026-11-01T01:00:00Z"])); }
+    }
+    try {
+      const { html } = await render(compile("app/admin/page", MonthBoundary).default);
+      assert.match(html, /This month/);
+      assert.match(html, /2026-10/);
+      assert.match(html, /\$20\.00 of \$350/);
+      assert.match(html, /local checkpoint spend is not included/);
+    } finally { modules["@/lib/data"] = data; }
   });
 });
 

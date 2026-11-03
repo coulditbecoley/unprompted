@@ -28,6 +28,7 @@ import { totals } from "@/lib/analytics";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
+import { RUN_ZONE } from "@/lib/schedule";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -151,7 +152,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // Same counting as the pre-flight's budget check, from committed files. It
   // cannot see spend sitting in the run machine's local checkpoints.
   const ceiling = rates.monthly_ceiling ?? 0;
-  const month = new Date().toISOString().slice(0, 7);
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: RUN_ZONE, year: "numeric", month: "2-digit" }).format(new Date());
   const spend = spendSummary(
     priced.map((p) => ({ date: p.run.run_date, category: p.run.category, dollars: p.cost.total })),
     new Set(held.runs.filter((h) => !h.recoveredOn).map((h) => `${h.date}/${h.category}`)),
@@ -592,16 +593,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               )}
 
               <div className="cmp-stat">
-                <span>
-                  This month{" "}
-                  <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                    {month} &middot; PUBLISHED AND HELD
-                  </small>
-                </span>
-                <span>{money(spend.monthTotal)}{ceiling > 0 ? ` of ${money(ceiling)}` : ""}</span>
-              </div>
-
-              <div className="cmp-stat">
                 <span style={{ color: "var(--fg-2)" }}>
                   Every recorded run{" "}
                   <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
@@ -611,15 +602,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span style={{ color: "var(--fg-3)" }}>{money(archiveCost)}</span>
               </div>
 
-              {archiveErrors.length > 0 && (
-                <p style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 12 }}>
-                  {archiveErrors.length} archived file
-                  {archiveErrors.length === 1 ? "" : "s"} could not be read, so
-                  these totals are low by an unknown amount:{" "}
-                  <span className="mono">{archiveErrors.join("; ")}</span>
-                </p>
-              )}
-
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
                 Priced from usage the providers reported, each run at the rates
                 in force on its date (current list verified {rates.verified}),
@@ -628,6 +610,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 against a real bill monthly.
               </p>
             </>
+          )}
+          <div className="cmp-stat">
+            <span>This month <small className="mono">{month} &middot; PUBLISHED AND HELD</small></span>
+            <span>{money(spend.monthTotal)}{ceiling > 0 ? ` of ${money(ceiling)}` : ""}</span>
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+            Recorded archive spend only; local checkpoint spend is not included.
+          </p>
+          {archiveErrors.length > 0 && (
+            <p style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 12 }}>
+              {archiveErrors.length} archived file{archiveErrors.length === 1 ? "" : "s"} could not be read,
+              so these totals are low by an unknown amount: <span className="mono">{archiveErrors.join("; ")}</span>
+            </p>
           )}
         </div>
 
