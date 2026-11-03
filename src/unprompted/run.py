@@ -30,7 +30,7 @@ from .checks import run_checks
 from .budget import check as check_budget
 from .cost import cost_of_run, format_report
 from .engines import all_engines
-from .cli_provider import ApiExtractor, ProviderError, resolve_extractor
+from .cli_provider import ApiExtractor, ProviderError, readiness_limit_seconds, resolve_extractor
 from .extract import EXTRACT_PROMPT, extract_run
 from .engines.base import SYSTEM_PROMPT, refuse_new_paid_work, run_time_left
 from .models import EngineAnswer, RunRecord
@@ -689,7 +689,7 @@ def main() -> int:
     # pull, or readiness's computed probe budget plus wrapper cleanup, already in flight.
     from .engines.base import booked_to
     booked = None if args.ignore_budget else args.date[:7]
-    with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=__import__("unprompted.cli_provider", fromlist=["readiness_limit_seconds"]).readiness_limit_seconds() + 5 * 60):
+    with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=readiness_limit_seconds() + 5 * 60):
         return _measure(args, categories)
 
 

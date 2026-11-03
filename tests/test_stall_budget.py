@@ -131,5 +131,6 @@ def test_readiness_budget_covers_probes_cleanup_and_lock_wait(monkeypatch):
     waits = [k.value for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Name) and n.func.id == "run_lock" for k in n.keywords if k.arg == "wait"]
     assert len(waits) == 1
-    wait = eval(compile(ast.Expression(waits[0]), "lock wait", "eval"))
+    wait = eval(compile(ast.Expression(waits[0]), "lock wait", "eval"),
+                {"readiness_limit_seconds": cli.readiness_limit_seconds})
     assert wait > expected + readiness.WRAPPER_GRACE_SECONDS
