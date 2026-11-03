@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.error
 from types import SimpleNamespace
 from datetime import date
 from pathlib import Path
@@ -371,6 +372,26 @@ class _FlakyEngine(Engine):
             ["https://example.com"],
             {"input_tokens": 120, "output_tokens": 40, "web_searches": 1},
         )
+
+
+def test_a_refused_account_is_found_before_spend_and_a_blip_is_not():
+    from unprompted import run as run_module
+
+    class Refused(_FlakyEngine):
+        def _one_call(self, question):
+            self.calls += 1
+            raise urllib.error.HTTPError("https://x", 401, "Unauthorized", {}, None)
+
+    class Identifies(Refused):
+        def identify(self):
+            return {"model": "m", "version": "v"}
+
+    refused, blip, fine = Refused(), _FlakyEngine(fail_always=True), _FlakyEngine()
+    assert "401" in refused.account_problem()
+    assert blip.account_problem() is None and fine.account_problem() is None
+    assert (refused.calls, blip.calls, fine.calls) == (1, 1, 1)  # one tiny call each, never retried
+    problems = run_module.account_problems({"perplexity": refused, "ok": fine, "gemini": Identifies()})
+    assert problems == ["perplexity: HTTPError: HTTP Error 401: Unauthorized"]  # identify() engines are probed there
 
 
 def test_engine_returns_one_answer_per_run():
@@ -1097,6 +1118,20 @@ def test_an_unchanged_engine_list_is_not_flagged():
     run["method_version"] = 1
 
     assert run_checks(run, brand_week(run), [], previous=previous).passed
+
+
+def test_a_reread_with_a_new_extractor_and_the_old_version_holds():
+    """reextract.py skips run.unversioned_change, so rule 0 is its only guard."""
+    previous = {"engines": ["chatgpt", "claude"], "method_version": 1,
+                "methodology": {"extraction_prompt": "old", "extractor": {"id": "a"}}}
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"]) for e in previous["engines"] for i in range(50)])
+    run.update(engines=["chatgpt", "claude"], method_version=1,
+               methodology={"extraction_prompt": "new", "extractor": {"id": "a"}, "system_prompt": "s"})
+    result = run_checks(run, brand_week(run), [], previous=previous)
+    assert any("method changed" in r and "extraction_prompt" in r for r in result.reasons)
+    assert not any("system_prompt" in r for r in result.reasons)  # not recorded before: not comparable
+    run["method_version"] = 2
+    assert not any("method changed" in r for r in run_checks(run, brand_week(run), [], previous=previous).reasons)
 
 
 # --- version and possessive folding -----------------------------------------
@@ -2370,26 +2405,35 @@ def test_a_harness_call_crosses_only_argv_stdin_and_an_empty_jail(monkeypatch):
     assert "sk-should-not-leak" not in str(seen["env"])
 
 
-def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch):
+@pytest.mark.parametrize("shim", [False, pytest.param(True, marks=pytest.mark.skipif(os.name != "nt", reason="Windows CMD shim"))])
+def test_a_timeout_ends_the_real_harness_not_just_its_shim(tmp_path, monkeypatch, shim):
     # On Windows the child is a .CMD shim, and the harness under it holds the pipes.
     import sys, time
     from unprompted import cli_provider
     marker = tmp_path / "survivor"
     child = f"import time; time.sleep(4); open({str(marker)!r}, 'w').write('x')"
-    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(30)"
-    provider = cli_provider.CliProvider("slow", "Slow", "claude", ("-c", parent))
-    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: sys.executable)
+    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); print('CANARY-offline-token', flush=True); time.sleep(30)"
+    executable, args = sys.executable, ("-c", parent)
+    if shim:
+        script = tmp_path / "parent.py"
+        script.write_text(parent, encoding="utf-8")
+        wrapper = tmp_path / "harness.cmd"
+        wrapper.write_text(f'@"{sys.executable}" "{script}"\n', encoding="utf-8")
+        executable, args = str(wrapper), ()
+    provider = cli_provider.CliProvider("slow", "Slow", "claude", args)
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: executable)
     monkeypatch.setattr(cli_provider, "TIMEOUT_SECONDS", 1)
     started = time.monotonic()
-    with pytest.raises(cli_provider.CliTimeout):
+    with pytest.raises(cli_provider.CliTimeout) as caught:
         provider._exec("", str(tmp_path))
     assert time.monotonic() - started < 15
+    assert "CANARY-offline-token" in caught.value.stdout
     time.sleep(5)
     assert not marker.exists()
 
 
-def test_a_probe_outlasts_a_stall_but_never_retries_a_real_failure(monkeypatch):
-    # 2026-11-02: a 23-minute machine stall timed out the probes and lost the week.
+def test_probe_retries_only_timeouts_and_stops_after_three_attempts(monkeypatch):
+    # This checks retry control flow, not survival of a real machine stall.
     from unprompted import cli_provider
     claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
     slept, calls = [], []
@@ -2423,6 +2467,172 @@ def test_a_probe_outlasts_a_stall_but_never_retries_a_real_failure(monkeypatch):
     with pytest.raises(cli_provider.ProviderError, match="not a timeout"):
         claude.qualify()
     assert len(calls) == 1
+
+
+def test_canary_failure_on_a_timed_out_attempt_cannot_be_retried(monkeypatch):
+    from unprompted import cli_provider
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    calls = []
+    monkeypatch.setattr(cli_provider.secrets, "token_hex", lambda n: "offline-canary-token")
+    monkeypatch.setattr(cli_provider.time, "sleep", lambda seconds: None)
+
+    def leaks_then_refuses(self, *args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise cli_provider.CliTimeout("timed out", stdout="CANARY-offline-canary-token")
+        return SimpleNamespace(returncode=0, stdout="FAILED", stderr="")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", leaks_then_refuses)
+    with pytest.raises(cli_provider.ProviderError, match="isolation no longer holds"):
+        claude.qualify()
+    assert len(calls) == 1
+
+
+def test_timeout_keeps_partial_output_for_the_isolation_check(monkeypatch, tmp_path):
+    import subprocess
+    from unprompted import cli_provider
+
+    class FakePopen:
+        pid = 123
+
+        def communicate(self, *args, **kwargs):
+            if args:
+                raise subprocess.TimeoutExpired("offline", 1, output=b"CANARY-token")
+            return "CANARY-token", ""
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", lambda *a, **kw: FakePopen())
+    monkeypatch.setattr(cli_provider, "_end_tree", lambda pid: None)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(cli_provider.CliTimeout) as caught:
+        claude._exec("probe", str(tmp_path))
+    assert caught.value.stdout == "CANARY-token"
+
+
+@pytest.mark.parametrize("failure", ["kill", "drain"])
+def test_a_probe_never_retries_when_timeout_cleanup_is_unconfirmed(monkeypatch, tmp_path, failure):
+    import subprocess
+    from unprompted import cli_provider
+    started = []
+
+    class FakePopen:
+        pid = 123
+
+        def __init__(self, *args, **kwargs):
+            started.append(self)
+
+        def communicate(self, *args, **kwargs):
+            if args or failure == "drain":
+                raise subprocess.TimeoutExpired("offline", 1)
+            return "", ""
+
+        def kill(self):
+            pass
+
+        def wait(self, timeout):
+            return 0
+
+    def end_tree(pid):
+        if failure == "kill":
+            raise subprocess.CalledProcessError(1, "taskkill")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(cli_provider, "_end_tree", end_tree)
+    monkeypatch.setattr(cli_provider.time, "sleep", lambda seconds: None)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(cli_provider.ProviderError, match="cleanup") as caught:
+        claude._probe("probe", str(tmp_path))
+    assert not isinstance(caught.value, cli_provider.CliTimeout)
+    assert len(started) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
+def test_tree_cleanup_is_bounded_and_checks_taskkill_failure(monkeypatch):
+    import subprocess
+    from unprompted import cli_provider
+    seen = {}
+
+    def taskkill(argv, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr(cli_provider.subprocess, "run", taskkill)
+    with pytest.raises(subprocess.CalledProcessError):
+        cli_provider._end_tree(123)
+    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and seen["check"] is True
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
+def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, capsys):
+    import subprocess
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from scripts import timed
+    waits = []
+
+    class FakePopen:
+        pid = 123
+
+        def wait(self, timeout):
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired("offline", timeout)
+
+        def kill(self):
+            pass
+
+    def taskkill(argv, **kwargs):
+        assert kwargs["timeout"] == 60 and kwargs["check"] is True
+        raise subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **kw: FakePopen())
+    monkeypatch.setattr(timed.subprocess, "run", taskkill)
+    assert timed.run(1, ["offline"]) == 125
+    assert waits == [1, 5]
+    assert "cleanup failed" in capsys.readouterr().err
+
+
+def test_cli_call_respects_the_remaining_weekly_clock(monkeypatch, tmp_path):
+    from unprompted import cli_provider
+    from unprompted.engines import base
+    started, limits = [], []
+
+    class FakePopen:
+        returncode = 0
+
+        def __init__(self, *args, **kwargs):
+            started.append(args)
+
+        def communicate(self, prompt, timeout):
+            limits.append(timeout)
+            return "OK", ""
+
+    monkeypatch.setattr(cli_provider.CliProvider, "resolve", lambda self: "offline")
+    monkeypatch.setattr(cli_provider.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(base, "run_time_left", lambda: 7)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    assert claude._exec("probe", str(tmp_path)).stdout == "OK"
+    assert limits == [7]
+    monkeypatch.setattr(base, "run_time_left", lambda: 0)
+    with pytest.raises(TimeoutError, match="budget is spent"):
+        claude._exec("probe", str(tmp_path))
+    assert len(started) == 1
+
+
+def test_probe_does_not_sleep_past_the_weekly_deadline(monkeypatch, tmp_path):
+    from unprompted import cli_provider
+    from unprompted.engines import base
+    slept = []
+    monkeypatch.setattr(base, "run_time_left", lambda: 10)
+    monkeypatch.setattr(cli_provider.time, "sleep", slept.append)
+
+    def timeout(self, *args):
+        raise cli_provider.CliTimeout("timed out")
+
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", timeout)
+    claude = cli_provider.CliProvider("claude-code", "Claude Code", "claude", ALLOWED_CLIS["claude"])
+    with pytest.raises(TimeoutError, match="time left"):
+        claude._probe("probe", str(tmp_path))
+    assert slept == []
 
 
 def test_a_rate_limit_waits_longer_than_a_reset_connection(monkeypatch):
@@ -2591,3 +2801,18 @@ def test_readiness_keeps_the_runs_warnings(monkeypatch, capsys):
     assert "probe searched 1 time" in capsys.readouterr().out
     body = next(c for c in calls if c[:3] == ["gh", "issue", "create"])[-1]
     assert "Also noted" in body and "probe searched 1 time" in body
+
+
+@pytest.mark.parametrize("code, payload", [
+    (124, {"issues": []}), (125, {"issues": []}), (1, {"issues": []}),
+    (0, []), (0, None), (0, {}), (0, {"issues": "broken"}),
+    (0, {"issues": [42]}), (2, {"issues": []}),
+])
+def test_readiness_rejects_incomplete_or_failed_check_output(monkeypatch, code, payload):
+    reply = SimpleNamespace(returncode=code, stdout=json.dumps(payload), stderr="offline failure")
+    rd, calls = _readiness(monkeypatch, lambda a: reply if "--qualify" in a else
+                           SimpleNamespace(returncode=0, stdout="[]", stderr=""))
+    result, failure = rd.qualify("2026-11-02")
+    assert result is None and failure
+    assert rd.main() == 1
+    assert any(c[:3] == ["gh", "issue", "create"] for c in calls)

@@ -67,10 +67,18 @@ canonical:
     - microsoft copilot
     - copilot
     - bing chat
+    # Owner decision 2026-11-03: Microsoft 365's assistant is the same Copilot.
+    - microsoft 365 copilot
+    - copilot for microsoft 365
+    - m365 copilot
+    - copilot for outlook
   NovelCrafter: []
   Mintlify: []
   NovelAI: []
   Document360: []
+  # Owner decisions 2026-11-03: both are products a writer chooses.
+  GitBook: []
+  DeepL Write: []
   Lavender: []
   Paperpal: []
   LanguageTool: []

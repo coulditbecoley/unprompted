@@ -92,8 +92,15 @@ def run_checks(
     snapshot = run.get("methodology", {})
     if previous and previous.get("method_version") == run.get("method_version"):
         before_method = previous.get("methodology", {})
-        if before_method and snapshot and any(before_method.get(k) != snapshot.get(k) for k in ("questions", "engines")):
-            reasons.append("questions or engine configuration changed without a method_version bump")
+        # The same fields run.unversioned_change refuses on. A live run never
+        # gets here with a change, but a re-read (reextract.py) skips that
+        # guard and writes today's extractor under the source's version, so
+        # this rule is the only thing between it and an unversioned publish.
+        # Fields an older reading did not record cannot be compared.
+        changed = [k for k in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor")
+                   if k in before_method and k in snapshot and before_method[k] != snapshot[k]]
+        if changed:
+            reasons.append(f"method changed without a method_version bump: {', '.join(changed)}")
     if previous:
         before = sorted(previous.get("engines", []))
         now = sorted(run.get("engines", []))

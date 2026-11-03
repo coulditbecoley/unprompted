@@ -25,7 +25,8 @@ where the API keys are, or it reports them missing), `--collect-only`
 reading stored them, which readings from November 2026 do; older held weeks
 need the paid re-read), `unprompted.report`,
 `scripts/watchdog.py`, the tests. Small real calls: `run --preflight --qualify`
-and `scripts/readiness.py` (subscription calls and a tiny Gemini probe). Paid:
+and `scripts/readiness.py` (subscription calls, a tiny Gemini probe and one tiny
+account check per other paid engine). Paid:
 `python -m unprompted.run` *including* `--dry-run` (it still asks every
 engine), `unprompted.reextract` without `--renormalize` (about $2 a category),
 `unprompted.jev_reader`, `scripts/compare_jev.py --read` and `compare_jev.py
@@ -35,8 +36,11 @@ paid command to fill a gap; report the gap.
 **Before a Monday.** `python -m unprompted.run --preflight --qualify` runs what
 the weekly run checks first: each local engine's isolation canary, the model
 every engine reports, and the run's full method-change comparison (real
-calls: two per local harness on the subscription, and Gemini's model probe,
-up to three tiny attempts; nothing is measured). `scripts/readiness.py` runs it
+calls: two per local harness on the subscription, Gemini's model probe,
+up to three tiny attempts, and one tiny call each to ChatGPT, Claude and
+Perplexity to prove the provider accepts the account, pennies; nothing is
+measured). The weekly run makes the same account check before each category
+and refuses that category, unpaid, when a key is rejected or out of credit. `scripts/readiness.py` runs it
 for the coming Monday every Sunday at 18:00 and opens a GitHub issue if it
 finds anything (registered by `scripts/install-weekly-task.ps1`).
 

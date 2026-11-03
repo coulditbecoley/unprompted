@@ -20,11 +20,28 @@ def run(seconds: float, command: list[str]) -> int:
     try:
         return process.wait(timeout=seconds)
     except subprocess.TimeoutExpired:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
-        else:
-            os.killpg(process.pid, signal.SIGKILL)
-        process.wait()
+        try:
+            if os.name == "nt":
+                try:
+                    subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True,
+                                   timeout=60, check=True)
+                except subprocess.CalledProcessError as exc:
+                    if exc.returncode != 128:  # Already exited; still confirm below.
+                        raise
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait(timeout=120)
+        except (OSError, subprocess.SubprocessError) as exc:
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            print(f"timeout cleanup failed: {exc}", file=sys.stderr)
+            return 125
         print(f"timed out after {seconds}s: {' '.join(command)}", file=sys.stderr)
         return 124
 

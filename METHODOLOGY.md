@@ -268,7 +268,9 @@ clearly separate series begins.
 Where the prior published reading includes frozen methodology, the runner refuses
 changes to the recorded question specification, engine configuration, system
 prompt, extraction prompt, or extractor without a version bump before paid calls.
-Publication checks also enforce roster versioning and the expected call
+Since November 3, 2026 the publication checks compare the same five fields, so a
+re-read of stored answers (which never reaches that pre-call refusal) is held if
+it would publish a changed extractor or prompt under the old version. Publication checks also enforce roster versioning and the expected call
 population when a frozen question manifest exists. Legacy
 records without snapshots cannot prove that historical wording was unchanged.
 Movement indicators and history-chart connections are suppressed between
