@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.error
 from types import SimpleNamespace
 from datetime import date
 from pathlib import Path
@@ -371,6 +372,26 @@ class _FlakyEngine(Engine):
             ["https://example.com"],
             {"input_tokens": 120, "output_tokens": 40, "web_searches": 1},
         )
+
+
+def test_a_refused_account_is_found_before_spend_and_a_blip_is_not():
+    from unprompted import run as run_module
+
+    class Refused(_FlakyEngine):
+        def _one_call(self, question):
+            self.calls += 1
+            raise urllib.error.HTTPError("https://x", 401, "Unauthorized", {}, None)
+
+    class Identifies(Refused):
+        def identify(self):
+            return {"model": "m", "version": "v"}
+
+    refused, blip, fine = Refused(), _FlakyEngine(fail_always=True), _FlakyEngine()
+    assert "401" in refused.account_problem()
+    assert blip.account_problem() is None and fine.account_problem() is None
+    assert (refused.calls, blip.calls, fine.calls) == (1, 1, 1)  # one tiny call each, never retried
+    problems = run_module.account_problems({"perplexity": refused, "ok": fine, "gemini": Identifies()})
+    assert problems == ["perplexity: HTTPError: HTTP Error 401: Unauthorized"]  # identify() engines are probed there
 
 
 def test_engine_returns_one_answer_per_run():
@@ -1097,6 +1118,20 @@ def test_an_unchanged_engine_list_is_not_flagged():
     run["method_version"] = 1
 
     assert run_checks(run, brand_week(run), [], previous=previous).passed
+
+
+def test_a_reread_with_a_new_extractor_and_the_old_version_holds():
+    """reextract.py skips run.unversioned_change, so rule 0 is its only guard."""
+    previous = {"engines": ["chatgpt", "claude"], "method_version": 1,
+                "methodology": {"extraction_prompt": "old", "extractor": {"id": "a"}}}
+    run = _run([ex(engine=e, run=i, brands=["PSA", "CGC"]) for e in previous["engines"] for i in range(50)])
+    run.update(engines=["chatgpt", "claude"], method_version=1,
+               methodology={"extraction_prompt": "new", "extractor": {"id": "a"}, "system_prompt": "s"})
+    result = run_checks(run, brand_week(run), [], previous=previous)
+    assert any("method changed" in r and "extraction_prompt" in r for r in result.reasons)
+    assert not any("system_prompt" in r for r in result.reasons)  # not recorded before: not comparable
+    run["method_version"] = 2
+    assert not any("method changed" in r for r in run_checks(run, brand_week(run), [], previous=previous).reasons)
 
 
 # --- version and possessive folding -----------------------------------------

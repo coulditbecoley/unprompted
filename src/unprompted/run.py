@@ -172,6 +172,12 @@ def _run_category(
             "disable that engine in providers.json and bump the method version."
         )
 
+    refused = account_problems(engines)
+    if refused:
+        raise SystemExit("The provider refused a declared engine's account before anything was paid for:\n"
+                         + "\n".join(f"  - {line}" for line in refused)
+                         + "\nTop up the credit or replace the key, then run again.")
+
     print(f"  engines queried: {', '.join(sorted(engines))}", file=sys.stderr)
 
     # A local harness chooses its own model and updates itself. Ask which model
@@ -518,6 +524,17 @@ def retryable_on_resume(answer: EngineAnswer, engine, extraction_state: Path) ->
             and not extraction_state.exists() and getattr(engine, "transport", None) != "messages-batch")
 
 
+def account_problems(engines: dict) -> list[str]:
+    """Paid engines whose provider refuses the account, found with one tiny call each.
+
+    Engines with identify() are skipped: that probe already makes a real call
+    which an account failure stops (Gemini's model probe, the local harnesses).
+    """
+    return [f"{name}: {why}" for name, engine in sorted(engines.items())
+            if not hasattr(engine, "identify") and hasattr(engine, "account_problem")
+            and (why := engine.account_problem())]
+
+
 def qualify(categories: list[str]) -> tuple[dict, list[str]]:
     """What the weekly run's own first steps would say, without measuring anything.
 
@@ -538,6 +555,7 @@ def qualify(categories: list[str]) -> tuple[dict, list[str]]:
                 identified[name] = engine.identify()
             except (ProviderError, TimeoutError, OSError, subprocess.SubprocessError) as exc:
                 issues.append(f"{name}: {exc}")
+    issues += [f"account refused: {line}" for line in account_problems(engines)]
     for category in categories:
         try:
             spec = load_questions(category)
@@ -617,7 +635,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="still makes PAID provider calls and keeps their checkpoints in .unprompted/; only the final run record is not written")
     parser.add_argument("--collect-only", action="store_true", help="download every submitted, uncollected batch (no new paid work), then stop")
     parser.add_argument("--preflight", action="store_true", help="print configuration and combined budget checks without provider calls or measurement writes")
-    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers (real calls: two per local harness on the subscription and Gemini's model probe, up to three tiny attempts; no measurement)")
+    parser.add_argument("--qualify", action="store_true", help="with --preflight: also run each local engine's isolation canary and ask every engine that can say which model answers, and send each other paid engine one tiny call to prove its account is accepted (real calls: two per local harness on the subscription, Gemini's model probe, up to three tiny attempts, and one call each to ChatGPT, Claude and Perplexity, pennies; no measurement)")
     parser.add_argument(
         "--ignore-budget",
         action="store_true",
@@ -661,7 +679,7 @@ def main() -> int:
             result["issues"] += found
             result["status"] = "issues_found" if result["issues"] else "checks_passed"
             result["scope"] = ("Preflight plus the weekly run's first steps: real calls to each local harness "
-                               "(isolation canary, model) and Gemini's model probe, and the full method-change "
+                               "(isolation canary, model), Gemini's model probe, one tiny account check per other paid engine, and the full method-change "
                                "comparison. No measurement, extraction, Git or publication is tested.")
         print(json.dumps(result, indent=2))
         return 2 if result["issues"] else 0

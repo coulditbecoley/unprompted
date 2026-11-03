@@ -187,6 +187,8 @@ exclude:
   # real answer to the shopper's question and still not a generator.
   - getty images
   - getty images generative ai
+  # Owner decision 2026-11-03: the product's own name, same stock-library rule.
+  - generative ai by getty images
   - shutterstock
   - shutterstock ai
   - envato

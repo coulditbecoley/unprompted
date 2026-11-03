@@ -102,6 +102,13 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def is_account_failure(error: str) -> bool:
+    """A refusal about the account (key, credit, quota) rather than the call."""
+    return any(word in error.lower() for word in (
+        "quota", "billing", "credit balance", "usage limit", "spending limit", "authentication",
+        "unauthorized", "invalid api key", "invalid_api_key", "payment required"))
+
+
 def read_key(*names: str) -> str | None:
     """First non-empty environment variable among `names`."""
     for name in names:
@@ -192,6 +199,23 @@ class Engine:
         """Return (answer_text, source_urls, usage). May raise; caller handles it."""
         raise NotImplementedError
 
+    def account_problem(self) -> str | None:
+        """One tiny real call: why the provider refuses this account, or None.
+
+        A key that is present but rejected, or an account out of credit, only
+        showed up mid-run: on 2026-11-02 Perplexity returned 401 on all 225
+        calls while every other engine was paid for, and the whole week was
+        held. Pennies here stop the category before that spend. Only account
+        failures count; a transient error is left to the run's own retries.
+        """
+        try:
+            self._one_call("Reply with the single word OK.")
+        except Exception as exc:  # noqa: BLE001 - classified, not raised
+            error = f"{type(exc).__name__}: {exc}"
+            # A 403 before any spend is the account's access; mid-run it may be one call's.
+            return error if is_account_failure(error) or "forbidden" in error.lower() else None
+        return None
+
     def ask_one(self, question_id: str, question: str, run_index: int) -> EngineAnswer:
         """One call, with retries. Never raises.
 
@@ -222,7 +246,7 @@ class Engine:
                 break
             except Exception as exc:  # noqa: BLE001 - recorded, not raised
                 error = f"{type(exc).__name__}: {exc}"
-                if any(word in error.lower() for word in ("quota", "billing", "credit balance", "usage limit", "spending limit", "authentication", "unauthorized", "invalid api key", "invalid_api_key")):
+                if is_account_failure(error):
                     # In-flight calls may finish; queued calls on this instance stop.
                     self._blocked_error = f"not attempted after provider failure: {error}"
                 if not self.is_retryable(exc):
