@@ -21,7 +21,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
-from unprompted.storage import record_status, run_lock  # noqa: E402 - stdlib-only module
+from unprompted.storage import LockBusy, record_status, run_lock  # noqa: E402 - stdlib-only module
 from timed import run as timed_run  # noqa: E402
 
 STATUS = REPO / ".unprompted" / "status"
@@ -53,9 +53,12 @@ def pull() -> str:
     try:
         lock = run_lock(REPO / ".unprompted", "week.lock")
         lock.__enter__()
-    except OSError:
+    except LockBusy:
         print("a weekly run is in progress; not pulling, syncing whatever is already local", file=sys.stderr)
         return "skipped"  # the run is the one updating this checkout
+    except OSError as exc:
+        print(f"could not take week.lock: {exc}", file=sys.stderr)
+        return "failed"  # the lock file itself is unusable: not a busy week
     try:
         # Bounded, whole tree ended at the limit: an unbounded pull here once
         # could hold week.lock past Monday's start (2026-11-03 audit). A git

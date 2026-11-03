@@ -7,6 +7,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+class LockBusy(OSError):
+    """Another process holds the lock (as opposed to the lock file being unusable)."""
+
+
 def write_json(path: Path, value: object, *, replace: bool = False) -> None:
     write_text(path, json.dumps(value, indent=2, sort_keys=True) + "\n", replace=replace)
 
@@ -53,9 +57,9 @@ def run_lock(root: Path, name: str = "run.lock", wait: float = 0.0):
                     import fcntl
                     fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except OSError:
+            except OSError as exc:
                 if time.monotonic() >= deadline:
-                    raise
+                    raise LockBusy(*exc.args) from exc
                 time.sleep(1)
         try:
             yield
@@ -84,8 +88,11 @@ def record_status(folder: Path, name: str, ok: bool, error: str = "", **detail: 
         previous = {}
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     kept = previous.get("last_success")
-    if not (isinstance(kept, str) and len(kept) == 20 and kept <= now):
-        kept = None  # damaged or from the future: unknown, never a fake success
+    try:
+        if time.strptime(kept, "%Y-%m-%dT%H:%M:%SZ") > time.gmtime():
+            kept = None  # from the future: unknown, never a fake success
+    except (TypeError, ValueError):
+        kept = None  # missing or damaged
     reserved = {"name", "last_attempt", "ok", "error", "last_success"}
     status = {**{k: v for k, v in detail.items() if k not in reserved},
               "name": name, "last_attempt": now, "ok": ok, "error": error[-500:],

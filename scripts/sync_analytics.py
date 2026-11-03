@@ -99,10 +99,28 @@ def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
-            flat = json.loads(response.read()).get("result") or []
+            body = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise Unreachable(f"{day}: {exc}") from exc
-    return {flat[i]: int(flat[i + 1]) for i in range(0, len(flat) - 1, 2)}
+    # Upstash answers HTTP 200 with {"error": ...} for a rejected command. Read as
+    # "no result" that was archived as a day nothing happened: the silent loss
+    # Unreachable exists to prevent.
+    if not isinstance(body, dict) or "error" in body:
+        raise Unreachable(f"{day}: Redis returned an error: {str(body.get('error') if isinstance(body, dict) else body)[:200]}")
+    flat = body.get("result")
+    if flat is None:
+        return {}  # expired, or never written
+    if not isinstance(flat, list) or len(flat) % 2:
+        raise Unreachable(f"{day}: unexpected reply shape from Redis")
+    counters = {}
+    for field, value in zip(flat[::2], flat[1::2]):
+        try:
+            counters[str(field)] = int(value)
+        except (TypeError, ValueError):
+            raise Unreachable(f"{day}: non-numeric counter {str(field)[:60]!r}") from None
+        if counters[str(field)] < 0:
+            raise Unreachable(f"{day}: negative counter {str(field)[:60]!r}")
+    return counters
 
 
 def split(counters: dict[str, int], kind: str) -> dict[str, int]:

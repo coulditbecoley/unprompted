@@ -2851,3 +2851,40 @@ def test_readiness_rejects_incomplete_or_failed_check_output(monkeypatch, code, 
     assert result is None and failure
     assert rd.main() == 1
     assert any(c[:3] == ["gh", "issue", "create"] for c in calls)
+
+
+@pytest.mark.parametrize("reply, expected", [
+    ({"result": ["v", "3", "g:Bot", "1"]}, {"v": 3, "g:Bot": 1}),
+    ({"result": None}, {}),                       # expired or never written
+    ({"error": "WRONGPASS invalid token"}, None),  # HTTP 200 error envelope: never an empty day
+    ({"result": ["v"]}, None),                     # odd field count
+    ({"result": ["v", "many"]}, None),
+    ({"result": ["v", "-2"]}, None),
+    (["not", "an", "object"], None),
+])
+def test_a_redis_error_reply_is_never_archived_as_an_empty_day(monkeypatch, reply, expected):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import io
+    import scripts.sync_analytics as sa  # noqa: PLC0415
+    class Reply(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(sa.urllib.request, "urlopen", lambda *a, **k: Reply(json.dumps(reply).encode()))
+    if expected is None:
+        with pytest.raises(sa.Unreachable):
+            sa.fetch_day("https://kv.invalid", "t", "2026-11-03")
+    else:
+        assert sa.fetch_day("https://kv.invalid", "t", "2026-11-03") == expected
+
+
+def test_only_a_held_lock_counts_as_busy(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import scripts.sync_vault as sv  # noqa: PLC0415
+    from unprompted.storage import LockBusy, run_lock
+    with run_lock(tmp_path, "week.lock"):
+        with pytest.raises(LockBusy):
+            with run_lock(tmp_path, "week.lock"):
+                pass
+    monkeypatch.setattr(sv, "REPO", tmp_path)
+    (tmp_path / ".unprompted").write_text("a file where the folder should be")  # lock cannot even be opened
+    assert sv.pull() == "failed"
