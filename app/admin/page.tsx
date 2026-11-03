@@ -164,9 +164,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   const lastRun = (() => {
     try {
-      return JSON.parse(
+      const raw = JSON.parse(
         fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
-      ) as { status: string; at: string };
+      );
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+      // The report date is not the timestamp or the latest published reading.
+      const runDate = typeof raw.run_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.run_date)
+        && Number.isFinite(Date.parse(raw.run_date))
+        && new Date(raw.run_date).toISOString().slice(0, 10) === raw.run_date ? raw.run_date : null;
+      return {
+        status: typeof raw.status === "string" ? raw.status : "unknown",
+        runDate,
+        at: typeof raw.at === "string" && Number.isFinite(Date.parse(raw.at)) ? raw.at : null,
+        detail: typeof raw.detail === "string" ? raw.detail : "",
+        categories: raw.categories && typeof raw.categories === "object" && !Array.isArray(raw.categories)
+          ? raw.categories as Record<string, unknown> : {},
+      };
     } catch {
       return null;
     }
@@ -205,9 +218,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             ? "held"
             : lastRun?.status === "failed"
               ? "failed"
-              : "none yet",
-      note: selectedArchive.error ? "archive unavailable" : run ? run.run_date : "no data",
-      attention: lastRun?.status === "failed" || lastRun?.status === "held",
+              : lastRun ? "unknown" : "unavailable",
+      note: lastRun?.runDate ?? "run date not recorded",
+      attention: !lastRun || !["published", "measured"].includes(lastRun.status),
     },
     nextRunTile(),
     {
@@ -277,7 +290,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <section className="shell section">
-      <RunStatus />
       <AdminMasthead tiles={tiles} />
 
       {/*
@@ -293,6 +305,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       */}
       <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
       <h1 className="sr-only">Admin dashboard</h1>
+      <RunStatus last={lastRun} />
       <h2 className="zone">Operations</h2>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
@@ -302,7 +315,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="cmp-stat"><span>Method version</span><span>v{spec.method_version}</span></div>
           <div className="cmp-stat"><span>Runs per question</span><span>{spec.runs_per_question}</span></div>
           <div className="cmp-stat"><span>Weeks recorded</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
-          <div className="cmp-stat"><span>Latest run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
+          <div className="cmp-stat"><span>Latest published run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
           <div className="cmp-stat"><span>Brands charted</span><span>{selectedArchive.error ? "unavailable" : board.length}</span></div>
           {selectedArchive.error && <p>Published readings are unavailable. Review the archive errors below.</p>}
         </div>

@@ -226,6 +226,114 @@ test("admin server component remains readable when a published category is corru
   assert.match(html, /PUBLISHED/); // healthy categories remain visible
 });
 
+test("admin latest-run panel and tile share the committed report, including legacy and damaged status", async (t) => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const data = await import("../lib/data.ts");
+  const modules = {
+    "@/lib/data": data,
+    "@/lib/categories": await import("../lib/categories.ts"),
+    "@/lib/providers": await import("../lib/providers.ts"),
+    "@/lib/schedule": await import("../lib/schedule.ts"),
+    "@/lib/analytics": { totals },
+  };
+  const nativeRequire = createRequire(import.meta.url);
+  const compile = file => {
+    const source = fs.readFileSync(new URL(`../${file}.tsx`, import.meta.url), "utf8");
+    const compiled = ts.transpileModule(source, { compilerOptions: {
+      module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+    } }).outputText;
+    const exports = {};
+    runInNewContext(compiled, { exports, process, console, require: id => {
+      if (modules[id]) return modules[id];
+      if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
+      return nativeRequire(id);
+    } });
+    return exports;
+  };
+  modules["@/components/run-status"] = compile("components/run-status");
+  modules["@/components/admin-masthead"] = compile("components/admin-masthead");
+  const page = compile("app/admin/page").default;
+  const statusPath = path.join(data.REPO_ROOT, "data/last-run.json");
+  const originalRead = fs.readFileSync;
+  const current = { status: "held", run_date: "2026-11-02", at: "2026-11-03T01:19:44+00:00", categories: {
+    "ai-coding-assistants": { outcome: "held", dollars: 18.46, minutes: 17.4, reasons: ["perplexity failed 75 of its own 75 calls"] },
+    "ai-image-generators": { outcome: "held", dollars: 17.49, minutes: 17.1, reasons: ["Unknown name: Generative AI by Getty Images"] },
+    "ai-writing-tools": { outcome: "held", dollars: 13.71, minutes: 15, reasons: ["Three names need a decision"] },
+  } };
+  const render = async () => {
+    const html = renderToStaticMarkup(await page({ searchParams: Promise.resolve({ category: "ai-writing-tools" }) }));
+    return {
+      tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)[1],
+      panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
+    };
+  };
+  const status = (t, value) => t.mock.method(fs, "readFileSync", (p, ...args) => {
+    if (p !== statusPath) return originalRead(p, ...args);
+    if (value instanceof Error) throw value;
+    return typeof value === "string" ? value : JSON.stringify(value);
+  });
+
+  await t.test("current held report uses its run date, not its timestamp or published archive", async t => {
+    status(t, current);
+    const { tile, panel } = await render();
+    assert.match(tile, /held/);
+    assert.ok(tile.includes(current.run_date));
+    assert.doesNotMatch(tile, /2026-10-28/);
+    assert.ok(panel.includes(`<strong>${current.run_date}</strong>`));
+    assert.ok(panel.toLowerCase().includes(`datetime="${current.at.toLowerCase()}"`));
+    for (const row of Object.values(current.categories)) {
+      assert.ok(panel.includes(`$${row.dollars.toFixed(2)}`));
+      assert.ok(panel.includes(row.minutes.toFixed(1)));
+    }
+    assert.match(panel, /perplexity failed 75/);
+    assert.match(panel, /Generative AI by Getty Images/);
+    assert.match(panel, /deployment and later local attempts are not verified/);
+  });
+  await t.test("mixed outcomes retain zero amounts and never invent missing costs", async t => {
+    status(t, { status: "held", run_date: "2026-11-02", at: "2026-11-03T01:19:44Z", categories: {
+      "ai-coding-assistants": { outcome: "passed", dollars: 0, minutes: 0, reasons: [] },
+      "ai-image-generators": { outcome: "failed", minutes: 6, reasons: ["timed out", "<script>bad</script>"] },
+      "ai-writing-tools": { outcome: "not_started", reasons: ["run budget spent"] },
+      other: { outcome: "not_run" },
+    } });
+    const { panel } = await render();
+    for (const word of ["Passed", "Failed", "Not started", "Not run", "$0.00", "0.0", "not recorded", "timed out", "run budget spent"]) assert.ok(panel.includes(word), word);
+    assert.match(panel, /&lt;script&gt;bad&lt;\/script&gt;/);
+    assert.doesNotMatch(panel, /<script>/);
+  });
+  await t.test("legacy prose survives without inventing a run date or categories", async t => {
+    status(t, { status: "published", at: "2026-10-29T00:20:00Z", detail: "Older report\nNo category breakdown" });
+    const { tile, panel } = await render();
+    assert.match(tile, /run date not recorded/);
+    assert.match(panel, /Run date not recorded/);
+    assert.match(panel, /Per-category results were not recorded/);
+    assert.match(panel, /Older report\nNo category breakdown/);
+    assert.doesNotMatch(panel, /\$0\.00/);
+  });
+  for (const [name, value] of [["missing", new Error("ENOENT")], ["invalid JSON", "{"], ["null", "null"], ["array", "[]"]]) {
+    await t.test(name, async t => {
+      status(t, value);
+      const { tile, panel } = await render();
+      assert.match(tile, /unavailable/);
+      assert.match(panel, /missing or unreadable/);
+    });
+  }
+  await t.test("malformed fields stay unknown and cannot crash the page", async t => {
+    status(t, { status: {}, at: "bad date", run_date: "2026-02-30", categories: {
+      broken: null,
+      partial: { outcome: "toString", minutes: -1, dollars: "12", reasons: [null, {}, "valid reason"] },
+    } });
+    const { tile, panel } = await render();
+    assert.match(tile, /unknown/);
+    assert.match(tile, /run date not recorded/);
+    assert.match(panel, /Unknown|has not reported yet/);
+    assert.match(panel, /valid reason/);
+    assert.doesNotMatch(panel, /Invalid Date|\$12|>NaN<|>-1/);
+  });
+});
+
 test("quarantine uses latest records, excludes refusals from the floor, and exposes missing evidence", async (t) => {
   const { loadQuarantine, REPO_ROOT } = await import("../lib/data.ts");
   const records = new Map();

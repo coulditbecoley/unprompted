@@ -1,29 +1,15 @@
-import fs from "node:fs";
-import path from "node:path";
-
-import { REPO_ROOT } from "@/lib/data";
-
-/**
- * What the last weekly run did, at the top of the operator's dashboard.
- *
- * The run happens on one machine at 1pm on a Monday and writes to a log file
- * nobody opens. A week that was held, or that measured everything and then
- * failed to push, looks exactly like a week that went fine: the site keeps
- * showing last Monday's date, which is what it would show anyway.
- *
- * The other half of the alert is a GitHub issue, which reaches a phone. This is
- * the half that is still here tomorrow, and it is committed with the run so git
- * keeps every outcome rather than only the current one.
- */
+import { CATEGORIES } from "@/lib/categories";
+import { TrimTop } from "@/components/ui";
 
 type Status = {
-  status: "published" | "measured" | "held" | "failed" | "unknown";
+  status: string;
+  runDate: string | null;
+  at: string | null;
   detail: string;
-  exit_code: number;
-  at: string;
+  categories: Record<string, unknown>;
 };
 
-const WORD: Record<Status["status"], string> = {
+const WORD: Record<string, string> = {
   published: "recorded (legacy status)",
   measured: "measured; deployment not verified",
   held: "held for review",
@@ -31,47 +17,49 @@ const WORD: Record<Status["status"], string> = {
   unknown: "has not reported yet",
 };
 
-function load(): Status | null {
-  try {
-    const raw = fs.readFileSync(
-      path.join(REPO_ROOT, "data", "last-run.json"),
-      "utf-8",
-    );
-    return JSON.parse(raw) as Status;
-  } catch {
-    return null;
-  }
-}
+const OUTCOME: Record<string, string> = {
+  passed: "Passed", held: "Held", failed: "Failed",
+  not_started: "Not started", not_run: "Not run",
+};
 
-/** How long ago, in the coarsest unit that is still useful. */
-function since(at: string): string {
-  const then = Date.parse(at);
-  if (Number.isNaN(then)) return "";
-  const hours = Math.round((Date.now() - then) / 3_600_000);
-  if (hours < 1) return "just now";
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
+const recordedNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
 
-export function RunStatus() {
-  const last = load();
-  if (!last) return null;
-
-  const bad = last.status === "failed";
-  const attention = bad || last.status === "held";
-
+/** The committed report only; local attempts and deployment are not observable here. */
+export function RunStatus({ last }: { last: Status | null }) {
   return (
-    <div className="run-status" data-status={last.status}>
-      <span className="label run-status-word">
-        Last run {WORD[last.status] ?? last.status}
-      </span>
-      <span className="run-status-detail">{last.detail}</span>
-      <span className="mono run-status-when">{since(last.at)}</span>
-      {attention && (
-        <span className="mono run-status-flag" data-bad={bad}>
-          {bad ? "needs a person" : "did not publish"}
-        </span>
-      )}
-    </div>
+    <section aria-labelledby="latest-run-heading">
+      <h2 className="zone" id="latest-run-heading">Latest run</h2>
+      {!last ? <p>The committed run status is missing or unreadable.</p> : <>
+        <p>
+          <strong>{last.runDate ?? "Run date not recorded"}</strong>
+          {" · "}{Object.hasOwn(WORD, last.status) ? WORD[last.status] : "Unknown status"}
+        </p>
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+          Report recorded: {last.at
+            ? <time dateTime={last.at}>{new Date(last.at).toISOString().replace("T", " ").replace(".000Z", " UTC")}</time>
+            : "not recorded"}. Committed report only; deployment and later local attempts are not verified.
+        </p>
+        {Object.keys(last.categories).length === 0 ? <>
+          <p>Per-category results were not recorded.</p>
+          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{last.detail || "No details recorded."}</p>
+        </> : <div className="cmp-grid">
+          {Object.entries(last.categories).map(([slug, value]) => {
+            const row = value && typeof value === "object" && !Array.isArray(value)
+              ? value as Record<string, unknown> : {};
+            const reasons = Array.isArray(row.reasons)
+              ? row.reasons.filter((reason): reason is string => typeof reason === "string" && Boolean(reason.trim())) : [];
+            return <article className="cmp-pick" key={slug} style={{ overflowWrap: "anywhere" }}>
+              <TrimTop />
+              <h3>{CATEGORIES.find(c => c.slug === slug)?.label ?? slug}</h3>
+              <div className="cmp-stat"><span>Outcome</span><span>{typeof row.outcome === "string" && Object.hasOwn(OUTCOME, row.outcome) ? OUTCOME[row.outcome] : "Not recorded"}</span></div>
+              <div className="cmp-stat"><span>Minutes</span><span>{recordedNumber(row.minutes) ? row.minutes.toFixed(1) : "not recorded"}</span></div>
+              <div className="cmp-stat"><span>Cost</span><span>{recordedNumber(row.dollars) ? `$${row.dollars.toFixed(2)}` : "not recorded"}</span></div>
+              {reasons.length ? <ul>{reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul> : <p>No reasons recorded.</p>}
+            </article>;
+          })}
+        </div>}
+      </>}
+    </section>
   );
 }
