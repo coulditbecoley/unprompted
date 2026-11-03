@@ -548,6 +548,21 @@ test("recorded absence of affiliations never falls back to today's ownership", a
 });
 
 test("route integration: analytics and stale editor protection", async (t) => {
+  await t.test("commit rejects unauthorised writes and reports a GitHub write race as a conflict", async t => {
+    const edit = { target: "aliases", category: "ai-writing-tools", baseline: "canonical: {}\n", content: "canonical: {Alpha: []}\n" };
+    let writes = 0, reads = 0;
+    t.mock.method(globalThis, "fetch", async (_url, init = {}) => {
+      if (init.method === "PUT") { writes++; return Response.json({ message: "sha changed" }, { status: 409 }); }
+      reads++;
+      return Response.json({ sha: "remote-sha", content: Buffer.from(edit.baseline).toString("base64") });
+    });
+    assert.equal((await commit(request("/api/admin/commit", edit))).status, 401);
+    assert.equal(reads, 0);
+    const result = await commit(request("/api/admin/commit", edit, { cookie }));
+    assert.equal(result.status, 409);
+    assert.match((await result.json()).error, /reload and merge/);
+    assert.equal(writes, 1);
+  });
   await t.test("a brand click never becomes a brand view or referral", async () => {
     calls.length = 0;
     assert.equal((await track(request("/api/track", { path: "/brand/ai-coding-assistants/cursor", event: "out:source", referrer: "https://chatgpt.com" }))).status, 204);
@@ -722,4 +737,84 @@ test("Needs you lists an engine only past the limit that holds a week", async ()
   assert.deepEqual(buildNeeds(report, reading(mixed), [], label).map(n => n.id), ["engine-perplexity", "engine-extractor"]);
   assert.equal(parseLastRun("not json"), null);
   assert.equal(parseLastRun("[]"), null);
+});
+
+test("editor diff shows replacements, insertions, deletions and newline changes", async () => {
+  const { editDiff } = await import("../lib/admin-edit.ts");
+  assert.equal(editDiff("a\nold\nz\n", "a\nnew\nz\n"), "- old\n+ new");
+  assert.equal(editDiff("a\nz\n", "a\nnew\nz\n"), "+ new");
+  assert.equal(editDiff("a\nold\nz\n", "a\nz\n"), "- old");
+  assert.equal(editDiff("a", "a\n"), "+ ");
+  assert.equal(editDiff("a\r\n", "a\n"), "");
+});
+
+test("editor requires current review, retains conflicts and resets errors on editing", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const editing = await import("../lib/admin-edit.ts");
+  const nativeRequire = createRequire(import.meta.url);
+  const source = fs.readFileSync(new URL("../components/admin-editor.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  let states = [], cursor = 0, response = Response.json({ ok: true }), requests = [];
+  const exports = {};
+  runInNewContext(compiled, { exports, require: id => {
+    if (id === "@/lib/admin-edit") return editing;
+    if (id === "react") return { useState: initial => {
+      const index = cursor++;
+      if (!(index in states)) states[index] = initial;
+      return [states[index], value => { states[index] = value; }];
+    } };
+    return nativeRequire(id);
+  }, fetch: async (_url, init) => { requests.push(JSON.parse(init.body)); return response; } });
+  let props = { category: "ai-writing-tools", target: "aliases", label: "Alias map", initial: "canonical: {}\n", note: "" };
+  let nodes;
+  const render = () => {
+    cursor = 0; nodes = [];
+    const visit = node => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      nodes.push(node); visit(node.props?.children);
+    };
+    visit(exports.AdminEditor(props));
+  };
+  const button = text => nodes.find(n => n.type === "button" && n.props.children === text);
+  const change = value => { nodes.find(n => n.type === "textarea").props.onChange({ target: { value } }); render(); };
+  const review = () => { button("REVIEW CHANGES").props.onClick(); render(); };
+  render();
+  change("canonical: {Alpha: []}\n");
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  await button("COMMIT TO REPO").props.onClick();
+  assert.equal(requests.length, 0);
+  review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, false);
+  assert.match(nodes.find(n => n.type === "pre").props.children, /\+ canonical: \{Alpha/);
+  change("canonical: {Beta: []}\n");
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  review();
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.equal(requests[0].baseline, props.initial);
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  change("canonical: {Gamma: []}\n"); review();
+  response = Response.json({ error: "Invalid aliases" }, { status: 400 });
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.ok(nodes.some(n => n.props?.children === "Invalid aliases"));
+  change("canonical: {Delta: []}\n");
+  assert.ok(!nodes.some(n => n.props?.children === "Invalid aliases"));
+  review();
+  response = Response.json({ error: "File changed" }, { status: 409 });
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.equal(requests.at(-1).baseline, "canonical: {Beta: []}\n");
+  assert.equal(nodes.find(n => n.type === "textarea").props.value, "canonical: {Delta: []}\n");
+  assert.ok(nodes.some(n => n.type === "a" && n.props.href === "/admin?category=ai-writing-tools"));
+  change("canonical: {Epsilon: []}\n"); review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  states = [];
+  props = { ...props, target: "questions", initial: "method_version: 1\nquestions: [Old]\n" };
+  render(); change("method_version: 1\nquestions: [New]\n"); review();
+  assert.ok(nodes.some(n => n.props?.role === "alert" && /method_version/.test(n.props.children)));
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  change("method_version: 2\nquestions: [New]\n"); review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, false);
 });

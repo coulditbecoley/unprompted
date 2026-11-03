@@ -744,6 +744,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <ProviderManager initial={providers} initialRaw={fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8")} />
 
       <AdminEditor
+        key={`questions-${category}`}
         category={category}
         label="Questions"
         target="questions"
@@ -753,6 +754,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       <div id="alias-editor" />
       <AdminEditor
+        key={`aliases-${category}`}
         category={category}
         label="Alias map"
         target="aliases"

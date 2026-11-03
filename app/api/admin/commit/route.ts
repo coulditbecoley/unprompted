@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { load as loadYaml } from "js-yaml";
 
+import { unversionedChange } from "@/lib/admin-edit";
 import { isAuthorised } from "@/lib/auth";
 import { CATEGORIES } from "@/lib/categories";
 import { CATEGORY, quarantineKey } from "@/lib/data";
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
   });
 
   if (!put.ok) {
+    if (put.status === 409) return NextResponse.json({ error: "This file changed while you were saving. Copy your edits, reload and merge them." }, { status: 409 });
     const detail = await put.text();
     return NextResponse.json(
       { error: `GitHub rejected the commit (${put.status}): ${detail.slice(0, 200)}` },
@@ -114,46 +116,6 @@ export async function POST(request: Request) {
 
   const result = (await put.json()) as { commit?: { html_url?: string } };
   return NextResponse.json({ ok: true, url: result.commit?.html_url });
-}
-
-/**
- * Why this question-bank edit must not commit, or null. Compared the way the
- * Python guard compares the spec: mappings by content whatever their key
- * order, lists in order, and only plain JSON values (no NaN, no cycles).
- */
-function unversionedChange(baseline: string, content: string): string | null {
-  let before: unknown, after: unknown;
-  try {
-    before = canonical(loadYaml(baseline));
-    after = canonical(loadYaml(content));
-  } catch (err) {
-    return `The question bank must hold plain values only: ${err instanceof Error ? err.message : "unsupported value"}`;
-  }
-  if (!before || typeof before !== "object" || !after || typeof after !== "object") return null;
-  const { method_version: was, ...rest } = before as Record<string, unknown>;
-  const { method_version: now, ...next } = after as Record<string, unknown>;
-  if (JSON.stringify(rest) === JSON.stringify(next) || Number(now) > Number(was)) return null;
-  // Conservative: compared with the file as opened, not the last published
-  // week, so a bank already bumped but not yet measured asks for another bump.
-  return "This changes the question bank without raising method_version. Raise it with every change (and add a dated note to METHODOLOGY.md): a bank that differs from the last published week without a bump stops the next weekly run.";
-}
-
-/** A JSON-safe copy with sorted keys; throws on cycles and non-finite numbers. */
-function canonical(value: unknown, seen = new Set<object>()): unknown {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("non-finite number");
-    return value;
-  }
-  if (typeof value !== "object") throw new Error(`unsupported ${typeof value}`);
-  if (seen.has(value)) throw new Error("recursive alias");
-  seen.add(value);
-  const out = Array.isArray(value)
-    ? value.map(v => canonical(v, seen))
-    : value instanceof Date ? (() => { throw new Error("date value"); })()
-    : Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical((value as Record<string, unknown>)[k], seen)]));
-  seen.delete(value);
-  return out;
 }
 
 function validate(target: Target, content: string): string | null {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { editDiff, unversionedChange } from "@/lib/admin-edit";
 
 type Target = "questions" | "aliases";
 
@@ -24,13 +25,17 @@ export function AdminEditor({
   note: string;
 }) {
   const [body, setBody] = useState(initial);
-  const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "done" | "error" | "conflict">("idle");
   const [message, setMessage] = useState("");
+  const [reviewed, setReviewed] = useState<string | null>(null);
 
   const [baseline, setBaseline] = useState(initial);
   const dirty = body !== baseline;
+  const warning = dirty && target === "questions" ? unversionedChange(baseline, body) : null;
+  const canCommit = dirty && reviewed === body && !warning && status !== "saving" && status !== "conflict";
 
   async function save() {
+    if (!canCommit) return;
     const submitted = body;
     setStatus("saving");
     setMessage("");
@@ -42,16 +47,17 @@ export function AdminEditor({
       });
       const data = (await res.json()) as { ok?: boolean; error?: string; url?: string };
       if (!res.ok || !data.ok) {
-        setStatus("error");
+        setStatus(res.status === 409 ? "conflict" : "error");
         setMessage(data.error ?? `Save failed (${res.status})`);
         return;
       }
       setBaseline(submitted);
+      setReviewed(null);
       setStatus("done");
       setMessage(data.url ? `Committed. ${data.url}` : "Committed.");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage("Could not confirm the commit. Your edits are retained. Check the repository before retrying.");
     }
   }
 
@@ -63,7 +69,12 @@ export function AdminEditor({
 
       <textarea
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(e) => {
+          setBody(e.target.value);
+          setReviewed(null);
+          if (status !== "conflict") { setStatus("idle"); setMessage(""); }
+        }}
+        disabled={status === "saving"}
         spellCheck={false}
         rows={16}
         aria-label={`${label} source`}
@@ -80,20 +91,28 @@ export function AdminEditor({
         }}
       />
 
+      {warning && <p role="alert" className="pending">{warning}</p>}
+      {dirty && reviewed === body && <section aria-label={`${label} pending diff`}>
+        <h4>Pending change</h4>
+        <p>Removed lines start with −; added lines start with +. Unchanged beginning and end are omitted.</p>
+        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12.5 }}>{editDiff(baseline, body) || "Only line endings changed."}</pre>
+      </section>}
+
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
+        <button type="button" disabled={!dirty || status === "saving"} onClick={() => setReviewed(body)}>REVIEW CHANGES</button>
         <button
           type="button"
           onClick={save}
-          disabled={!dirty || status === "saving"}
+          disabled={!canCommit}
           className="mono"
           style={{
             fontSize: 11,
             letterSpacing: "0.12em",
             padding: "9px 16px",
-            background: dirty ? "var(--fg)" : "var(--surface-2)",
-            color: dirty ? "var(--bg)" : "var(--fg-3)",
+            background: canCommit ? "var(--fg)" : "var(--surface-2)",
+            color: canCommit ? "var(--bg)" : "var(--fg-3)",
             border: "1px solid var(--rule-2)",
-            cursor: dirty ? "pointer" : "not-allowed",
+            cursor: canCommit ? "pointer" : "not-allowed",
           }}
         >
           {status === "saving" ? "COMMITTING…" : "COMMIT TO REPO"}
@@ -110,13 +129,14 @@ export function AdminEditor({
             role="status"
             style={{
               fontSize: 11.5,
-              color: status === "error" ? "var(--down)" : "var(--up)",
+              color: status === "error" || status === "conflict" ? "var(--down)" : "var(--up)",
             }}
           >
             {message}
           </span>
         )}
       </div>
+      {status === "conflict" && <p role="alert">Your draft is still above. Copy it before <a href={`/admin?category=${encodeURIComponent(category)}`}>reloading the current file</a>, then merge your edits and review again.</p>}
     </div>
   );
 }
