@@ -54,9 +54,13 @@ const RUN_STATE_WORD = {
 const money = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
 
-export default async function AdminPage(props: { searchParams: Promise<{ category?: string }> }) {
-  try { return await Dashboard(props); }
-  catch {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+  // Outside the try: during a build this await signals Next that the page is
+  // dynamic, and that signal must not be caught as a data failure.
+  const selected = (await searchParams).category;
+  try { return await Dashboard(selected); }
+  catch (error) {
+    console.error("Admin dashboard could not render:", error instanceof Error ? error.message : "unknown error");
     let last = null;
     try { last = parseLastRun(fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8")); } catch { /* Report may also be unavailable. */ }
     return <section className="shell section admin-page">
@@ -67,8 +71,7 @@ export default async function AdminPage(props: { searchParams: Promise<{ categor
   }
 }
 
-async function Dashboard({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
-  const selected = (await searchParams).category;
+async function Dashboard(selected: string | undefined) {
   const category = CATEGORIES.some(c => c.slug === selected) ? selected! : CATEGORY;
   const questionsPath = path.join(REPO_ROOT, "questions", `${category}.yml`);
   const aliasesPath = path.join(REPO_ROOT, "aliases", `${category}.yml`);
@@ -385,7 +388,7 @@ async function Dashboard({ searchParams }: { searchParams: Promise<{ category?: 
           <h3 style={{ marginTop: 6 }}>State</h3>
           <div className="cmp-stat"><span>Method version</span><span>v{spec.method_version}</span></div>
           <div className="cmp-stat"><span>Runs per question</span><span>{spec.runs_per_question}</span></div>
-          <div className="cmp-stat"><span>Weeks recorded</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
+          <div className="cmp-stat"><span>Published readings</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
           <div className="cmp-stat"><span>Latest published run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
           <div className="cmp-stat"><span>Brands charted</span><span>{selectedArchive.error ? "unavailable" : board.length}</span></div>
           {selectedArchive.error && <p>Published readings are unavailable. Review the archive errors below.</p>}
