@@ -39,6 +39,8 @@ TIMEOUT_SECONDS = 300
 # excluding process startup and cleanup, and share the weekly run's deadline.
 PROBE_ATTEMPTS = 3
 PROBE_PAUSE_SECONDS = 120
+TREE_KILL_SECONDS = 60
+CLEANUP_WAIT_SECONDS = 120
 
 # The CLIs this project knows how to talk to, and the exact arguments that make
 # each one read a prompt on stdin. Mirrors KNOWN_CLIS in lib/providers.ts.
@@ -137,8 +139,12 @@ def _end_tree(pid: int) -> None:
     """End a process and its children. On Windows the child is a .CMD shim, and
     killing only that leaves the real harness running and holding the pipes."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
-                       timeout=30, check=True)
+        try:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True,
+                           timeout=TREE_KILL_SECONDS, check=True)
+        except subprocess.CalledProcessError as exc:
+            if exc.returncode != 128:  # Already exited; draining below still confirms completion.
+                raise
     else:
         try:
             os.killpg(pid, signal.SIGKILL)
@@ -229,10 +235,11 @@ class CliProvider:
         recorded. Same pinned arguments and containment as ask(); only the
         output format differs where the harness needs it to report a model.
         """
-        exe = self.resolve()
-        version = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=60,
-                                 encoding="utf-8", errors="replace", env=_child_env())
         with tempfile.TemporaryDirectory(prefix="unprompted-identify-", ignore_cleanup_errors=True) as jail:
+            version = self._probe("", jail, version=True)
+            if version.returncode != 0:
+                raise ProviderError(f"{self.id}: version check failed; exit {version.returncode}: "
+                                    f"{(version.stderr or version.stdout or '').strip()[:300]}")
             result = self._probe("Reply with just the word OK.", jail, _IDENTIFY_EXTRA.get(self.command, ()))
         model = _reported_model(self.command, result.stdout or "", result.stderr or "")
         if not model:
@@ -268,13 +275,14 @@ class CliProvider:
                 raise ProviderError(f"{self.id}: isolation check was inconclusive; "
                                     f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
 
-    def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
+    def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = (), *,
+              version: bool = False) -> subprocess.CompletedProcess:
         # Imported here because engines also construct CliProviders.
         from .engines.base import refuse_new_paid_work, run_time_left
 
         refuse_new_paid_work(f"{self.id} CLI call")
         timeout = min(TIMEOUT_SECONDS, max(0, run_time_left()))
-        argv = [self.resolve(), *self.args, *extra]
+        argv = [self.resolve(), "--version"] if version else [self.resolve(), *self.args, *extra]
         process = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
@@ -292,7 +300,7 @@ class CliProvider:
         except subprocess.TimeoutExpired as exc:
             try:
                 _end_tree(process.pid)
-                stdout, _ = process.communicate(timeout=30)
+                stdout, _ = process.communicate(timeout=CLEANUP_WAIT_SECONDS)
             except (OSError, subprocess.SubprocessError) as cleanup:
                 try:
                     process.kill()
@@ -307,12 +315,12 @@ class CliProvider:
         return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
 
     def _probe(self, prompt: str, cwd: str, extra: tuple[str, ...] = (), *,
-               check: Callable[[str], None] | None = None) -> subprocess.CompletedProcess:
+               check: Callable[[str], None] | None = None, version: bool = False) -> subprocess.CompletedProcess:
         from .engines.base import run_time_left
 
         for attempt in range(1, PROBE_ATTEMPTS + 1):
             try:
-                result = self._exec(prompt, cwd, extra)
+                result = self._exec(prompt, cwd, extra, version=True) if version else self._exec(prompt, cwd, extra)
             except CliTimeout as exc:
                 if check:
                     check(exc.stdout)  # a timeout cannot erase evidence that isolation failed
@@ -418,6 +426,13 @@ def declared_clis(role: str) -> list[CliProvider]:
             continue
         out.append(_provider_from(entry))
     return out
+
+
+def readiness_limit_seconds() -> int:
+    """Version, identity and isolation per local engine, plus hosted/startup headroom."""
+    probe = PROBE_ATTEMPTS * (TIMEOUT_SECONDS + TREE_KILL_SECONDS + CLEANUP_WAIT_SECONDS)
+    probe += (PROBE_ATTEMPTS - 1) * PROBE_PAUSE_SECONDS
+    return len(declared_clis("engine")) * 3 * probe + 5 * 60
 
 
 def _provider_from(entry: dict) -> CliProvider:

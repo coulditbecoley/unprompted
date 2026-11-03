@@ -2525,7 +2525,7 @@ def test_tree_cleanup_is_bounded_and_checks_taskkill_failure(monkeypatch):
     monkeypatch.setattr(cli_provider.subprocess, "run", taskkill)
     with pytest.raises(subprocess.CalledProcessError):
         cli_provider._end_tree(123)
-    assert seen["timeout"] == 30 and seen["check"] is True
+    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and seen["check"] is True
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
@@ -2546,7 +2546,7 @@ def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, ca
             pass
 
     def taskkill(argv, **kwargs):
-        assert kwargs["timeout"] == 30 and kwargs["check"] is True
+        assert kwargs["timeout"] == 60 and kwargs["check"] is True
         raise subprocess.CalledProcessError(1, argv)
 
     monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **kw: FakePopen())

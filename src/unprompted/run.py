@@ -668,10 +668,10 @@ def main() -> int:
 
     # Held for the whole week: the daily sync's pull and the readiness check
     # wait on it, so inputs cannot change between categories. The wait covers a
-    # pull, or a readiness check (30-minute limit), already in flight.
+    # pull, or readiness's computed probe budget plus wrapper cleanup, already in flight.
     from .engines.base import booked_to
     booked = None if args.ignore_budget else args.date[:7]
-    with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=35 * 60):
+    with booked_to(booked), run_lock(ROOT / ".unprompted", "week.lock", wait=__import__("unprompted.cli_provider", fromlist=["readiness_limit_seconds"]).readiness_limit_seconds() + 5 * 60):
         return _measure(args, categories)
 
 

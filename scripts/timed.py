@@ -22,14 +22,18 @@ def run(seconds: float, command: list[str]) -> int:
     except subprocess.TimeoutExpired:
         try:
             if os.name == "nt":
-                subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True,
-                               timeout=30, check=True)
+                try:
+                    subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True,
+                                   timeout=60, check=True)
+                except subprocess.CalledProcessError as exc:
+                    if exc.returncode != 128:  # Already exited; still confirm below.
+                        raise
             else:
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-            process.wait(timeout=30)
+            process.wait(timeout=120)
         except (OSError, subprocess.SubprocessError) as exc:
             try:
                 process.kill()
