@@ -17,7 +17,6 @@ import {
   loadHistory,
   loadQuarantine,
   loadRates,
-  quarantineKey,
   runHistory,
   spendSummary,
   standings,
@@ -32,6 +31,7 @@ import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
 import { RUN_ZONE } from "@/lib/schedule";
+import { buildNeeds, parseLastRun, readingNames } from "@/lib/admin-status";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -184,26 +184,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const signupTries = clickCount("signup:tried");
 
   const lastRun = (() => {
-    try {
-      const raw = JSON.parse(
-        fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
-      );
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-      // The report date is not the timestamp or the latest published reading.
-      const runDate = typeof raw.run_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.run_date)
-        && Number.isFinite(Date.parse(raw.run_date))
-        && new Date(raw.run_date).toISOString().slice(0, 10) === raw.run_date ? raw.run_date : null;
-      return {
-        status: typeof raw.status === "string" ? raw.status : "unknown",
-        runDate,
-        at: typeof raw.at === "string" && Number.isFinite(Date.parse(raw.at)) ? raw.at : null,
-        detail: typeof raw.detail === "string" ? raw.detail : "",
-        categories: raw.categories && typeof raw.categories === "object" && !Array.isArray(raw.categories)
-          ? raw.categories as Record<string, unknown> : {},
-      };
-    } catch {
-      return null;
-    }
+    try { return parseLastRun(fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8")); }
+    catch { return null; }
   })();
 
   const publishedRuns = loadAllRuns();
@@ -217,87 +199,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     lastRun ? { date: lastRun.runDate, outcomes: reportOutcomes } : null,
   );
 
-  const needs: { id: string; title: string; details: string[]; href: string }[] = [];
   const categoryLabel = (slug: string) => CATEGORIES.find(c => c.slug === slug)?.label ?? slug;
   const needsDate = lastRun?.runDate;
-  const needsReadings = allRuns.filter(r => r.run_date === needsDate);
-  const explained = new Set<string>();
-  const failures = new Map<string, { categories: Set<string>; errors: Map<string, number> }>();
-  const quarantines = allRuns.map(reading => {
-    const names = new Map<string, { name: string; count: number }>();
-    for (const name of Array.isArray(reading.quarantined) ? reading.quarantined : []) {
-      if (typeof name !== "string" || !name.trim()) continue;
-      const key = quarantineKey(name);
-      if (!key) continue;
-      const entry = names.get(key) ?? { name, count: 0 };
-      entry.count += 1;
-      names.set(key, entry);
-    }
-    const total = answered(reading).length;
-    return { reading, total, names: [...names.values()]
-      .map(n => ({ ...n, material: total > 0 && n.count / total >= QUARANTINE_MATERIAL }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) };
-  });
-  const selectedQuarantine = quarantines.filter(q => q.reading.category === category).at(-1);
+  const needs = buildNeeds(lastRun, allRuns, [...archiveErrors, ...quarantineErrors], categoryLabel);
+  const latestOfCategory = allRuns.filter(r => r.category === category).at(-1);
+  const selectedQuarantine = latestOfCategory ? readingNames(latestOfCategory) : undefined;
   const selectedNames = selectedQuarantine?.names ?? [];
-  for (const reading of needsReadings) {
-    for (const answer of reading.extractions) {
-      if (typeof answer.error !== "string" || !answer.error.trim()) continue;
-      const source = answer.error.startsWith("extract failed:") ? "extractor" : answer.engine;
-      const failure = failures.get(source) ?? { categories: new Set<string>(), errors: new Map<string, number>() };
-      failure.categories.add(reading.category);
-      failure.errors.set(answer.error, (failure.errors.get(answer.error) ?? 0) + 1);
-      failures.set(source, failure);
-      explained.add(reading.category);
-    }
-  }
-  for (const [engine, failure] of failures) {
-    const errors = [...failure.errors.keys()].join("\n");
-    const advice = /\b401\b|unauthori[sz]ed|invalid.api.key/i.test(errors)
-      ? `Check or replace the ${engine} credential on the run machine and confirm its access. Authentication was rejected.`
-      : /\b403\b|forbidden/i.test(errors)
-        ? `Check the ${engine} account's permissions and model access on the run machine.`
-        : /\b429\b|rate.limit|quota|billing|credit.balance/i.test(errors)
-          ? `Check the ${engine} usage limits and billing before the next run.`
-          : /timed?.?out|timeout/i.test(errors)
-            ? `Check the ${engine} service and the run machine for the recorded timeout before the next run.`
-            : `Investigate the recorded ${engine} error before the next run.`;
-    needs.push({ id: `engine-${engine}`, title: `${engine}: recorded errors`, href: "#latest-run-heading",
-      details: [advice, `${needsDate}: ${[...failure.categories].map(categoryLabel).join(", ")}.`,
-        ...[...failure.errors].map(([error, count]) => `${error} (${count} answer record${count === 1 ? "" : "s"})`)] });
-  }
-  for (const { reading, names } of quarantines.filter(q => q.reading.run_date === needsDate)) {
-    const material = names.filter(n => n.material);
-    if (material.length) {
-      explained.add(reading.category);
-      needs.push({ id: `names-${reading.category}`, title: `${categoryLabel(reading.category)}: review ${material.length} unrecognised name${material.length === 1 ? "" : "s"}`,
-        href: `/admin?category=${encodeURIComponent(reading.category)}#alias-editor`,
-        details: [`Recorded on ${needsDate}: ${material.map(n => n.name).join(", ")}.`,
-          "These reached the run's review threshold. Check the current aliases before deciding; edits since the run are not reflected here. Alias decisions stay manual."] });
-    }
-  }
-  for (const [slug, value] of Object.entries(lastRun?.categories ?? {})) {
-    const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-    const outcome = typeof row.outcome === "string" ? row.outcome : "unknown";
-    const reasons = Array.isArray(row.reasons) ? row.reasons.filter((r): r is string => typeof r === "string" && Boolean(r.trim())) : [];
-    if (["failed", "not_started", "not_run"].includes(outcome) || (outcome === "held" && !explained.has(slug))) {
-      needs.push({ id: `category-${slug}`, title: `${categoryLabel(slug)}: ${outcome.replaceAll("_", " ")}`,
-        href: "#latest-run-heading", details: reasons.length ? reasons : ["Review the committed run report; no reason was recorded."] });
-    }
-    if (!["passed", "held", "failed", "not_started", "not_run"].includes(outcome)
-        || (["passed", "held"].includes(outcome) && !needsReadings.some(r => r.category === slug))) {
-      needs.push({ id: `missing-${slug}`, title: `${categoryLabel(slug)}: evidence is incomplete`, href: "#latest-run-heading",
-        details: ["The category outcome or its reading is missing or unreadable. Check the committed report and archive."] });
-    }
-  }
-  if (!needsDate || !lastRun || !["measured", "published", "held", "failed"].includes(lastRun.status)
-      || Object.keys(lastRun.categories).length === 0
-      || (["held", "failed"].includes(lastRun.status) && needs.length === 0)) {
-    needs.push({ id: "report", title: "Review the latest run report", href: "#latest-run-heading",
-      details: [lastRun?.detail || "The dated category report is missing or incomplete; there is not enough evidence to say nothing needs attention."] });
-  }
-  const needsErrors = [...new Set([...archiveErrors, ...quarantineErrors])];
-  if (needsErrors.length) needs.push({ id: "archive", title: "Restore unreadable run evidence", href: "#latest-run-heading", details: needsErrors });
 
   /*
     Names frequent enough to have held the run they came from.

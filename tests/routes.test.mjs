@@ -196,6 +196,7 @@ test("admin server component remains readable when a published category is corru
   const categories = await import("../lib/categories.ts");
   const providers = await import("../lib/providers.ts");
   const schedule = await import("../lib/schedule.ts");
+  const adminStatus = await import("../lib/admin-status.ts");
   const category = categories.DEFAULT_CATEGORY;
   const reading = data.loadHistory(category, true)[0];
   const heldReading = data.loadHeld().runs[0];
@@ -213,6 +214,7 @@ test("admin server component remains readable when a published category is corru
     if (id === "@/lib/categories") return categories;
     if (id === "@/lib/providers") return providers;
     if (id === "@/lib/schedule") return schedule;
+    if (id === "@/lib/admin-status") return adminStatus;
     if (id === "@/lib/analytics") return { totals };
     // Exercise the page and its real archive readers; child widgets are outside this check.
     if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
@@ -238,6 +240,7 @@ test("admin latest-run panel and tile share the committed report, including lega
     "@/lib/categories": await import("../lib/categories.ts"),
     "@/lib/providers": await import("../lib/providers.ts"),
     "@/lib/schedule": await import("../lib/schedule.ts"),
+    "@/lib/admin-status": await import("../lib/admin-status.ts"),
     "@/lib/analytics": { totals },
   };
   const nativeRequire = createRequire(import.meta.url);
@@ -693,4 +696,21 @@ test("run history tells published, held, re-read and failed weeks apart", async 
   assert.deepEqual(runHistory([], [], ["a", "b"], {
     date: "2026-11-02", outcomes: { a: "held", b: "not_run" },
   })[0].states, { a: "held", b: "not_started" });
+});
+
+test("Needs you lists an engine only past the limit that holds a week", async () => {
+  const { buildNeeds, parseLastRun } = await import("../lib/admin-status.ts");
+  const answers = (engine, total, failed) => Array.from({ length: total }, (_, i) => ({
+    engine, brands: [], error: i < failed ? "HTTPError: HTTP Error 401: Unauthorized" : null,
+  }));
+  const report = parseLastRun(JSON.stringify({ status: "measured", run_date: "2026-11-02", categories: { a: { outcome: "passed" } } }));
+  const reading = extractions => [{ run_date: "2026-11-02", category: "a", quarantined: [], extractions }];
+  const label = slug => slug;
+  assert.deepEqual(buildNeeds(report, reading(answers("perplexity", 75, 1)), [], label), []);
+  assert.deepEqual(buildNeeds(report, reading(answers("perplexity", 75, 15)), [], label), []); // exactly 20% passes
+  const [need] = buildNeeds(report, reading(answers("perplexity", 75, 16)), [], label);
+  assert.equal(need.id, "engine-perplexity");
+  assert.match(need.details[0], /credential/);
+  assert.equal(parseLastRun("not json"), null);
+  assert.equal(parseLastRun("[]"), null);
 });
