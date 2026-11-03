@@ -8,6 +8,11 @@ REM The project's own interpreter, as the weekly launcher uses: sync_analytics
 REM imports the pipeline, which a bare system python cannot.
 set "SYNC_PYTHON=python"
 if exist ".venv\Scripts\python.exe" set "SYNC_PYTHON=.venv\Scripts\python.exe"
+REM Push a measured week whose push failed, if one is recorded. Exactly that
+REM commit, fast-forward only; a busy lock (exit 4) just means try tomorrow.
+"%SYNC_PYTHON%" scripts\publish.py pending >> "%TEMP%\unprompted-sync.log" 2>&1
+set "PUBLISH_EXIT=%ERRORLEVEL%"
+if "%PUBLISH_EXIT%"=="4" set "PUBLISH_EXIT=0"
 "%SYNC_PYTHON%" scripts\sync_vault.py >> "%TEMP%\unprompted-sync.log" 2>&1
 set "VAULT_EXIT=%ERRORLEVEL%"
 
@@ -22,5 +27,6 @@ set "ANALYTICS_EXIT=%ERRORLEVEL%"
 REM Both outcomes count. Task Scheduler showed 0 whenever the last line worked,
 REM so a failing vault sync looked healthy. Each step also writes its own status
 REM file under .unprompted\status, which readiness and the mid-week check read.
+if not "%PUBLISH_EXIT%"=="0" exit /b %PUBLISH_EXIT%
 if not "%VAULT_EXIT%"=="0" exit /b %VAULT_EXIT%
 exit /b %ANALYTICS_EXIT%

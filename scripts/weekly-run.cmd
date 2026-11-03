@@ -45,6 +45,15 @@ if not "%RUN_BRANCH%"=="main" (
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "The checkout was not on main, so nothing was measured. Switch the checkout back to main." >> "%LOG%" 2>&1
   exit /b 1
 )
+REM Finish an earlier week whose push failed before measuring a new one. Only
+REM that recorded commit is ever pushed; anything unclear stops here with an
+REM alert, never a paid run on top of an unpublished one.
+"%UNPROMPTED_PYTHON%" scripts\publish.py pending --wait 600 >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo ABORT: an earlier week is still unpublished, see publish.py output above >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "An earlier measured week could not be published (see .unprompted\status\publish.json and the log), so no new week was measured on top of it." >> "%LOG%" 2>&1
+  exit /b 1
+)
 "%UNPROMPTED_PYTHON%" scripts\timed.py 600 git pull --ff-only origin main >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo ABORT: git pull failed, working tree may have local changes >> "%LOG%"
@@ -132,70 +141,21 @@ if "%RUN_EXIT%"=="2" (
   "%UNPROMPTED_PYTHON%" scripts\notify.py --status published --exit-code 0 --summary-file .unprompted\weekly-summary.json --detail "Every category measured and passed local checks. Commit and push follow; deployment is not verified." >> "%LOG%" 2>&1
 )
 
-REM Written with labels rather than one parenthesised block on purpose: cmd
-REM expands %VAR% for a whole block when it parses it, so a variable set inside
-REM the block reads as empty and the SHA comparison below would silently never
-REM fire -- the exact class of bug this section exists to remove.
-REM Checked, because a failed stage is indistinguishable from a clean week
-REM once it has happened: `git diff --staged --quiet` then finds nothing staged,
-REM the branch below logs "No new data to commit", and the task exits zero
-REM having published nothing at all. Same class as the PUSHED line above.
-REM The message says what happened: a held week committed as "published"
-REM misled anyone reading git log (2026-10-26).
+REM Commit, push and confirm the remote has it: scripts\publish.py, under the
+REM same locks as every other job, with bounded retries on one deadline. A push
+REM that still fails leaves the commit recorded in .unprompted\publish-intent.json,
+REM and the next start or the daily sync pushes exactly that commit. The commit
+REM message says what happened: a held week committed as "published" misled
+REM anyone reading git log (2026-10-26).
 set "COMMIT_MSG=Run: measured and published"
 if "%RUN_EXIT%"=="2" set "COMMIT_MSG=Run: measured; one or more categories held, see data/last-run.json"
-git add data reports >> "%LOG%" 2>&1
-if errorlevel 1 goto :stage_failed
-git diff --staged --quiet
-if errorlevel 1 goto :publish
-echo No new data to commit. >> "%LOG%"
+"%UNPROMPTED_PYTHON%" scripts\publish.py final --message "%COMMIT_MSG%" --wait 600 >> "%LOG%" 2>&1
+if errorlevel 1 goto :publish_failed
 goto :published
 
-:publish
-git -c user.name="unprompted-bot" -c user.email="bot@unprompted.report" commit -m "%COMMIT_MSG%" >> "%LOG%" 2>&1
-if errorlevel 1 goto :commit_failed
-"%UNPROMPTED_PYTHON%" scripts\timed.py 900 git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=120 push origin HEAD:main >> "%LOG%" 2>&1
-if errorlevel 1 goto :push_failed
-
-REM Confirm the remote actually has it. Neither commit nor push returns non-zero
-REM for every kind of failure, and PUSHED used to be printed unconditionally: a
-REM network or auth failure looked identical to a real publication in both the
-REM log and Task Scheduler's last result.
-set "LOCAL_SHA="
-set "REMOTE_SHA="
-for /f %%H in ('git rev-parse HEAD') do set "LOCAL_SHA=%%H"
-"%UNPROMPTED_PYTHON%" scripts\timed.py 180 git ls-remote origin refs/heads/main > "%TEMP%\unprompted-remote.txt" 2>> "%LOG%"
-if errorlevel 1 goto :sha_mismatch
-for /f "usebackq" %%H in ("%TEMP%\unprompted-remote.txt") do set "REMOTE_SHA=%%H"
-if "%LOCAL_SHA%"=="" goto :sha_mismatch
-if "%REMOTE_SHA%"=="" goto :sha_mismatch
-if not "%LOCAL_SHA%"=="%REMOTE_SHA%" goto :sha_mismatch
-echo PUSHED %LOCAL_SHA%, exit %RUN_EXIT% >> "%LOG%"
-goto :published
-
-:stage_failed
-echo FAILED: git add failed, so nothing could be committed. The week is >> "%LOG%"
-echo         measured and on this machine only. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git add failed, so the measured week could not be committed. It is on this machine only." >> "%LOG%" 2>&1
-exit /b 3
-
-:commit_failed
-echo FAILED: git commit failed. The week is measured but not committed. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git commit failed. The week is measured but not committed, and exists on this machine only." >> "%LOG%" 2>&1
-exit /b 3
-
-:push_failed
-echo FAILED: git push failed. The commit is on this machine only and the site >> "%LOG%"
-echo         will not update. Fix the remote and push by hand. Do not re-run >> "%LOG%"
-echo         the week: the data already exists and data/runs is append-only. >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "git push failed. The commit is local only and the site will not update. Push by hand; do not re-run the week." >> "%LOG%" 2>&1
-exit /b 3
-
-:sha_mismatch
-echo FAILED: push reported success but the remote and this machine disagree. >> "%LOG%"
-echo         local  %LOCAL_SHA% >> "%LOG%"
-echo         remote %REMOTE_SHA% >> "%LOG%"
-"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The push reported success but the remote and this machine disagree on the commit, so the site may not have updated." >> "%LOG%" 2>&1
+:publish_failed
+echo FAILED: the week is measured but not published; see publish.py output above. >> "%LOG%"
+"%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The week is measured but not published (see .unprompted\status\publish.json). A committed week is pushed automatically by the next start or daily sync; anything else needs a look. Do not re-run the week." >> "%LOG%" 2>&1
 exit /b 3
 
 :published
