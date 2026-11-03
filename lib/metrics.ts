@@ -713,6 +713,8 @@ export type Rates = {
   /** Registry ids whose extraction is billed through the Batch API, at half price. */
   batch_billed_extractors: string[];
   verified: string;
+  /** Dollars a calendar month may cost before the pre-flight refuses a category. */
+  monthly_ceiling?: number;
   engines: Record<string, { input_per_m: number; output_per_m: number; per_search: number }>;
   /** Earlier price lists, each with the last run date it priced. */
   history?: { until: string; engines: Rates["engines"] }[];
@@ -977,4 +979,58 @@ export function coverage(run: RunRecord): EngineCoverage[] {
 /** The engines that did not answer everything they were asked, worst first. */
 export function shortfall(run: RunRecord): EngineCoverage[] {
   return coverage(run).filter((c) => c.short);
+}
+
+/**
+ * What a date's spend bought, and where the month stands. Held readings count,
+ * as they do in budget.py: they were paid for. Only readings still unpublished
+ * count as buying nothing; a held reading later re-read and published did not.
+ */
+export function spendSummary(
+  priced: { date: string; category: string; dollars: number }[],
+  unpublished: ReadonlySet<string>,
+  date: string | null,
+  month: string,
+) {
+  const isUnpublished = (p: { date: string; category: string }) => unpublished.has(`${p.date}/${p.category}`);
+  const sum = (rows: { dollars: number }[]) => rows.reduce((total, p) => total + p.dollars, 0);
+  const day = priced.filter((p) => p.date === date);
+  return {
+    dayUnpublished: sum(day.filter(isUnpublished)),
+    allDayUnpublished: day.length > 0 && day.every(isUnpublished),
+    monthTotal: sum(priced.filter((p) => p.date.startsWith(month))),
+  };
+}
+
+export type RunState = "published" | "held" | "reread" | "failed" | "not_started" | "none";
+
+/**
+ * One row per measured date, newest first. Held wins over a published file only
+ * while it has no published re-read. `outcomes` comes from the latest run report,
+ * the only record of a category that failed before writing any reading.
+ */
+export function runHistory(
+  published: { date: string; category: string }[],
+  held: { date: string; category: string; recoveredOn?: string }[],
+  categories: string[],
+  report: { date: string | null; outcomes: Record<string, string> } | null,
+  limit = 12,
+): { date: string; states: Record<string, RunState> }[] {
+  const dates = new Set([...published, ...held].map((r) => r.date));
+  if (report?.date) dates.add(report.date);
+  return [...dates].sort().reverse().slice(0, limit).map((date) => {
+    const states: Record<string, RunState> = {};
+    for (const category of categories) {
+      const match = (r: { date: string; category: string }) => r.date === date && r.category === category;
+      const outcome = report?.date === date ? report.outcomes[category] : undefined;
+      const heldHere = held.find(match);
+      states[category] = published.some(match) ? "published"
+        : heldHere ? (heldHere.recoveredOn ? "reread" : "held")
+        : outcome === "held" ? "held"
+        : outcome === "failed" ? "failed"
+        : outcome === "not_started" || outcome === "not_run" ? "not_started"
+        : "none";
+    }
+    return { date, states };
+  });
 }

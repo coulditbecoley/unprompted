@@ -456,7 +456,7 @@ export type QuarantineEntry = {
 };
 
 /** The share of a run's answered calls a name must reach to have held it. */
-const QUARANTINE_MATERIAL = 0.02;
+export const QUARANTINE_MATERIAL = 0.02;
 
 export function quarantineKey(name: string): string {
   const parts = name.trim().toLowerCase().replace(/['\u2019]s\b/g, "").replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/);

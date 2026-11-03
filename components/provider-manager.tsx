@@ -47,9 +47,15 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
   async function detect() {
     setBusy("scanning");
     setMessage("");
+    setScan(null);
     try {
       const res = await fetch("/api/admin/providers/detect");
       const data = await res.json();
+      if (!res.ok || !Array.isArray(data.detected) || typeof data.note !== "string") {
+        setScan(null);
+        setMessage("Provider scan unavailable. No installation result was confirmed.");
+        return;
+      }
       setScan(data);
     } catch {
       setMessage("Scan failed. Is the dashboard still running?");
@@ -135,7 +141,7 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
   return (
     <section style={{ marginBottom: 34 }}>
       <div className="ed-head">
-        <p className="label">Providers</p>
+        <h3 className="label">Providers</h3>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={detect} disabled={busy !== "idle"}>
             {busy === "scanning" ? "Scanning…" : "Scan this machine"}
@@ -159,7 +165,7 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
             <span className="mono" style={{ fontSize: 11, color: p.enabled ? "var(--fg-2)" : "var(--fg-3)" }}>
               {p.kind === "cli" ? "LOCAL CLI" : "API"}
             </span>
-            <button aria-label={`${p.enabled ? "Disable" : "Enable"} ${p.label}`} className="btn" onClick={() => toggle(p.id)} style={{ fontSize: 11 }}>
+            <button aria-label={`${p.label} enabled`} aria-pressed={p.enabled} disabled={busy !== "idle"} className="btn" onClick={() => toggle(p.id)} style={{ fontSize: 11 }}>
               {p.enabled ? "ON" : "OFF"}
             </button>
           </div>
@@ -174,7 +180,7 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
             row on the chart. It answers on your subscription rather than per call, but
             reports no citations, and the run will refuse to start on any machine where it
             is not installed. An <strong>extractor</strong> only reads answers other engines
-            gave, never appears on the chart, and falls back to the API when absent.
+            gave and never appears on the chart. Local extraction is not currently isolation-qualified.
           </p>
           {scan.detected.length === 0 ? (
             <p className="mono" style={{ fontSize: 12.5, color: "var(--fg-3)", margin: 0 }}>
@@ -239,17 +245,19 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
       )}
 
       <div className="panel" style={{ padding: "14px 16px", marginTop: 12 }}>
-        <p className="label" style={{ marginTop: 0 }}>Add manually</p>
+        <h4 className="label" style={{ marginTop: 0 }}>Add manually</h4>
         <div className="prov-form">
           <input
             className="prov-in"
             placeholder="Name"
+            aria-label="Provider name"
             value={draft.label}
             onChange={(e) => setDraft({ ...draft, label: e.target.value })}
           />
           <select
             className="prov-in"
             value={draft.kind}
+            aria-label="Provider kind"
             onChange={(e) => setDraft({ ...draft, kind: e.target.value as "api" | "cli" })}
           >
             <option value="cli">Local CLI</option>
@@ -258,6 +266,7 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
           <select
             className="prov-in"
             value={draft.role}
+            aria-label="Provider role"
             onChange={(e) => setDraft({ ...draft, role: e.target.value as "engine" | "extractor" })}
           >
             <option value="extractor">Extractor</option>
@@ -268,12 +277,14 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
               <input
                 className="prov-in"
                 placeholder="Command, e.g. claude"
+                aria-label="CLI command"
                 value={draft.command}
                 onChange={(e) => setDraft({ ...draft, command: e.target.value })}
               />
               <input
                 className="prov-in"
                 placeholder="Args, e.g. -p"
+                aria-label="CLI arguments"
                 value={draft.args}
                 onChange={(e) => setDraft({ ...draft, args: e.target.value })}
               />
@@ -281,19 +292,20 @@ export function ProviderManager({ initial, initialRaw }: { initial: Provider[]; 
           ) : (
             <input
               className="prov-in"
-              placeholder="Key variable, e.g. MISTRAL_API_KEY"
+              placeholder="Key variable, e.g. OPENAI_API_KEY"
+              aria-label="Credential environment variable name"
               value={draft.env}
               onChange={(e) => setDraft({ ...draft, env: e.target.value })}
             />
           )}
-          <button className="btn" onClick={addManual}>
+          <button className="btn" onClick={addManual} disabled={busy !== "idle"}>
             Add
           </button>
         </div>
       </div>
 
       {message && (
-        <p className="mono" style={{ fontSize: 12.5, color: "var(--fg-2)", marginTop: 10 }}>
+        <p role="status" className="mono" style={{ fontSize: 12.5, color: "var(--fg-2)", marginTop: 10 }}>
           {message}
         </p>
       )}

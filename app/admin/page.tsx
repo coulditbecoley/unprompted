@@ -7,6 +7,7 @@ import { load as loadYaml } from "js-yaml";
 import {
   CATEGORY,
   MAX_ENGINE_ERROR_RATE,
+  QUARANTINE_MATERIAL,
   REPO_ROOT,
   answered,
   costOfRun,
@@ -16,6 +17,8 @@ import {
   loadHistory,
   loadQuarantine,
   loadRates,
+  runHistory,
+  spendSummary,
   standings,
 } from "@/lib/data";
 import { CATEGORIES } from "@/lib/categories";
@@ -27,6 +30,8 @@ import { totals } from "@/lib/analytics";
 import { AdminEditor } from "@/components/admin-editor";
 import { ProviderManager } from "@/components/provider-manager";
 import { loadProviders, providerStatus } from "@/lib/providers";
+import { RUN_ZONE } from "@/lib/schedule";
+import { buildNeeds, parseLastRun, readingNames } from "@/lib/admin-status";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -41,18 +46,48 @@ export const metadata: Metadata = {
  * slower than an instant write and it is the entire point: "check my work" has
  * to be verifiable, not promised.
  */
+const RUN_STATE_WORD = {
+  published: "Published", held: "Held", reread: "Held, re-read published",
+  failed: "Failed", not_started: "Not started", none: "No record",
+} as const;
+
 const money = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+  // Outside the try: during a build this await signals Next that the page is
+  // dynamic, and that signal must not be caught as a data failure.
   const selected = (await searchParams).category;
+  try { return await Dashboard(selected); }
+  catch (error) {
+    console.error("Admin dashboard could not render:", error instanceof Error ? error.message : "unknown error");
+    let last = null;
+    try { last = parseLastRun(fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8")); } catch { /* Report may also be unavailable. */ }
+    return <section className="shell section admin-page">
+      <h1>Admin dashboard</h1>
+      <p role="alert">Dashboard data or configuration is missing or invalid. Check the selected question bank, alias map, providers.json, data/rates.json and run archives in the repository. Editors and totals are unavailable until the files can be read safely.</p>
+      <RunStatus last={last} />
+    </section>;
+  }
+}
+
+async function Dashboard(selected: string | undefined) {
   const category = CATEGORIES.some(c => c.slug === selected) ? selected! : CATEGORY;
   const questionsPath = path.join(REPO_ROOT, "questions", `${category}.yml`);
   const aliasesPath = path.join(REPO_ROOT, "aliases", `${category}.yml`);
 
   const questionsRaw = fs.readFileSync(questionsPath, "utf-8");
   const aliasesRaw = fs.readFileSync(aliasesPath, "utf-8");
-  const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number };
+  const spec = loadYaml(questionsRaw) as { method_version: number; runs_per_question: number; questions: unknown[] };
+  const aliasSpec = loadYaml(aliasesRaw) as { canonical: unknown };
+  if (!spec || !Number.isInteger(spec.method_version) || spec.method_version < 1
+      || !Number.isInteger(spec.runs_per_question) || spec.runs_per_question < 1
+      || !Array.isArray(spec.questions) || !spec.questions.length
+      || !aliasSpec?.canonical || typeof aliasSpec.canonical !== "object" || Array.isArray(aliasSpec.canonical)) {
+    throw new Error("Invalid editor configuration");
+  }
+  const providersRaw = fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8");
+  const registry = JSON.parse(providersRaw);
 
   const perCategory = CATEGORIES.map((c) => {
     let history: ReturnType<typeof loadHistory> = [];
@@ -78,19 +113,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // The engine panel reads the registry rather than a second hardcoded list,
   // so adding a provider shows up here without another edit.
   const providers = loadProviders();
+  if (!Array.isArray(registry?.providers) || registry.providers.length !== providers.length
+      || providers.some(p => (p.args !== undefined && (!Array.isArray(p.args) || p.args.some(a => typeof a !== "string")))
+        || (p.command !== undefined && typeof p.command !== "string") || (p.env !== undefined && typeof p.env !== "string"))) {
+    throw new Error("Invalid provider registry");
+  }
   const withStatus = providers
     .filter((p) => p.enabled)
     .map((p) => ({ p, ...providerStatus(p) }));
   const engines = withStatus.filter(({ p }) => p.role === "engine");
   const extractors = withStatus.filter(({ p }) => p.role === "extractor");
-  // Registry order is priority, and only one extractor ever reads a run. Which
-  // one is not obvious from a list of enabled toggles, and getting it wrong is
-  // expensive rather than visible, so the dashboard names it.
+  // Web-host configuration is not evidence of which extractor the runner used.
   const activeExtractor = extractors.find(({ p, ready }) => p.kind === "api" && ready);
 
-  // Where the week actually runs. A local CLI engine cannot exist on a GitHub
-  // runner, so registering one moves the measurement onto this machine, and the
-  // dashboard should say so rather than leaving it to be inferred.
+  // Local engines require the operator's run machine; its scheduler is not observable here.
   const localEngines = engines.filter(({ p }) => p.kind === "cli");
   const held = loadHeld();
 
@@ -107,6 +143,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
      away, which meant the one question a spend limit makes urgent could only be
      answered by logging into three provider dashboards. */
   const rates = loadRates();
+  const validPrices = (prices: unknown) => prices && typeof prices === "object" && !Array.isArray(prices)
+    && Object.values(prices).every(p => p && [p.input_per_m, p.output_per_m, p.per_search].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0));
+  if (!rates || !validPrices(rates.engines) || !Array.isArray(rates.batch_billed_extractors)
+      || !Number.isFinite(rates.batch_discount) || rates.batch_discount < 0
+      || (rates.monthly_ceiling !== undefined && (!Number.isFinite(rates.monthly_ceiling) || rates.monthly_ceiling < 0))
+      || (rates.history !== undefined && (!Array.isArray(rates.history) || rates.history.some(h => !h || typeof h.until !== "string" || !validPrices(h.engines))))) {
+    throw new Error("Invalid rates");
+  }
   const { runs: allRuns, errors: archiveErrors } = loadAllRuns(true);
 
   // Priced once. Each run was previously parsed by loadAllRuns and then priced
@@ -147,6 +191,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // confidently; "not recorded" is the honest reading.
   const costRecorded = weekCost > 0;
 
+  // Same counting as the pre-flight's budget check, from committed files. It
+  // cannot see spend sitting in the run machine's local checkpoints.
+  const ceiling = rates.monthly_ceiling ?? 0;
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: RUN_ZONE, year: "numeric", month: "2-digit" }).format(new Date());
+  const spend = spendSummary(
+    priced.map((p) => ({ date: p.run.run_date, category: p.run.category, dollars: p.cost.total })),
+    new Set(held.runs.filter((h) => !h.recoveredOn).map((h) => `${h.date}/${h.category}`)),
+    lastDate,
+    month,
+  );
+
   /* -- how the engines behaved ---------------------------------------------
      The same measurement checks.py rule 5 uses to hold a week, shown
      continuously instead of only when it fires. */
@@ -163,35 +218,29 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const signupTries = clickCount("signup:tried");
 
   const lastRun = (() => {
-    try {
-      return JSON.parse(
-        fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8"),
-      ) as { status: string; at: string };
-    } catch {
-      return null;
-    }
+    try { return parseLastRun(fs.readFileSync(path.join(REPO_ROOT, "data", "last-run.json"), "utf-8")); }
+    catch { return null; }
   })();
 
-  /*
-    Names frequent enough to have held the run they came from.
+  const publishedRuns = loadAllRuns();
+  const reportOutcomes = Object.fromEntries(Object.entries(lastRun?.categories ?? {}).map(([slug, value]) => [
+    slug, String((value as { outcome?: unknown } | null)?.outcome ?? ""),
+  ]));
+  const weeks = runHistory(
+    publishedRuns.runs.map(r => ({ date: r.run_date, category: r.category })),
+    held.runs.map(h => ({ date: h.date, category: h.category, recoveredOn: h.recoveredOn })),
+    CATEGORIES.map(c => c.slug),
+    lastRun ? { date: lastRun.runDate, outcomes: reportOutcomes } : null,
+  );
 
-    Three thresholds were tried here and all three were wrong. The raw 549 reads
-    as an emergency and is mostly a tail of things named once. An arbitrary
-    "three or more" invents its own urgency. And applying the checks' real 2%
-    floor -- but taking the denominator from the flagship category's latest
-    published run and applying it to counts pooled from every category -- gave
-    33 where the rule gives 24, because a 279-answer run's floor is six and this
-    was testing against five.
+  const categoryLabel = (slug: string) => CATEGORIES.find(c => c.slug === slug)?.label ?? slug;
+  const needsDate = lastRun?.runDate;
+  const needs = buildNeeds(lastRun, allRuns, [...archiveErrors, ...quarantineErrors], categoryLabel);
+  const latestOfCategory = allRuns.filter(r => r.category === category).at(-1);
+  const selectedQuarantine = latestOfCategory ? readingNames(latestOfCategory) : undefined;
+  const selectedNames = selectedQuarantine?.names ?? [];
 
-    loadQuarantine decides it now, per run, because it is the only place that
-    still knows which run each count came from.
-
-    It is still a reading of the past, and the label says so. Quarantine files
-    are written when a run happens, so they reflect the alias map of that
-    moment; curating aliases afterwards does not rewrite them, and the count only
-    falls when the next run is measured against the corrected map. Showing this
-    as outstanding work would be wrong -- most of it is already fixed.
-  */
+  // Historical name counts do not establish whether later alias edits resolved them.
   const materialQuarantine = quarantine.filter((q) => q.material).length;
   const enginesReady = engines.filter((e) => e.ready).length;
 
@@ -205,16 +254,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             ? "held"
             : lastRun?.status === "failed"
               ? "failed"
-              : "none yet",
-      note: selectedArchive.error ? "archive unavailable" : run ? run.run_date : "no data",
-      attention: lastRun?.status === "failed" || lastRun?.status === "held",
+              : lastRun ? "unknown" : "unavailable",
+      note: lastRun?.runDate ?? "run date not recorded",
+      attention: !lastRun || !["published", "measured"].includes(lastRun.status),
     },
     nextRunTile(),
     {
-      // Reachable is not the same as behaving. An engine can answer every probe
-      // and still have failed a third of the week it was asked to measure --
-      // which is exactly what happened on 2026-08-24 -- so the tile carries both.
-      label: "Engines",
+      // Local configuration and recorded error rates are separate evidence.
+      label: "Engines configured here",
       value: `${enginesReady}/${engines.length}`,
       note:
         enginesReady !== engines.length
@@ -229,15 +276,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       value: costRecorded ? money(weekCost) : "not recorded",
       note: archiveErrors.length
         ? `${archiveErrors.length} file${archiveErrors.length === 1 ? "" : "s"} unreadable`
-        : costRecorded
-          ? `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`
-          : "this run reported no usage",
+        : !costRecorded
+          ? (lastDate ? "no priced usage recorded" : "no readable runs")
+          : spend.allDayUnpublished
+            ? "published nothing"
+            : spend.dayUnpublished > 0
+              ? `${money(spend.dayUnpublished)} published nothing`
+              : `${weekAnswers} answers, ${money(weekCost / Math.max(weekAnswers, 1))} each`,
       // An incomplete total presented as complete is the one thing a money tile
       // must never do.
-      attention: archiveErrors.length > 0,
+      attention: archiveErrors.length > 0 || (costRecorded && spend.dayUnpublished > 0),
     },
     {
-      label: "Weeks recorded",
+      label: "Published readings",
       value: selectedArchive.error ? "unavailable" : String(history.length),
       note: `method v${spec.method_version}`,
     },
@@ -255,45 +306,81 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       label: "Signup reports",
       value: audience.status === "ok" ? String(signups) : audience.status,
       note:
-        signupTries > signups
+        audience.status !== "ok" ? "counts unavailable" : signupTries > signups
           ? `${signupTries} tried, 7d`
           : signups === 0
             ? "none yet, 7d"
             : "7 complete days",
     },
     {
-      label: "Held last run",
+      label: "Material names",
       value: quarantineErrors.length ? "incomplete" : String(materialQuarantine),
       note:
         quarantineErrors.length ? "review unreadable quarantine evidence" : materialQuarantine === 0
           ? "nothing material"
           : `of ${quarantine.length} names, at the map of that day`,
-      // Not marked. These are a record of the last run, not a queue: alias
-      // edits since then already cover most of them and the count only moves
-      // when the next Monday is measured.
+      // Recorded names are not proof of unresolved alias decisions.
       attention: quarantineErrors.length > 0,
     },
   ];
 
   return (
-    <section className="shell section">
-      <RunStatus />
+    <section className="shell section admin-page">
+      <h1 className="sr-only">Admin dashboard</h1>
+      <section aria-labelledby="needs-you-heading">
+        <h2 className="zone" id="needs-you-heading">Needs you</h2>
+        {needs.length ? <ul className="admin-needs">{needs.map(need => <li key={need.id}>
+          <strong><a href={need.href}>{need.title}</a></strong>
+          {need.details.map((detail, i) => <p key={i} style={{ margin: "4px 0" }}>{detail}</p>)}
+        </li>)}</ul> : <p>Nothing needs attention in the committed report for {needsDate}.</p>}
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>Recorded evidence only; current credentials and fixes on the run machine are not verified here.</p>
+      </section>
       <AdminMasthead tiles={tiles} />
 
-      {/*
-        The visible h1 is gone: the most valuable space on a dashboard is its
-        first screen, and this spent it on the word "Admin" at 40px over a note
-        about commit behaviour, neither of which is why anybody opens the page.
-        The note now lives beside the editors that do the committing.
+      <nav className="admin-nav" aria-label="Jump to a section">
+        <a href="#needs-you-heading">Needs you</a>
+        <a href="#latest-run-heading">Latest run</a>
+        <a href="#run-history-heading">Run history</a>
+        <a href="#operations-heading">Operations</a>
+        <a href="#cost-heading">Cost and health</a>
+        <a href="#audience-heading">Audience</a>
+        <a href="#curation-heading">Curation</a>
+      </nav>
+      <RunStatus last={lastRun} />
 
-        The heading itself stays, unstyled and off-screen. Removing it outright
-        left the document starting at h2 and cost anyone navigating by headings
-        the name of the page -- a visual decision should not take a structural
-        one with it.
-      */}
-      <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
-      <h1 className="sr-only">Admin dashboard</h1>
-      <h2 className="zone">Operations</h2>
+      <section aria-labelledby="run-history-heading" style={{ marginBottom: 26 }}>
+        <h2 className="zone" id="run-history-heading">Run history</h2>
+        <div style={{ overflowX: "auto" }} tabIndex={0} role="region" aria-labelledby="run-history-heading">
+          <table aria-label="Recorded run history by category" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th scope="col" style={{ textAlign: "left", padding: "6px 12px 6px 0" }}>Date</th>
+                {CATEGORIES.map(c => <th scope="col" key={c.slug} style={{ textAlign: "left", padding: "6px 12px 6px 0" }}>{c.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map(week => <tr key={week.date} style={{ borderTop: "1px solid var(--rule)" }}>
+                <th scope="row" className="mono" style={{ textAlign: "left", fontWeight: 400, padding: "6px 12px 6px 0", whiteSpace: "nowrap" }}>{week.date}</th>
+                {CATEGORIES.map(c => {
+                  const state = week.states[c.slug];
+                  const bad = state === "held" || state === "failed" || state === "not_started";
+                  return <td key={c.slug} className={bad ? "pending" : undefined} style={{ padding: "6px 12px 6px 0", color: state === "none" ? "var(--fg-3)" : undefined }}>
+                    {state === "published" ? <Link href={`/chart/${c.slug}/${week.date}`}>Published</Link> : RUN_STATE_WORD[state]}
+                  </td>;
+                })}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+          Latest {weeks.length} dates in readable archives or the latest report. Earlier failures replaced by a later report may be absent. ?No record? does not prove a run was skipped.
+        </p>
+      </section>
+      <h2 className="zone" id="operations-heading">Operations</h2>
+      <nav className="admin-nav" id="category-nav" aria-label="Category for State, Quarantine and the editors">
+        <span className="admin-nav-label">Showing</span>
+        {CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}#category-nav`} aria-current={c.slug === category ? "page" : undefined}>{c.label}</a>)}
+      </nav>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
@@ -301,8 +388,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h3 style={{ marginTop: 6 }}>State</h3>
           <div className="cmp-stat"><span>Method version</span><span>v{spec.method_version}</span></div>
           <div className="cmp-stat"><span>Runs per question</span><span>{spec.runs_per_question}</span></div>
-          <div className="cmp-stat"><span>Weeks recorded</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
-          <div className="cmp-stat"><span>Latest run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
+          <div className="cmp-stat"><span>Published readings</span><span>{selectedArchive.error ? "unavailable" : history.length}</span></div>
+          <div className="cmp-stat"><span>Latest published run</span><span>{selectedArchive.error ? "unavailable" : run?.run_date ?? "none"}</span></div>
           <div className="cmp-stat"><span>Brands charted</span><span>{selectedArchive.error ? "unavailable" : board.length}</span></div>
           {selectedArchive.error && <p>Published readings are unavailable. Review the archive errors below.</p>}
         </div>
@@ -325,9 +412,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </small>
             </span>
             <span className={enginesReady === engines.length ? "" : "pending"}>
-              {enginesReady === engines.length
-                ? "ALL REACHABLE"
-                : `${engines.length - enginesReady} UNREACHABLE`}
+              {engines.length === 0 ? "NONE ENABLED" : enginesReady === engines.length
+                ? "CONFIGURED ON WEB HOST"
+                : `${engines.length - enginesReady} NOT CONFIGURED HERE`}
             </span>
           </div>
 
@@ -342,79 +429,72 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
           <div className="cmp-stat">
             <span>
-              Reads the week{" "}
+              Extractor configured here{" "}
               <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                {activeExtractor?.p.kind === "api" ? "API" : "LOCAL"}
+                {activeExtractor ? "API" : ""}
               </small>
             </span>
-            <span>{activeExtractor?.p.label ?? "NONE AVAILABLE"}</span>
+            <span>{activeExtractor?.p.label ?? "NONE CONFIGURED HERE"}</span>
           </div>
 
           <div className="cmp-stat">
-            <span style={{ color: "var(--fg-2)" }}>Fallbacks</span>
+            <span style={{ color: "var(--fg-2)" }}>Other extractor entries</span>
             <span style={{ color: "var(--fg-3)" }}>
               {extractors.filter(({ p }) => p.id !== activeExtractor?.p.id).length} configured
             </span>
           </div>
 
           <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
-            Only the extractor named above reads the week: the first enabled one
-            this machine can reach, in registry order. The rest cost nothing
-            until it is unavailable. Keys are read from the environment and never
-            stored in the repo.
+            These checks inspect the web host?s environment and installed files only.
+            They do not verify credentials, model access or the run machine. Recorded
+            readings identify the extractor that actually ran.
           </p>
         </div>
 
-        <div className="cmp-pick">
+        <section className="cmp-pick" aria-labelledby="quarantine-heading">
           <TrimTop />
-          <h3 style={{ marginTop: 6 }}>Quarantine</h3>
+          <h3 id="quarantine-heading" style={{ marginTop: 6 }}>Quarantine: {categoryLabel(category)}</h3>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+            {selectedQuarantine
+              ? `Latest readable run: ${selectedQuarantine.reading.run_date}. ${selectedQuarantine.total} answered calls.`
+              : "No readable run is available for this category."}
+          </p>
+          <p><a href="#alias-editor">Review this category’s alias map</a></p>
           {quarantineErrors.length > 0 && <div><p>Quarantine review is incomplete. These sources could not be assessed:</p><ul>{quarantineErrors.map(error => <li key={error}>{error}</li>)}</ul></div>}
-          {quarantine.length === 0 ? (
+          {selectedNames.length === 0 ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              {quarantineErrors.length ? "No names are available from the readable records." : "No unresolved names in the latest archived readings."}
+              {!selectedQuarantine || quarantineErrors.length ? "No names are available from the readable evidence." : "No unrecognised names were recorded in this run."}
             </p>
           ) : (
             <>
-              {/*
-                The material count first. Leading with 549 made a tail of names
-                seen once look like a crisis, beside the number that actually
-                decides whether a Monday publishes. Both are a record of the run
-                that wrote them: aliases curated since are not reflected until
-                the next run is measured.
-              */}
               <div className="cmp-stat">
-                <span>{quarantineErrors.length ? "Material in readable records" : "Material at the last run"}</span>
-                <span>{materialQuarantine}</span>
+                <span>Names reaching the review threshold</span>
+                <span>{selectedNames.filter(q => q.material).length}</span>
               </div>
               <div className="cmp-stat">
                 <span style={{ color: "var(--fg-2)" }}>Seen at all</span>
-                <span style={{ color: "var(--fg-3)" }}>{quarantine.length}</span>
+                <span style={{ color: "var(--fg-3)" }}>{selectedNames.length}</span>
               </div>
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
-                Latest readable record of each category, most frequent first.
-                Unresolved names need contextual review; frequency does not establish product identity.
+                Most frequent first. Review threshold: {QUARANTINE_MATERIAL * 100}% of this run’s answered calls.
               </p>
-
-              {/* Only the names worth acting on are visible. The tail is real
-                  data but it is noise, so it collapses rather than filling the
-                  page above the editors. */}
               <div className="q-chips">
-                {quarantine.slice(0, 6).map((q) => (
+                {selectedNames.slice(0, 6).map((q) => (
                   <span className="q-chip" key={q.name}>
                     {q.name}
-                    <b>{q.count}</b>
+                    <b>{q.count}</b>{q.material && <span>review</span>}
                   </span>
                 ))}
               </div>
 
-              {quarantine.length > 6 && (
+              {selectedNames.length > 6 && (
                 <details className="q-more">
-                  <summary>{quarantine.length - 6} more</summary>
+                  <summary>{selectedNames.length - 6} more</summary>
                   <div className="q-chips" style={{ marginTop: 10 }}>
-                    {quarantine.slice(6).map((q) => (
+                    {selectedNames.slice(6).map((q) => (
                       <span className="q-chip q-chip-dim" key={q.name}>
                         {q.name}
-                        <b>{q.count}</b>
+                        <b>{q.count}</b>{q.material && <span>review</span>}
                       </span>
                     ))}
                   </div>
@@ -422,7 +502,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               )}
             </>
           )}
-        </div>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
+            Recorded names, not suggested aliases. Decisions stay manual; frequency does not establish product identity.
+            Check the current alias map: edits since this run are not reflected here.
+          </p>
+        </section>
       </div>
 
       <section style={{ marginBottom: 26 }}>
@@ -430,7 +514,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <TrimTop />
           <div className="seq-row" style={{ gridTemplateColumns: "1fr auto" }}>
             <span className="seq-brand" style={{ gap: 3 }}>
-              Runs on
+              Configured launch location
               <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
                 {localEngines.length > 0
                   ? "scripts/weekly-run.cmd, Windows Task Scheduler, Mondays 13:00"
@@ -438,7 +522,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </small>
             </span>
             <span className="mono" style={{ fontSize: 11 }}>
-              {localEngines.length > 0 ? "THIS MACHINE" : "CLOUD"}
+              {localEngines.length > 0 ? "RUN MACHINE" : "CLOUD"}
             </span>
           </div>
 
@@ -447,7 +531,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="seq-brand" style={{ gap: 3 }}>
                 Why not the cloud
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
-                  {localEngines.map(({ p }) => p.label).join(", ")} sign in on this
+                  {localEngines.map(({ p }) => p.label).join(", ")} sign in on the run
                   machine, and a run refuses to start without every declared engine
                 </small>
               </span>
@@ -479,7 +563,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 {h.category}
                 <small className="mono" style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 400 }}>
                   {h.date} · held, {h.errorRate === null ? "call error rate unavailable" : `${Math.round(h.errorRate * 100)}% of calls errored`} ·
-                  kept in data/held, never published
+                  original held evidence retained in data/held
                 </small>
                 <small style={{ fontSize: 12, color: "var(--fg-2)", fontWeight: 400 }}>
                   {h.reasons.length ? h.reasons.join("; ") : "Hold reasons were not recorded. Review this run's saved answers and runner logs."}
@@ -500,7 +584,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 10 }}>
           A held run is the checks working, not a crash. Its answers are kept, so
           it can be re-read with <span className="mono">unprompted.reextract</span>{" "}
-          once the cause is fixed, without paying to ask anything again.
+          once the cause is fixed. Re-reading may incur extraction charges; it does not ask the engines again.
         </p>
       </section>
 
@@ -514,6 +598,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         table style. A dashboard with two ways of drawing a row of figures reads
         as two dashboards.
       */}
+      <h2 className="zone" id="cost-heading">Cost and health</h2>
       <div className="cmp-grid" style={{ marginBottom: 26 }}>
         <div className="cmp-pick">
           <TrimTop />
@@ -526,10 +611,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
           {!costRecorded ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              This run reported no usage, so it prices at nothing. That is a
-              missing measurement rather than a free week &mdash; runs archived
-              before usage was instrumented carry none, and the archive is
-              append-only, so they are never backfilled with a guess.
+              {lastDate ? "No priced usage is recorded for this date. This does not establish that the run was free." : "No readable run is available to price."}
             </p>
           ) : (
             <>
@@ -555,24 +637,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span>{money(weekCost)}</span>
               </div>
 
+              {spend.dayUnpublished > 0 && (
+                <div className="cmp-stat">
+                  <span>Held, not published</span>
+                  <span className="pending">{money(spend.dayUnpublished)}</span>
+                </div>
+              )}
+
               <div className="cmp-stat">
                 <span style={{ color: "var(--fg-2)" }}>
                   Every recorded run{" "}
                   <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                    AT TODAY&rsquo;S RATES
+                    AT RECORDED-DATE RATES
                   </small>
                 </span>
                 <span style={{ color: "var(--fg-3)" }}>{money(archiveCost)}</span>
               </div>
-
-              {archiveErrors.length > 0 && (
-                <p style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 12 }}>
-                  {archiveErrors.length} archived file
-                  {archiveErrors.length === 1 ? "" : "s"} could not be read, so
-                  these totals are low by an unknown amount:{" "}
-                  <span className="mono">{archiveErrors.join("; ")}</span>
-                </p>
-              )}
 
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
                 Priced from usage the providers reported, each run at the rates
@@ -582,6 +662,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 against a real bill monthly.
               </p>
             </>
+          )}
+          <div className="cmp-stat">
+            <span>This month <small className="mono">{month} &middot; PUBLISHED AND HELD</small></span>
+            <span>{money(spend.monthTotal)}{ceiling > 0 ? ` of ${money(ceiling)}` : ""}</span>
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+            Recorded archive spend only; local checkpoint spend is not included.
+          </p>
+          {archiveErrors.length > 0 && (
+            <p style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 12 }}>
+              {archiveErrors.length} archived file{archiveErrors.length === 1 ? "" : "s"} could not be read,
+              so these totals are low by an unknown amount: <span className="mono">{archiveErrors.join("; ")}</span>
+            </p>
           )}
         </div>
 
@@ -598,7 +691,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <span>
                     {h.engine}{" "}
                     <small className="mono" style={{ fontSize: 10.5, color: "var(--fg-3)" }}>
-                      {h.calls - h.errors} ANSWERED &middot; {h.errors} FAILED
+                      {h.calls - h.errors} WITHOUT ERROR &middot; {h.errors} FAILED
                       {h.errors > 0 && h.worstCategory ? ` \u00b7 WORST IN ${h.worstCategory}` : ""}
                     </small>
                   </span>
@@ -617,8 +710,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {worst.worstCategory ?? "a category"} on {lastDate}.
                     </strong>{" "}
                     A run that fails this check is meant to be held rather than
-                    published, so this one is worth a decision: it stands on the
-                    other engines, or it comes down.
+                    published. Review the recorded outcome and cause; do not treat
+                    the remaining engines as a comparable full run.
                   </>
                 ) : (
                   <>
@@ -641,15 +734,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         but it was previously eleven headings deep in a flat list, which made
         the operational status above it hard to find at all.
       */}
-      <h2 className="zone">Audience</h2>
+      <h2 className="zone" id="audience-heading">Audience</h2>
       <AdminAnalytics current={audience} previous={previousAudience} />
 
-      {/*
-        Where the week runs, and what came out of it. Split out from State
-        because "is the automatic flow actually working" is a different question
-        from "what is the method", and it is the one asked most often.
-      */}
-      <h2 className="zone">Curation</h2>
+      <h2 className="zone" id="curation-heading">Curation</h2>
       <p className="section-lead" style={{ marginTop: -4 }}>
         Every change below becomes a commit on the public repository. Editing the
         questions, the run count or the engine list changes what the numbers
@@ -657,9 +745,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         engine list moved without one is held rather than published.
       </p>
 
-      <ProviderManager initial={providers} initialRaw={fs.readFileSync(path.join(REPO_ROOT, "providers.json"), "utf-8")} />
+      <ProviderManager initial={providers} initialRaw={providersRaw} />
 
       <AdminEditor
+        key={`questions-${category}`}
         category={category}
         label="Questions"
         target="questions"
@@ -667,7 +756,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         note="Changing any question, or the run count, changes what every future number means. Bump method_version in the same edit."
       />
 
+      <div id="alias-editor" />
       <AdminEditor
+        key={`aliases-${category}`}
         category={category}
         label="Alias map"
         target="aliases"

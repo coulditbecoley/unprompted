@@ -195,6 +195,8 @@ test("admin server component remains readable when a published category is corru
   const data = await import("../lib/data.ts");
   const categories = await import("../lib/categories.ts");
   const providers = await import("../lib/providers.ts");
+  const schedule = await import("../lib/schedule.ts");
+  const adminStatus = await import("../lib/admin-status.ts");
   const category = categories.DEFAULT_CATEGORY;
   const reading = data.loadHistory(category, true)[0];
   const heldReading = data.loadHeld().runs[0];
@@ -211,6 +213,8 @@ test("admin server component remains readable when a published category is corru
     if (id === "@/lib/data") return data;
     if (id === "@/lib/categories") return categories;
     if (id === "@/lib/providers") return providers;
+    if (id === "@/lib/schedule") return schedule;
+    if (id === "@/lib/admin-status") return adminStatus;
     if (id === "@/lib/analytics") return { totals };
     // Exercise the page and its real archive readers; child widgets are outside this check.
     if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
@@ -224,6 +228,282 @@ test("admin server component remains readable when a published category is corru
   assert.match(html, /Quarantine review is incomplete/);
   assert.ok(html.includes(`https://github.com/coulditbecoley/unprompted/blob/main/data/held/${heldReading.date}/${heldReading.category}.json`));
   assert.match(html, /PUBLISHED/); // healthy categories remain visible
+});
+
+test("admin latest-run panel and tile share the committed report, including legacy and damaged status", async (t) => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const data = await import("../lib/data.ts");
+  const modules = {
+    "@/lib/data": data,
+    "@/lib/categories": await import("../lib/categories.ts"),
+    "@/lib/providers": await import("../lib/providers.ts"),
+    "@/lib/schedule": await import("../lib/schedule.ts"),
+    "@/lib/admin-status": await import("../lib/admin-status.ts"),
+    "@/lib/analytics": { totals },
+  };
+  const nativeRequire = createRequire(import.meta.url);
+  const compile = (file, clock = Date) => {
+    const source = fs.readFileSync(new URL(`../${file}.tsx`, import.meta.url), "utf8");
+    const compiled = ts.transpileModule(source, { compilerOptions: {
+      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+    } }).outputText;
+    const exports = {};
+    runInNewContext(compiled, { exports, process, console, Date: clock, require: id => {
+      if (modules[id]) return modules[id];
+      if (id.startsWith("@/components/") || id === "next/link") return new Proxy({}, { get: () => () => null });
+      return nativeRequire(id);
+    } });
+    return exports;
+  };
+  modules["@/components/run-status"] = compile("components/run-status");
+  modules["@/components/admin-masthead"] = compile("components/admin-masthead");
+  const page = compile("app/admin/page").default;
+  const statusPath = path.join(data.REPO_ROOT, "data/last-run.json");
+  const originalRead = fs.readFileSync;
+  const current = { status: "held", run_date: "2026-11-02", at: "2026-11-03T01:19:44+00:00", categories: {
+    "ai-coding-assistants": { outcome: "held", dollars: 18.46, minutes: 17.4, reasons: ["perplexity failed 75 of its own 75 calls"] },
+    "ai-image-generators": { outcome: "held", dollars: 17.49, minutes: 17.1, reasons: ["Unknown name: Generative AI by Getty Images"] },
+    "ai-writing-tools": { outcome: "held", dollars: 13.71, minutes: 15, reasons: ["Three names need a decision"] },
+  } };
+  const render = async (view = page, category = "ai-writing-tools") => {
+    const html = renderToStaticMarkup(await view({ searchParams: Promise.resolve({ category }) }));
+    return {
+      html,
+      needs: html.match(/<section aria-labelledby="needs-you-heading">([\s\S]*?)<\/section>/)?.[1],
+      quarantine: html.match(/<section class="cmp-pick" aria-labelledby="quarantine-heading">([\s\S]*?)<\/section>/)?.[1],
+      tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)?.[1],
+      panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
+    };
+  };
+  const status = (t, value) => t.mock.method(fs, "readFileSync", (p, ...args) => {
+    if (p !== statusPath) return originalRead(p, ...args);
+    if (value instanceof Error) throw value;
+    return typeof value === "string" ? value : JSON.stringify(value);
+  });
+
+  await t.test("admin keeps the report visible and disables editors when configuration is missing or corrupt", async t => {
+    for (const [file, bad] of [
+      ["questions/ai-writing-tools.yml", null], ["questions/ai-writing-tools.yml", "null"],
+      ["aliases/ai-writing-tools.yml", "canonical: []"], ["aliases/ai-writing-tools.yml", "[invalid"],
+      ["providers.json", null], ["providers.json", "not json"], ["providers.json", '{"providers":[null]}'],
+      ["data/rates.json", null], ["data/rates.json", "{}"],
+    ]) {
+      await t.test(`${file}: ${bad}`, async t => {
+        t.mock.method(fs, "readFileSync", (p, ...args) => {
+          if (path.resolve(String(p)) !== path.resolve(data.REPO_ROOT, file)) return originalRead(p, ...args);
+          if (bad === null) throw new Error("ENOENT");
+          return bad;
+        });
+        const { html } = await render();
+        assert.match(html, /role="alert"/);
+        assert.match(html, /Editors and totals are unavailable/);
+        assert.match(html, /id="latest-run-heading"/);
+        assert.doesNotMatch(html, /COMMIT TO REPO|\$0\.00|NaN/);
+      });
+    }
+  });
+
+  await t.test("admin headings, forms and scroll regions have accessible names and honest scope", async () => {
+    modules["@/lib/admin-edit"] = await import("../lib/admin-edit.ts");
+    modules["@/components/admin-editor"] = compile("components/admin-editor");
+    modules["@/components/provider-manager"] = compile("components/provider-manager");
+    try {
+      const { html } = await render(compile("app/admin/page").default);
+      const levels = [...html.matchAll(/<h([1-6])(?:\s|>)/g)].map(m => Number(m[1]));
+      assert.equal(levels[0], 1);
+      for (let i = 1; i < levels.length; i++) assert.ok(levels[i] <= levels[i - 1] + 1);
+      assert.match(html, /<h2[^>]*id="cost-heading"/);
+      assert.match(html, /table aria-label="Recorded run history by category"/);
+      for (const tag of html.match(/<(?:input|select|textarea)\b[^>]*>/g)) assert.match(tag, /aria-label="[^"]+"/);
+      assert.match(html, /aria-pressed="(?:true|false)"/);
+      assert.match(html, /They do not verify credentials/);
+      assert.doesNotMatch(html, /ALL REACHABLE|UNREACHABLE|AT TODAY|THIS MACHINE/);
+    } finally {
+      delete modules["@/components/admin-editor"];
+      delete modules["@/components/provider-manager"];
+    }
+  });
+
+  await t.test("current held report uses its run date, not its timestamp or published archive", async t => {
+    status(t, current);
+    const { tile, panel } = await render();
+    assert.match(tile, /held/);
+    assert.ok(tile.includes(current.run_date));
+    assert.doesNotMatch(tile, /2026-10-28/);
+    assert.ok(panel.includes(`<strong>${current.run_date}</strong>`));
+    assert.ok(panel.toLowerCase().includes(`datetime="${current.at.toLowerCase()}"`));
+    for (const row of Object.values(current.categories)) {
+      assert.ok(panel.includes(`$${row.dollars.toFixed(2)}`));
+      assert.ok(panel.includes(row.minutes.toFixed(1)));
+    }
+    assert.match(panel, /perplexity failed 75/);
+    assert.match(panel, /Generative AI by Getty Images/);
+    assert.match(panel, /deployment and later local attempts are not verified/);
+  });
+  await t.test("mixed outcomes retain zero amounts and never invent missing costs", async t => {
+    status(t, { status: "held", run_date: "2026-11-02", at: "2026-11-03T01:19:44Z", categories: {
+      "ai-coding-assistants": { outcome: "passed", dollars: 0, minutes: 0, reasons: [] },
+      "ai-image-generators": { outcome: "failed", minutes: 6, reasons: ["timed out", "<script>bad</script>"] },
+      "ai-writing-tools": { outcome: "not_started", reasons: ["run budget spent"] },
+      other: { outcome: "not_run" },
+    } });
+    const { panel } = await render();
+    for (const word of ["Passed", "Failed", "Not started", "Not run", "$0.00", "0.0", "not recorded", "timed out", "run budget spent"]) assert.ok(panel.includes(word), word);
+    assert.match(panel, /&lt;script&gt;bad&lt;\/script&gt;/);
+    assert.doesNotMatch(panel, /<script>/);
+  });
+  await t.test("legacy prose survives without inventing a run date or categories", async t => {
+    status(t, { status: "published", at: "2026-10-29T00:20:00Z", detail: "Older report\nNo category breakdown" });
+    const { tile, panel } = await render();
+    assert.match(tile, /run date not recorded/);
+    assert.match(panel, /Run date not recorded/);
+    assert.match(panel, /Per-category results were not recorded/);
+    assert.match(panel, /Older report\nNo category breakdown/);
+    assert.doesNotMatch(panel, /\$0\.00/);
+  });
+  for (const [name, value] of [["missing", new Error("ENOENT")], ["invalid JSON", "{"], ["null", "null"], ["array", "[]"]]) {
+    await t.test(name, async t => {
+      status(t, value);
+      const { tile, panel } = await render();
+      assert.match(tile, /unavailable/);
+      assert.match(panel, /missing or unreadable/);
+    });
+  }
+  await t.test("malformed fields stay unknown and cannot crash the page", async t => {
+    status(t, { status: {}, at: "bad date", run_date: "2026-02-30", categories: {
+      broken: null,
+      partial: { outcome: "toString", minutes: -1, dollars: "12", reasons: [null, {}, "valid reason"] },
+    } });
+    const { tile, panel } = await render();
+    assert.match(tile, /unknown/);
+    assert.match(tile, /run date not recorded/);
+    assert.match(panel, /Unknown|has not reported yet/);
+    assert.match(panel, /valid reason/);
+    assert.doesNotMatch(panel, /Invalid Date|\$12|>NaN<|>-1/);
+  });
+  await t.test("month spend survives a latest reading without usage and follows the runner's local month", async () => {
+    const reading = { category: "ai-writing-tools", engines: [], extractions: [] };
+    modules["@/lib/data"] = { ...data,
+      loadAllRuns: () => ({ runs: [{ ...reading, run_date: "2026-10-30" }, { ...reading, run_date: "2026-10-31" }], errors: [] }),
+      costOfRun: run => ({ total: run.run_date === "2026-10-30" ? 20 : 0, items: [] }),
+    };
+    class MonthBoundary extends Date {
+      constructor(...args) { super(...(args.length ? args : ["2026-11-01T01:00:00Z"])); }
+    }
+    try {
+      const { html } = await render(compile("app/admin/page", MonthBoundary).default);
+      assert.match(html, /This month/);
+      assert.match(html, /2026-10/);
+      assert.match(html, /\$20\.00 of \$350/);
+      assert.match(html, /local checkpoint spend is not included/);
+    } finally { modules["@/lib/data"] = data; }
+  });
+  const withReadings = async (runs, check, errors = [], category = "ai-writing-tools") => {
+    modules["@/lib/data"] = { ...data,
+      loadAllRuns: () => ({ runs, errors }),
+      loadQuarantine: () => ({ entries: [], errors }),
+      loadHeld: () => ({ runs: [], errors: [] }),
+    };
+    try { await check(await render(compile("app/admin/page").default, category)); }
+    finally { modules["@/lib/data"] = data; }
+  };
+  const answer = { engine: "perplexity", error: null, refused: false, brands: [], sources: [] };
+  const reading = (category, extra = {}) => ({ category, run_date: "2026-11-02", engines: ["perplexity"],
+    extractions: Array.from({ length: 100 }, () => ({ ...answer })), quarantined: [], ...extra });
+  await t.test("quarantine follows the selected category's latest reading and shares the Needs you threshold", async t => {
+    status(t, current);
+    const runs = [
+      reading("ai-writing-tools", { run_date: "2026-10-28", quarantined: ["Old writing name"] }),
+      reading("ai-writing-tools", { quarantined: ["New name", "New name Inc", "Rare <script>"] }),
+      reading("ai-image-generators", { quarantined: ["Image name", "Image name"] }),
+    ];
+    await withReadings(runs, ({ quarantine, needs, html }) => {
+      assert.match(quarantine, /Quarantine: AI Writing Tools/);
+      assert.match(quarantine, /Latest readable run: 2026-11-02/);
+      assert.match(quarantine, /100 answered calls/);
+      assert.match(quarantine, /New name<b>2<\/b><span>review/);
+      assert.match(quarantine, /Rare &lt;script&gt;<b>1<\/b>/);
+      assert.doesNotMatch(quarantine, /Old writing name|Image name|<script>/);
+      assert.match(quarantine, /href="#alias-editor"/);
+      assert.match(html, /id="alias-editor"/);
+      assert.match(quarantine, /Decisions stay manual/);
+      assert.match(needs, /review 1 unrecognised name/);
+    });
+    await withReadings(runs, ({ quarantine }) => {
+      assert.match(quarantine, /Image name<b>2<\/b><span>review/);
+      assert.doesNotMatch(quarantine, /New name|Rare|Old writing name/);
+    }, [], "ai-image-generators");
+  });
+  await t.test("quarantine distinguishes an empty run from missing or unreadable evidence", async t => {
+    status(t, current);
+    await withReadings([reading("ai-writing-tools", { run_date: "2026-10-28" })], ({ quarantine }) => {
+      assert.match(quarantine, /Latest readable run: 2026-10-28/);
+      assert.match(quarantine, /No unrecognised names were recorded in this run/);
+    });
+    await withReadings([], ({ quarantine }) => {
+      assert.match(quarantine, /No readable run is available for this category/);
+      assert.doesNotMatch(quarantine, /No unrecognised names/);
+    });
+    await withReadings([reading("ai-writing-tools")], ({ quarantine }) => {
+      assert.match(quarantine, /Quarantine review is incomplete/);
+      assert.doesNotMatch(quarantine, /No unrecognised names/);
+    }, ["data/held/broken.json: invalid JSON"]);
+  });
+  await t.test("Needs you shows exact engine errors once, four material names by category, and failed categories", async t => {
+    status(t, { ...current, categories: { ...current.categories,
+      "ai-coding-assistants": { outcome: "failed", reasons: ["Startup probe refused"] },
+      another: { outcome: "not_started", reasons: ["Run time budget spent"] },
+    } });
+    const error = "HTTPError: HTTP Error 401: Unauthorized";
+    await withReadings([
+      reading("ai-coding-assistants", { extractions: [{ ...answer, error }, { ...answer, error }] }),
+      reading("ai-image-generators", { quarantined: ["Getty", "Getty", "Below threshold"] }),
+      reading("ai-writing-tools", { quarantined: ["Copilot", "Copilot", "GitBook", "GitBook", "DeepL", "DeepL"] }),
+      reading("ai-writing-tools", { run_date: "2026-10-28", extractions: [{ ...answer, error: "old stale failure" }], quarantined: ["Old name"] }),
+    ], ({ needs }) => {
+      assert.match(needs, /Check or replace the perplexity credential on the run machine/);
+      assert.equal(needs.split(error).length - 1, 1);
+      assert.match(needs, /2 answer records/);
+      assert.match(needs, /review 1 unrecognised name/);
+      assert.match(needs, /review 3 unrecognised names/);
+      for (const name of ["Getty", "Copilot", "GitBook", "DeepL", "Startup probe refused", "Run time budget spent"]) assert.ok(needs.includes(name), name);
+      assert.match(needs, /category=ai-writing-tools#alias-editor/);
+      assert.doesNotMatch(needs, /old stale failure|Old name|Below threshold/);
+      assert.match(needs, /Alias decisions stay manual/);
+    });
+  });
+  await t.test("Needs you is empty only with readable successful evidence", async t => {
+    status(t, { status: "measured", run_date: "2026-11-02", categories: { "ai-writing-tools": { outcome: "passed" } } });
+    await withReadings([reading("ai-writing-tools")], ({ needs }) => {
+      assert.match(needs, /Nothing needs attention/);
+      assert.match(needs, /2026-11-02/);
+    });
+    await withReadings([], ({ needs }) => {
+      assert.match(needs, /evidence is incomplete/);
+      assert.doesNotMatch(needs, /Nothing needs attention/);
+    });
+    await withReadings([reading("ai-writing-tools")], ({ needs }) => {
+      assert.match(needs, /Restore unreadable run evidence/);
+      assert.doesNotMatch(needs, /Nothing needs attention/);
+    }, ["data/held/broken.json: invalid JSON"]);
+  });
+  await t.test("Needs you distinguishes extraction authentication from the answering engine", async t => {
+    status(t, { status: "held", run_date: "2026-11-02", categories: { "ai-writing-tools": { outcome: "held" } } });
+    await withReadings([reading("ai-writing-tools", { extractions: [{ ...answer, error: "extract failed: HTTP 401 Unauthorized <script>" }] })], ({ needs }) => {
+      assert.match(needs, /Check or replace the extractor credential/);
+      assert.doesNotMatch(needs, /replace the perplexity credential|<script>/);
+      assert.match(needs, /&lt;script&gt;/);
+    });
+  });
+  await t.test("Needs you does not call missing or legacy status healthy", async t => {
+    status(t, { status: "held", detail: "Older held report" });
+    const { needs } = await render();
+    assert.match(needs, /Review the latest run report/);
+    assert.match(needs, /Older held report/);
+    assert.doesNotMatch(needs, /Nothing needs attention/);
+  });
 });
 
 test("quarantine uses latest records, excludes refusals from the floor, and exposes missing evidence", async (t) => {
@@ -311,6 +591,21 @@ test("recorded absence of affiliations never falls back to today's ownership", a
 });
 
 test("route integration: analytics and stale editor protection", async (t) => {
+  await t.test("commit rejects unauthorised writes and reports a GitHub write race as a conflict", async t => {
+    const edit = { target: "aliases", category: "ai-writing-tools", baseline: "canonical: {}\n", content: "canonical: {Alpha: []}\n" };
+    let writes = 0, reads = 0;
+    t.mock.method(globalThis, "fetch", async (_url, init = {}) => {
+      if (init.method === "PUT") { writes++; return Response.json({ message: "sha changed" }, { status: 409 }); }
+      reads++;
+      return Response.json({ sha: "remote-sha", content: Buffer.from(edit.baseline).toString("base64") });
+    });
+    assert.equal((await commit(request("/api/admin/commit", edit))).status, 401);
+    assert.equal(reads, 0);
+    const result = await commit(request("/api/admin/commit", edit, { cookie }));
+    assert.equal(result.status, 409);
+    assert.match((await result.json()).error, /reload and merge/);
+    assert.equal(writes, 1);
+  });
   await t.test("a brand click never becomes a brand view or referral", async () => {
     calls.length = 0;
     assert.equal((await track(request("/api/track", { path: "/brand/ai-coding-assistants/cursor", event: "out:source", referrer: "https://chatgpt.com" }))).status, 204);
@@ -426,4 +721,197 @@ test("every top-level page is known to the proxy, so its visits are not counted 
     .map((entry) => `/${entry.name}`);
   const missing = pages.filter((page) => !known.some((prefix) => page === prefix || `${page}/`.startsWith(prefix)));
   assert.deepEqual(missing, []);
+});
+
+test("spend names what published nothing and counts held readings toward the month", async () => {
+  const { spendSummary } = await import("../lib/metrics.ts");
+  const priced = [
+    { date: "2026-10-28", category: "a", dollars: 10 },
+    { date: "2026-11-02", category: "a", dollars: 20 },
+    { date: "2026-11-02", category: "b", dollars: 30 },
+  ];
+  const all = spendSummary(priced, new Set(["2026-11-02/a", "2026-11-02/b"]), "2026-11-02", "2026-11");
+  assert.deepEqual(all, { dayUnpublished: 50, allDayUnpublished: true, monthTotal: 50 });
+  const some = spendSummary(priced, new Set(["2026-11-02/a"]), "2026-11-02", "2026-11");
+  assert.deepEqual(some, { dayUnpublished: 20, allDayUnpublished: false, monthTotal: 50 });
+  const none = spendSummary([], new Set(), null, "2026-11");
+  assert.deepEqual(none, { dayUnpublished: 0, allDayUnpublished: false, monthTotal: 0 });
+});
+
+test("run history tells published, held, re-read and failed weeks apart", async () => {
+  const { runHistory } = await import("../lib/metrics.ts");
+  const rows = runHistory(
+    [{ date: "2026-10-28", category: "a" }],
+    [{ date: "2026-10-28", category: "b" }, { date: "2026-10-19", category: "a", recoveredOn: "2026-10-28" }],
+    ["a", "b"],
+    { date: "2026-11-02", outcomes: { a: "failed", b: "not_started" } },
+  );
+  assert.deepEqual(rows.map(r => r.date), ["2026-11-02", "2026-10-28", "2026-10-19"]);
+  assert.deepEqual(rows[0].states, { a: "failed", b: "not_started" });
+  assert.deepEqual(rows[1].states, { a: "published", b: "held" });
+  assert.deepEqual(rows[2].states, { a: "reread", b: "none" });
+  assert.equal(runHistory([{ date: "2026-10-28", category: "a" }, { date: "2026-10-21", category: "a" }], [], ["a"], null, 1).length, 1);
+  assert.deepEqual(runHistory([], [], ["a", "b"], {
+    date: "2026-11-02", outcomes: { a: "held", b: "not_run" },
+  })[0].states, { a: "held", b: "not_started" });
+});
+
+test("Needs you lists an engine only past the limit that holds a week", async () => {
+  const { buildNeeds, parseLastRun } = await import("../lib/admin-status.ts");
+  const answers = (engine, total, failed) => Array.from({ length: total }, (_, i) => ({
+    engine, brands: [], error: i < failed ? "HTTPError: HTTP Error 401: Unauthorized" : null,
+  }));
+  const report = parseLastRun(JSON.stringify({ status: "measured", run_date: "2026-11-02", categories: { a: { outcome: "passed" } } }));
+  const reading = extractions => [{ run_date: "2026-11-02", category: "a", quarantined: [], extractions }];
+  const label = slug => slug;
+  assert.deepEqual(buildNeeds(report, reading(answers("perplexity", 75, 1)), [], label), []);
+  assert.deepEqual(buildNeeds(report, reading(answers("perplexity", 75, 15)), [], label), []); // exactly 20% passes
+  const [need] = buildNeeds(report, reading(answers("perplexity", 75, 16)), [], label);
+  assert.equal(need.id, "engine-perplexity");
+  assert.match(need.details[0], /credential/);
+  const extractionFailures = answers("perplexity", 75, 16).map(a => ({ ...a,
+    error: a.error ? `extract failed: ${a.error}` : null,
+  }));
+  const [extractor] = buildNeeds(report, reading([...extractionFailures, ...answers("gemini", 75, 0)]), [], label);
+  assert.equal(extractor.id, "engine-extractor");
+  assert.match(extractor.details[0], /extractor credential/);
+  const mixed = [...answers("perplexity", 75, 8)];
+  for (let i = 8; i < 16; i++) mixed[i].error = "extract failed: HTTP 401";
+  assert.deepEqual(buildNeeds(report, reading(mixed), [], label).map(n => n.id), ["engine-perplexity", "engine-extractor"]);
+  assert.equal(parseLastRun("not json"), null);
+  assert.equal(parseLastRun("[]"), null);
+});
+
+test("editor diff shows replacements, insertions, deletions and newline changes", async () => {
+  const { editDiff } = await import("../lib/admin-edit.ts");
+  assert.equal(editDiff("a\nold\nz\n", "a\nnew\nz\n"), "- old\n+ new");
+  assert.equal(editDiff("a\nz\n", "a\nnew\nz\n"), "+ new");
+  assert.equal(editDiff("a\nold\nz\n", "a\nz\n"), "- old");
+  assert.equal(editDiff("a", "a\n"), "+ ");
+  assert.equal(editDiff("a\r\n", "a\n"), "");
+});
+
+test("admin text and input boundaries retain contrast in every theme", () => {
+  const css = fs.readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const themes = [...css.matchAll(/:root[^{}]*\{([^}]+)\}/g)].map(m => Object.fromEntries(
+    [...m[1].matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})\b/g)].map(v => [v[1], v[2]]),
+  )).filter(t => t.bg);
+  const luminance = hex => {
+    const rgb = hex.slice(1).match(/../g).map(n => parseInt(n, 16) / 255).map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4);
+    return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+  };
+  const ratio = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+  assert.equal(themes.length, 3);
+  for (const theme of themes) for (const bg of ["bg", "surface", "surface-2"]) {
+    for (const fg of ["fg", "fg-2", "fg-3", "warn", "up", "down"]) assert.ok(ratio(theme[fg], theme[bg]) >= 4.5, `${fg}/${bg} ${ratio(theme[fg], theme[bg])}`);
+    assert.ok(ratio(theme.focus, theme[bg]) >= 3);
+  }
+  assert.match(css, /\.admin-page \.q-chip b\s*\{ opacity: 1;/);
+  assert.match(css, /\.admin-page :is\(input, select, textarea\).*border-color: var\(--fg-3\)/);
+});
+
+test("admin components handle a failed scan and invalid audience timestamps", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const nativeRequire = createRequire(import.meta.url);
+  let states = [], cursor = 0;
+  const compile = (name, modules, fetch) => {
+    const source = fs.readFileSync(new URL(`../components/${name}.tsx`, import.meta.url), "utf8");
+    const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+    const exports = {};
+    runInNewContext(compiled, { exports, fetch, require: id => modules[id] ?? nativeRequire(id) });
+    return exports;
+  };
+  const provider = compile("provider-manager", { react: { useState: initial => {
+    const i = cursor++;
+    if (!(i in states)) states[i] = initial;
+    return [states[i], value => { states[i] = value; }];
+  } } }, async () => Response.json({ error: "Not authorised" }, { status: 401 })).ProviderManager;
+  const props = { initial: [], initialRaw: '{"providers":[]}' };
+  let tree = provider(props);
+  const scan = tree.props.children[0].props.children[1].props.children[0];
+  await scan.props.onClick(); cursor = 0; tree = provider(props);
+  const providerHtml = renderToStaticMarkup(tree);
+  assert.match(providerHtml, /Provider scan unavailable/);
+  assert.doesNotMatch(providerHtml, /Nothing found/);
+  const fixture = { ...await totals(7, 1), status: "ok" };
+  const analytics = compile("admin-analytics", { "@/lib/analytics": {
+    feed: async () => [{ at: "broken", path: "/" }], daily: async () => [],
+    cadence: async () => [{ agent: "crawler", first: 0, last: Infinity }],
+  } }).AdminAnalytics;
+  const html = renderToStaticMarkup(await analytics({ current: fixture, previous: fixture }));
+  assert.match(html, /Timestamp unavailable/);
+  assert.match(html, /tabindex="0" role="region" aria-label="Audience activity by week"/);
+});
+
+test("editor requires current review, retains conflicts and resets errors on editing", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const editing = await import("../lib/admin-edit.ts");
+  const nativeRequire = createRequire(import.meta.url);
+  const source = fs.readFileSync(new URL("../components/admin-editor.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
+  } }).outputText;
+  let states = [], cursor = 0, response = Response.json({ ok: true }), requests = [];
+  const exports = {};
+  runInNewContext(compiled, { exports, require: id => {
+    if (id === "@/lib/admin-edit") return editing;
+    if (id === "react") return { useState: initial => {
+      const index = cursor++;
+      if (!(index in states)) states[index] = initial;
+      return [states[index], value => { states[index] = value; }];
+    } };
+    return nativeRequire(id);
+  }, fetch: async (_url, init) => { requests.push(JSON.parse(init.body)); return response; } });
+  let props = { category: "ai-writing-tools", target: "aliases", label: "Alias map", initial: "canonical: {}\n", note: "" };
+  let nodes;
+  const render = () => {
+    cursor = 0; nodes = [];
+    const visit = node => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      nodes.push(node); visit(node.props?.children);
+    };
+    visit(exports.AdminEditor(props));
+  };
+  const button = text => nodes.find(n => n.type === "button" && n.props.children === text);
+  const change = value => { nodes.find(n => n.type === "textarea").props.onChange({ target: { value } }); render(); };
+  const review = () => { button("REVIEW CHANGES").props.onClick(); render(); };
+  render();
+  change("canonical: {Alpha: []}\n");
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  await button("COMMIT TO REPO").props.onClick();
+  assert.equal(requests.length, 0);
+  review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, false);
+  assert.match(nodes.find(n => n.type === "pre").props.children, /\+ canonical: \{Alpha/);
+  change("canonical: {Beta: []}\n");
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  review();
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.equal(requests[0].baseline, props.initial);
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  change("canonical: {Gamma: []}\n"); review();
+  response = Response.json({ error: "Invalid aliases" }, { status: 400 });
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.ok(nodes.some(n => n.props?.children === "Invalid aliases"));
+  change("canonical: {Delta: []}\n");
+  assert.ok(!nodes.some(n => n.props?.children === "Invalid aliases"));
+  review();
+  response = Response.json({ error: "File changed" }, { status: 409 });
+  await button("COMMIT TO REPO").props.onClick(); render();
+  assert.equal(requests.at(-1).baseline, "canonical: {Beta: []}\n");
+  assert.equal(nodes.find(n => n.type === "textarea").props.value, "canonical: {Delta: []}\n");
+  assert.ok(nodes.some(n => n.type === "a" && n.props.href === "/admin?category=ai-writing-tools"));
+  change("canonical: {Epsilon: []}\n"); review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  states = [];
+  props = { ...props, target: "questions", initial: "method_version: 1\nquestions: [Old]\n" };
+  render(); change("method_version: 1\nquestions: [New]\n"); review();
+  assert.ok(nodes.some(n => n.props?.role === "alert" && /method_version/.test(n.props.children)));
+  assert.equal(button("COMMIT TO REPO").props.disabled, true);
+  change("method_version: 2\nquestions: [New]\n"); review();
+  assert.equal(button("COMMIT TO REPO").props.disabled, false);
 });
