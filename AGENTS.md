@@ -24,7 +24,9 @@ where the API keys are, or it reports them missing), `--collect-only`
 (re-applies aliases to stored raw names; works only when every answer in the
 reading stored them, which readings from November 2026 do; older held weeks
 need the paid re-read), `unprompted.report`,
-`scripts/watchdog.py`, the tests. Small real calls: `run --preflight --qualify`
+`scripts/watchdog.py`, `scripts/readiness.py --free`, `scripts/backup.py`
+(and `--restore-check`), `scripts/publish.py pending`, `scripts/heartbeat.py`,
+the tests. Small real calls: `run --preflight --qualify`
 and `scripts/readiness.py` (subscription calls, a tiny Gemini probe and one tiny
 account check per other paid engine). Paid:
 `python -m unprompted.run` *including* `--dry-run` (it still asks every
@@ -42,18 +44,41 @@ Perplexity to prove the provider accepts the account, pennies; nothing is
 measured). The weekly run makes the same account check before each category
 and refuses that category, unpaid, when a key is rejected or out of credit. `scripts/readiness.py` runs it
 for the coming Monday every Sunday at 18:00 and opens a GitHub issue if it
-finds anything (registered by `scripts/install-weekly-task.ps1`).
+finds anything (registered by `scripts/install-weekly-task.ps1`, which takes
+that task's time limit from `readiness.py --print-task-limit`; re-run the
+installer from the main checkout after changing probe budgets). It and the
+free Wednesday 09:00 mid-week check (`readiness.py --free`, no provider
+calls) also check GitHub sign-in, push access, free disk, the age of the
+backup and sync status files, an unpushed week, an undelivered alert and
+whether the GitHub watchdog is still enabled.
+
+**Unattended safety nets.** The launcher sets the `UNPROMPTED_HEARTBEAT`
+repository variable at start and at every exit after it; `watchdog.yml`
+opens an issue if it is missing by 14:15 New York (not started) or 21:30 (not
+finished), and the Tuesday check also compares each live
+`/standings/<category>.json` with the archive. Publication goes through
+`scripts/publish.py`: a failed push is recorded in
+`.unprompted/publish-intent.json` and the next start or daily sync pushes
+exactly that commit (fast-forward only; anything unclear is an issue, never a
+force). The daily 08:30 sync also runs `scripts/backup.py`: append-only,
+content-addressed copies of `.unprompted/`, `private/`, `data/`, `reports/`,
+the shadow audit and the vault analytics to `E:\Backups\Unprompted` and
+`%OneDrive%\Backups\Unprompted` (OneDrive counts only once uploaded, which
+nothing here verifies), with a Sunday restore check. Each job writes
+`.unprompted/status/<job>.json`. No new paid category starts with under 5 GiB
+free. Site analytics also go to an untrimmed Redis stream
+(`<namespace>:events`), exported daily to the vault as immutable segments.
 
 **The weekly run.** `scripts/weekly-run.cmd`, Mondays 13:00 via Windows Task
 Scheduler on the operator's machine (two engines are local CLIs signed in
 there). Outcome per category: `data/last-run.json` → `categories` (runs from
 November 2026 on; older status files have only the prose `detail`). When the
 launcher reports a failure (a refused pull, dirty data, failed publication) it
-writes `.unprompted/last-attempt.json` instead, and some early stops (no
-.venv, wrong branch, staged changes) write no status at all, so
+writes `.unprompted/last-attempt.json` instead (every early stop now alerts;
+with no .venv it opens the issue through `gh` directly), so
 `last-run.json` can describe an earlier week: check its `at`. The full log is
-`.unprompted/logs/weekly.log` on that machine (rotated to `weekly.log.1` past
-20 MB); the old `%TEMP%\unprompted-weekly.log` is used when .venv is missing
+`.unprompted/logs/weekly.log` on that machine (rotated past 20 MB to a
+timestamped `weekly-*.log`, never overwritten); the old `%TEMP%\unprompted-weekly.log` is used when .venv is missing
 or the log folder cannot be set up. Exit codes:
 0 all passed · 1 the launcher or `--collect-only` stopped before measuring ·
 2 at least one category held, failed or not started (passed ones still

@@ -2555,12 +2555,11 @@ def test_tree_cleanup_is_bounded_and_checks_taskkill_failure(monkeypatch):
 
     def taskkill(argv, **kwargs):
         seen.update(kwargs)
-        raise subprocess.CalledProcessError(1, argv)
+        return subprocess.CompletedProcess(argv, 1)
 
     monkeypatch.setattr(cli_provider.subprocess, "run", taskkill)
-    with pytest.raises(subprocess.CalledProcessError):
-        cli_provider._end_tree(123)
-    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and seen["check"] is True
+    cli_provider._end_tree(123)  # its exit code is not the proof; the caller's drain is
+    assert seen["timeout"] == cli_provider.TREE_KILL_SECONDS and "check" not in seen
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows taskkill contract")
@@ -2581,13 +2580,13 @@ def test_timed_reports_cleanup_failure_without_an_unbounded_wait(monkeypatch, ca
             pass
 
     def taskkill(argv, **kwargs):
-        assert kwargs["timeout"] == 60 and kwargs["check"] is True
-        raise subprocess.CalledProcessError(1, argv)
+        assert kwargs["timeout"] == 60 and "check" not in kwargs
+        return subprocess.CompletedProcess(argv, 1)
 
     monkeypatch.setattr(timed.subprocess, "Popen", lambda *a, **kw: FakePopen())
     monkeypatch.setattr(timed.subprocess, "run", taskkill)
     assert timed.run(1, ["offline"]) == 125
-    assert waits == [1, 5]
+    assert waits == [1, 120, 5]  # the drain, not taskkill's code, decides; then the last-resort kill
     assert "cleanup failed" in capsys.readouterr().err
 
 
