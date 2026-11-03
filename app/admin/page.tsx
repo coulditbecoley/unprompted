@@ -18,6 +18,7 @@ import {
   loadQuarantine,
   loadRates,
   quarantineKey,
+  runHistory,
   spendSummary,
   standings,
 } from "@/lib/data";
@@ -45,6 +46,11 @@ export const metadata: Metadata = {
  * slower than an instant write and it is the entire point: "check my work" has
  * to be verifiable, not promised.
  */
+const RUN_STATE_WORD = {
+  published: "Published", held: "Held", reread: "Held, re-read published",
+  failed: "Failed", not_started: "Not started", none: "No record",
+} as const;
+
 const money = (n: number) =>
   n >= 100 ? `$${n.toFixed(0)}` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`;
 
@@ -199,6 +205,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       return null;
     }
   })();
+
+  const publishedRuns = loadAllRuns();
+  const reportOutcomes = Object.fromEntries(Object.entries(lastRun?.categories ?? {}).map(([slug, value]) => [
+    slug, String((value as { outcome?: unknown } | null)?.outcome ?? ""),
+  ]));
+  const weeks = runHistory(
+    publishedRuns.runs.map(r => ({ date: r.run_date, category: r.category })),
+    held.runs.map(h => ({ date: h.date, category: h.category, recoveredOn: h.recoveredOn })),
+    CATEGORIES.map(c => c.slug),
+    lastRun ? { date: lastRun.runDate, outcomes: reportOutcomes } : null,
+  );
 
   const needs: { id: string; title: string; details: string[]; href: string }[] = [];
   const categoryLabel = (slug: string) => CATEGORIES.find(c => c.slug === slug)?.label ?? slug;
@@ -408,6 +425,35 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       */}
       <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
       <RunStatus last={lastRun} />
+
+      <section aria-labelledby="run-history-heading" style={{ marginBottom: 26 }}>
+        <h2 className="zone" id="run-history-heading">Run history</h2>
+        <div style={{ overflowX: "auto" }} tabIndex={0} role="region" aria-labelledby="run-history-heading">
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th scope="col" style={{ textAlign: "left", padding: "6px 12px 6px 0" }}>Date</th>
+                {CATEGORIES.map(c => <th scope="col" key={c.slug} style={{ textAlign: "left", padding: "6px 12px 6px 0" }}>{c.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map(week => <tr key={week.date} style={{ borderTop: "1px solid var(--rule)" }}>
+                <th scope="row" className="mono" style={{ textAlign: "left", fontWeight: 400, padding: "6px 12px 6px 0", whiteSpace: "nowrap" }}>{week.date}</th>
+                {CATEGORIES.map(c => {
+                  const state = week.states[c.slug];
+                  const bad = state === "held" || state === "failed" || state === "not_started";
+                  return <td key={c.slug} className={bad ? "pending" : undefined} style={{ padding: "6px 12px 6px 0", color: state === "none" ? "var(--fg-3)" : undefined }}>
+                    {state === "published" ? <Link href={`/chart/${c.slug}/${week.date}`}>Published</Link> : RUN_STATE_WORD[state]}
+                  </td>;
+                })}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+          Latest {weeks.length} dates with a recorded reading. A week that wrote nothing, or an earlier failure replaced by a later report, leaves no row or shows &ldquo;No record&rdquo;.
+        </p>
+      </section>
       <h2 className="zone">Operations</h2>
 
       <div className="cmp-grid" style={{ marginBottom: 26 }}>

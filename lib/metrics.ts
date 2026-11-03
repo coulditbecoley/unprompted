@@ -1001,3 +1001,35 @@ export function spendSummary(
     monthTotal: sum(priced.filter((p) => p.date.startsWith(month))),
   };
 }
+
+export type RunState = "published" | "held" | "reread" | "failed" | "not_started" | "none";
+
+/**
+ * One row per measured date, newest first. Held wins over a published file only
+ * while it has no published re-read. `outcomes` comes from the latest run report,
+ * the only record of a category that failed before writing any reading.
+ */
+export function runHistory(
+  published: { date: string; category: string }[],
+  held: { date: string; category: string; recoveredOn?: string }[],
+  categories: string[],
+  report: { date: string | null; outcomes: Record<string, string> } | null,
+  limit = 12,
+): { date: string; states: Record<string, RunState> }[] {
+  const dates = new Set([...published, ...held].map((r) => r.date));
+  if (report?.date) dates.add(report.date);
+  return [...dates].sort().reverse().slice(0, limit).map((date) => {
+    const states: Record<string, RunState> = {};
+    for (const category of categories) {
+      const match = (r: { date: string; category: string }) => r.date === date && r.category === category;
+      const outcome = report?.date === date ? report.outcomes[category] : undefined;
+      const heldHere = held.find(match);
+      states[category] = published.some(match) ? "published"
+        : heldHere ? (heldHere.recoveredOn ? "reread" : "held")
+        : outcome === "failed" ? "failed"
+        : outcome === "not_started" || outcome === "not_run" ? "not_started"
+        : "none";
+    }
+    return { date, states };
+  });
+}

@@ -636,3 +636,18 @@ test("spend names what published nothing and counts held readings toward the mon
   const none = spendSummary([], new Set(), null, "2026-11");
   assert.deepEqual(none, { dayUnpublished: 0, allDayUnpublished: false, monthTotal: 0 });
 });
+
+test("run history tells published, held, re-read and failed weeks apart", async () => {
+  const { runHistory } = await import("../lib/metrics.ts");
+  const rows = runHistory(
+    [{ date: "2026-10-28", category: "a" }],
+    [{ date: "2026-10-28", category: "b" }, { date: "2026-10-19", category: "a", recoveredOn: "2026-10-28" }],
+    ["a", "b"],
+    { date: "2026-11-02", outcomes: { a: "failed", b: "not_started" } },
+  );
+  assert.deepEqual(rows.map(r => r.date), ["2026-11-02", "2026-10-28", "2026-10-19"]);
+  assert.deepEqual(rows[0].states, { a: "failed", b: "not_started" });
+  assert.deepEqual(rows[1].states, { a: "published", b: "held" });
+  assert.deepEqual(rows[2].states, { a: "reread", b: "none" });
+  assert.equal(runHistory([{ date: "2026-10-28", category: "a" }, { date: "2026-10-21", category: "a" }], [], ["a"], null, 1).length, 1);
+});
