@@ -244,7 +244,7 @@ test("admin latest-run panel and tile share the committed report, including lega
   const compile = (file, clock = Date) => {
     const source = fs.readFileSync(new URL(`../${file}.tsx`, import.meta.url), "utf8");
     const compiled = ts.transpileModule(source, { compilerOptions: {
-      module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+      target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
     } }).outputText;
     const exports = {};
     runInNewContext(compiled, { exports, process, console, Date: clock, require: id => {
@@ -268,6 +268,7 @@ test("admin latest-run panel and tile share the committed report, including lega
     const html = renderToStaticMarkup(await view({ searchParams: Promise.resolve({ category: "ai-writing-tools" }) }));
     return {
       html,
+      needs: html.match(/<section aria-labelledby="needs-you-heading">([\s\S]*?)<\/section>/)?.[1],
       tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)[1],
       panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
     };
@@ -351,6 +352,71 @@ test("admin latest-run panel and tile share the committed report, including lega
       assert.match(html, /\$20\.00 of \$350/);
       assert.match(html, /local checkpoint spend is not included/);
     } finally { modules["@/lib/data"] = data; }
+  });
+  const withReadings = async (runs, check, errors = []) => {
+    modules["@/lib/data"] = { ...data,
+      loadAllRuns: () => ({ runs, errors }),
+      loadQuarantine: () => ({ entries: [], errors: [] }),
+      loadHeld: () => ({ runs: [], errors: [] }),
+    };
+    try { await check(await render(compile("app/admin/page").default)); }
+    finally { modules["@/lib/data"] = data; }
+  };
+  const answer = { engine: "perplexity", error: null, refused: false, brands: [], sources: [] };
+  const reading = (category, extra = {}) => ({ category, run_date: "2026-11-02", engines: ["perplexity"],
+    extractions: Array.from({ length: 100 }, () => ({ ...answer })), quarantined: [], ...extra });
+  await t.test("Needs you shows exact engine errors once, four material names by category, and failed categories", async t => {
+    status(t, { ...current, categories: { ...current.categories,
+      "ai-coding-assistants": { outcome: "failed", reasons: ["Startup probe refused"] },
+      another: { outcome: "not_started", reasons: ["Run time budget spent"] },
+    } });
+    const error = "HTTPError: HTTP Error 401: Unauthorized";
+    await withReadings([
+      reading("ai-coding-assistants", { extractions: [{ ...answer, error }, { ...answer, error }] }),
+      reading("ai-image-generators", { quarantined: ["Getty", "Getty", "Below threshold"] }),
+      reading("ai-writing-tools", { quarantined: ["Copilot", "Copilot", "GitBook", "GitBook", "DeepL", "DeepL"] }),
+      reading("ai-writing-tools", { run_date: "2026-10-28", extractions: [{ ...answer, error: "old stale failure" }], quarantined: ["Old name"] }),
+    ], ({ needs }) => {
+      assert.match(needs, /Check or replace the perplexity credential on the run machine/);
+      assert.equal(needs.split(error).length - 1, 1);
+      assert.match(needs, /2 answer records/);
+      assert.match(needs, /review 1 unrecognised name/);
+      assert.match(needs, /review 3 unrecognised names/);
+      for (const name of ["Getty", "Copilot", "GitBook", "DeepL", "Startup probe refused", "Run time budget spent"]) assert.ok(needs.includes(name), name);
+      assert.match(needs, /category=ai-writing-tools#alias-editor/);
+      assert.doesNotMatch(needs, /old stale failure|Old name|Below threshold/);
+      assert.match(needs, /Alias decisions stay manual/);
+    });
+  });
+  await t.test("Needs you is empty only with readable successful evidence", async t => {
+    status(t, { status: "measured", run_date: "2026-11-02", categories: { "ai-writing-tools": { outcome: "passed" } } });
+    await withReadings([reading("ai-writing-tools")], ({ needs }) => {
+      assert.match(needs, /Nothing needs attention/);
+      assert.match(needs, /2026-11-02/);
+    });
+    await withReadings([], ({ needs }) => {
+      assert.match(needs, /evidence is incomplete/);
+      assert.doesNotMatch(needs, /Nothing needs attention/);
+    });
+    await withReadings([reading("ai-writing-tools")], ({ needs }) => {
+      assert.match(needs, /Restore unreadable run evidence/);
+      assert.doesNotMatch(needs, /Nothing needs attention/);
+    }, ["data/held/broken.json: invalid JSON"]);
+  });
+  await t.test("Needs you distinguishes extraction authentication from the answering engine", async t => {
+    status(t, { status: "held", run_date: "2026-11-02", categories: { "ai-writing-tools": { outcome: "held" } } });
+    await withReadings([reading("ai-writing-tools", { extractions: [{ ...answer, error: "extract failed: HTTP 401 Unauthorized <script>" }] })], ({ needs }) => {
+      assert.match(needs, /Check or replace the extractor credential/);
+      assert.doesNotMatch(needs, /replace the perplexity credential|<script>/);
+      assert.match(needs, /&lt;script&gt;/);
+    });
+  });
+  await t.test("Needs you does not call missing or legacy status healthy", async t => {
+    status(t, { status: "held", detail: "Older held report" });
+    const { needs } = await render();
+    assert.match(needs, /Review the latest run report/);
+    assert.match(needs, /Older held report/);
+    assert.doesNotMatch(needs, /Nothing needs attention/);
   });
 });
 

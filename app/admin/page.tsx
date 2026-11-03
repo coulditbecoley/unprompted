@@ -7,6 +7,7 @@ import { load as loadYaml } from "js-yaml";
 import {
   CATEGORY,
   MAX_ENGINE_ERROR_RATE,
+  QUARANTINE_MATERIAL,
   REPO_ROOT,
   answered,
   costOfRun,
@@ -16,6 +17,7 @@ import {
   loadHistory,
   loadQuarantine,
   loadRates,
+  quarantineKey,
   spendSummary,
   standings,
 } from "@/lib/data";
@@ -198,6 +200,81 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     }
   })();
 
+  const needs: { id: string; title: string; details: string[]; href: string }[] = [];
+  const categoryLabel = (slug: string) => CATEGORIES.find(c => c.slug === slug)?.label ?? slug;
+  const needsDate = lastRun?.runDate;
+  const needsReadings = allRuns.filter(r => r.run_date === needsDate);
+  const explained = new Set<string>();
+  const failures = new Map<string, { categories: Set<string>; errors: Map<string, number> }>();
+  for (const reading of needsReadings) {
+    for (const answer of reading.extractions) {
+      if (typeof answer.error !== "string" || !answer.error.trim()) continue;
+      const source = answer.error.startsWith("extract failed:") ? "extractor" : answer.engine;
+      const failure = failures.get(source) ?? { categories: new Set<string>(), errors: new Map<string, number>() };
+      failure.categories.add(reading.category);
+      failure.errors.set(answer.error, (failure.errors.get(answer.error) ?? 0) + 1);
+      failures.set(source, failure);
+      explained.add(reading.category);
+    }
+  }
+  for (const [engine, failure] of failures) {
+    const errors = [...failure.errors.keys()].join("\n");
+    const advice = /\b401\b|unauthori[sz]ed|invalid.api.key/i.test(errors)
+      ? `Check or replace the ${engine} credential on the run machine and confirm its access. Authentication was rejected.`
+      : /\b403\b|forbidden/i.test(errors)
+        ? `Check the ${engine} account's permissions and model access on the run machine.`
+        : /\b429\b|rate.limit|quota|billing|credit.balance/i.test(errors)
+          ? `Check the ${engine} usage limits and billing before the next run.`
+          : /timed?.?out|timeout/i.test(errors)
+            ? `Check the ${engine} service and the run machine for the recorded timeout before the next run.`
+            : `Investigate the recorded ${engine} error before the next run.`;
+    needs.push({ id: `engine-${engine}`, title: `${engine}: recorded errors`, href: "#latest-run-heading",
+      details: [advice, `${needsDate}: ${[...failure.categories].map(categoryLabel).join(", ")}.`,
+        ...[...failure.errors].map(([error, count]) => `${error} (${count} answer record${count === 1 ? "" : "s"})`)] });
+  }
+  for (const reading of needsReadings) {
+    const names = new Map<string, { name: string; count: number }>();
+    for (const name of Array.isArray(reading.quarantined) ? reading.quarantined : []) {
+      if (typeof name !== "string" || !name.trim()) continue;
+      const key = quarantineKey(name);
+      if (!key) continue;
+      const entry = names.get(key) ?? { name, count: 0 };
+      entry.count += 1;
+      names.set(key, entry);
+    }
+    const total = answered(reading).length;
+    const material = [...names.values()].filter(n => total > 0 && n.count / total >= QUARANTINE_MATERIAL);
+    if (material.length) {
+      explained.add(reading.category);
+      needs.push({ id: `names-${reading.category}`, title: `${categoryLabel(reading.category)}: review ${material.length} unrecognised name${material.length === 1 ? "" : "s"}`,
+        href: `/admin?category=${encodeURIComponent(reading.category)}#alias-editor`,
+        details: [`Recorded on ${needsDate}: ${material.map(n => n.name).join(", ")}.`,
+          "These reached the run's review threshold. Check the current aliases before deciding; edits since the run are not reflected here. Alias decisions stay manual."] });
+    }
+  }
+  for (const [slug, value] of Object.entries(lastRun?.categories ?? {})) {
+    const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    const outcome = typeof row.outcome === "string" ? row.outcome : "unknown";
+    const reasons = Array.isArray(row.reasons) ? row.reasons.filter((r): r is string => typeof r === "string" && Boolean(r.trim())) : [];
+    if (["failed", "not_started", "not_run"].includes(outcome) || (outcome === "held" && !explained.has(slug))) {
+      needs.push({ id: `category-${slug}`, title: `${categoryLabel(slug)}: ${outcome.replaceAll("_", " ")}`,
+        href: "#latest-run-heading", details: reasons.length ? reasons : ["Review the committed run report; no reason was recorded."] });
+    }
+    if (!["passed", "held", "failed", "not_started", "not_run"].includes(outcome)
+        || (["passed", "held"].includes(outcome) && !needsReadings.some(r => r.category === slug))) {
+      needs.push({ id: `missing-${slug}`, title: `${categoryLabel(slug)}: evidence is incomplete`, href: "#latest-run-heading",
+        details: ["The category outcome or its reading is missing or unreadable. Check the committed report and archive."] });
+    }
+  }
+  if (!needsDate || !lastRun || !["measured", "published", "held", "failed"].includes(lastRun.status)
+      || Object.keys(lastRun.categories).length === 0
+      || (["held", "failed"].includes(lastRun.status) && needs.length === 0)) {
+    needs.push({ id: "report", title: "Review the latest run report", href: "#latest-run-heading",
+      details: [lastRun?.detail || "The dated category report is missing or incomplete; there is not enough evidence to say nothing needs attention."] });
+  }
+  const needsErrors = [...new Set([...archiveErrors, ...quarantineErrors])];
+  if (needsErrors.length) needs.push({ id: "archive", title: "Restore unreadable run evidence", href: "#latest-run-heading", details: needsErrors });
+
   /*
     Names frequent enough to have held the run they came from.
 
@@ -307,6 +384,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   return (
     <section className="shell section">
+      <h1 className="sr-only">Admin dashboard</h1>
+      <section aria-labelledby="needs-you-heading">
+        <h2 className="zone" id="needs-you-heading">Needs you</h2>
+        {needs.length ? <ul>{needs.map(need => <li key={need.id} style={{ marginBottom: 14, overflowWrap: "anywhere" }}>
+          <strong><a href={need.href}>{need.title}</a></strong>
+          {need.details.map((detail, i) => <p key={i} style={{ margin: "4px 0" }}>{detail}</p>)}
+        </li>)}</ul> : <p>Nothing needs attention in the committed report for {needsDate}.</p>}
+        <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>Recorded evidence only; current credentials and fixes on the run machine are not verified here.</p>
+      </section>
       <AdminMasthead tiles={tiles} />
 
       {/*
@@ -321,7 +407,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         one with it.
       */}
       <nav aria-label="Admin category">{CATEGORIES.map(c => <a key={c.slug} href={`/admin?category=${c.slug}`} aria-current={c.slug === category ? "page" : undefined} style={{ marginRight: 16 }}>{c.label}</a>)}</nav>
-      <h1 className="sr-only">Admin dashboard</h1>
       <RunStatus last={lastRun} />
       <h2 className="zone">Operations</h2>
 
@@ -708,6 +793,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         note="Changing any question, or the run count, changes what every future number means. Bump method_version in the same edit."
       />
 
+      <div id="alias-editor" />
       <AdminEditor
         category={category}
         label="Alias map"
