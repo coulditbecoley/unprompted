@@ -5,7 +5,8 @@
  * archive. `data/runs` is still the database in the sense that matters: the
  * measurement lives in git and is reproducible from it. This holds counters
  * about who read the site, which is operational, disposable, and expires on its
- * own after ninety days.
+ * own after ninety days. The one exception is the event journal
+ * (`${namespace}:events`), which is kept until `sync_analytics.py` exports it.
  *
  * Written to be cheap rather than complete. Upstash's free tier allows ten
  * thousand commands a day, so every event is one pipelined round trip of about
@@ -99,6 +100,29 @@ if (namespace !== "a" && !/^test-[a-z0-9-]{8,64}$/.test(namespace)) throw new Er
 const dayKey = (date: string) => `${namespace}:d:${date}`;
 const FEED_KEY = `${namespace}:feed`;
 const SEEN_KEY = `${namespace}:seen`;
+/**
+ * Every accepted event, kept: the durable journal that `sync_analytics.py`
+ * exports to the vault. Never trimmed here (no MAXLEN): a cap cannot promise
+ * export before loss. The counters and the 200-item feed stay as UI caches.
+ */
+const EVENTS_KEY = `${namespace}:events`;
+
+/**
+ * Journal write failures, warned about at most once per instance every few
+ * minutes. An event Redis never accepted cannot be recovered; this only makes
+ * the loss visible in the function logs instead of silent.
+ */
+const WARN_EVERY_MS = 5 * 60_000;
+let lastWarn = 0;
+let failuresSinceWarn = 0;
+function journalFailed(reason: string): void {
+  failuresSinceWarn++;
+  const now = Date.now();
+  if (now - lastWarn < WARN_EVERY_MS) return;
+  lastWarn = now;
+  console.warn(`analytics: ${failuresSinceWarn} write failure(s) since last warning; latest: ${reason.slice(0, 200)}`);
+  failuresSinceWarn = 0;
+}
 
 async function readWithin<T>(work: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -222,6 +246,20 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   const comparison = comparisonOf(hit.path, hit.query);
   if (comparison && !hit.agent && !hit.event && !hit.missing) fields.push(`m:${comparison}`);
 
+  // The logical identity of this event, fixed before any network call, so a
+  // retried or duplicated XADD is still recognisably one event on export.
+  const id = crypto.randomUUID();
+  const entry = {
+    at: Date.now(),
+    path: hit.path,
+    agent: hit.agent?.name ?? null,
+    vendor: hit.agent?.vendor ?? null,
+    purpose: hit.agent?.purpose ?? null,
+    event: hit.event ?? null,
+    referrer: hit.referrer ?? null,
+    missing: hit.missing ?? false,
+  };
+
   try {
     const pipe = r.pipeline();
     for (const field of fields) pipe.hincrby(key, field, 1);
@@ -229,21 +267,15 @@ async function write(r: Redis, hit: Hit): Promise<void> {
     // A rolling window of individual events, so the dashboard can show what is
     // happening now rather than only what a day totalled. Capped, so it can
     // never grow without bound.
-    pipe.lpush(
-      FEED_KEY,
-      JSON.stringify({
-        at: Date.now(),
-        path: hit.path,
-        agent: hit.agent?.name ?? null,
-        vendor: hit.agent?.vendor ?? null,
-        purpose: hit.agent?.purpose ?? null,
-        event: hit.event ?? null,
-        referrer: hit.referrer ?? null,
-        missing: hit.missing ?? false,
-      }),
-    );
+    pipe.lpush(FEED_KEY, JSON.stringify(entry));
     pipe.ltrim(FEED_KEY, 0, FEED_MAX - 1);
     pipe.expire(FEED_KEY, DAY_TTL);
+    // The same fields, journalled without a cap. A null field is left out
+    // (absent means null), since a stream value is always a string.
+    // ponytail: no MAXLEN; trimming waits for verified independent backup (W6).
+    pipe.xadd(EVENTS_KEY, "*", Object.fromEntries(
+      Object.entries({ id, ...entry, missing: String(entry.missing) }).filter(([, v]) => v !== null),
+    ));
 
     // First and last seen, outside the daily keys because the question is "am I
     // in this crawler's refresh cycle", which a per-day count cannot answer.
@@ -254,10 +286,15 @@ async function write(r: Redis, hit: Hit): Promise<void> {
       pipe.hset(SEEN_KEY, { [`${hit.agent.name}:last`]: Date.now() });
     }
 
-    await pipe.exec();
-  } catch {
-    // Deliberately silent. A dropped count is not worth a log line on every
-    // request, and there is nothing the caller could do about it.
+    // Pipelines are not atomic: any one command can fail while the rest land,
+    // so each result is checked rather than only the request as a whole.
+    const results = await pipe.exec({ keepErrors: true });
+    const failed = results.find((res) => res.error);
+    if (failed) journalFailed(String(failed.error));
+  } catch (err) {
+    // Never thrown into the page request, and never retried: replaying the
+    // counters would double them. Warned about, rate-limited, instead.
+    journalFailed(err instanceof Error ? err.message : String(err));
   }
 }
 
