@@ -650,4 +650,7 @@ test("run history tells published, held, re-read and failed weeks apart", async 
   assert.deepEqual(rows[1].states, { a: "published", b: "held" });
   assert.deepEqual(rows[2].states, { a: "reread", b: "none" });
   assert.equal(runHistory([{ date: "2026-10-28", category: "a" }, { date: "2026-10-21", category: "a" }], [], ["a"], null, 1).length, 1);
+  assert.deepEqual(runHistory([], [], ["a", "b"], {
+    date: "2026-11-02", outcomes: { a: "held", b: "not_run" },
+  })[0].states, { a: "held", b: "not_started" });
 });

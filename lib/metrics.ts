@@ -1026,6 +1026,7 @@ export function runHistory(
       const heldHere = held.find(match);
       states[category] = published.some(match) ? "published"
         : heldHere ? (heldHere.recoveredOn ? "reread" : "held")
+        : outcome === "held" ? "held"
         : outcome === "failed" ? "failed"
         : outcome === "not_started" || outcome === "not_run" ? "not_started"
         : "none";
