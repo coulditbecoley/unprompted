@@ -91,19 +91,22 @@ export function buildNeeds(
       return found;
     };
     for (const answer of reading.extractions) {
-      row(answer.engine).calls += 1;
-      row("extractor").calls += 1;
+      const engine = row(answer.engine);
+      engine.calls += 1;
       if (typeof answer.error !== "string" || !answer.error.trim()) continue;
-      const failed = row(answer.error.startsWith("extract failed:") ? "extractor" : answer.engine);
-      failed.errors.set(answer.error, (failed.errors.get(answer.error) ?? 0) + 1);
+      engine.errors.set(answer.error, (engine.errors.get(answer.error) ?? 0) + 1);
     }
     for (const [source, { calls, errors }] of bySource) {
       const count = [...errors.values()].reduce((sum, n) => sum + n, 0);
       if (!calls || count / calls <= MAX_ENGINE_ERROR_RATE) continue;
-      const failure = failures.get(source) ?? { categories: new Set<string>(), errors: new Map<string, number>() };
-      failure.categories.add(reading.category);
-      for (const [error, n] of errors) failure.errors.set(error, (failure.errors.get(error) ?? 0) + n);
-      failures.set(source, failure);
+      // The pipeline counts every error per engine; attribute its cause only after that check.
+      for (const [error, n] of errors) {
+        const cause = error.startsWith("extract failed:") ? "extractor" : source;
+        const failure = failures.get(cause) ?? { categories: new Set<string>(), errors: new Map<string, number>() };
+        failure.categories.add(reading.category);
+        failure.errors.set(error, (failure.errors.get(error) ?? 0) + n);
+        failures.set(cause, failure);
+      }
       explained.add(reading.category);
     }
   }

@@ -711,6 +711,15 @@ test("Needs you lists an engine only past the limit that holds a week", async ()
   const [need] = buildNeeds(report, reading(answers("perplexity", 75, 16)), [], label);
   assert.equal(need.id, "engine-perplexity");
   assert.match(need.details[0], /credential/);
+  const extractionFailures = answers("perplexity", 75, 16).map(a => ({ ...a,
+    error: a.error ? `extract failed: ${a.error}` : null,
+  }));
+  const [extractor] = buildNeeds(report, reading([...extractionFailures, ...answers("gemini", 75, 0)]), [], label);
+  assert.equal(extractor.id, "engine-extractor");
+  assert.match(extractor.details[0], /extractor credential/);
+  const mixed = [...answers("perplexity", 75, 8)];
+  for (let i = 8; i < 16; i++) mixed[i].error = "extract failed: HTTP 401";
+  assert.deepEqual(buildNeeds(report, reading(mixed), [], label).map(n => n.id), ["engine-perplexity", "engine-extractor"]);
   assert.equal(parseLastRun("not json"), null);
   assert.equal(parseLastRun("[]"), null);
 });
