@@ -25,7 +25,7 @@ if not exist "%UNPROMPTED_PYTHON%" (
 REM The log lives with the checkpoints it explains (gitignored), not in %TEMP%,
 REM which Windows may clear; it is rotated once it passes 20 MB.
 set "LOG=%CD%\.unprompted\logs\weekly.log"
-"%UNPROMPTED_PYTHON%" -c "import os, pathlib; p = pathlib.Path(os.environ['LOG']); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.replace(p.with_suffix('.log.1'))" 2>nul
+"%UNPROMPTED_PYTHON%" -c "import os, pathlib, datetime, uuid; p = pathlib.Path(os.environ['LOG']); p.parent.mkdir(parents=True, exist_ok=True); p.exists() and p.stat().st_size > 20_000_000 and p.rename(p.with_name('weekly-' + datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='microseconds').replace(':', '').replace('-', '').replace('+0000', 'Z') + '-' + uuid.uuid4().hex[:8] + '.log'))" 2>nul
 REM Read from the environment, never pasted into Python source: a checkout
 REM path with an apostrophe would break the literal. If the folder cannot be
 REM made, log where it used to go rather than lose every line.
@@ -160,6 +160,7 @@ goto :published
 :publish_failed
 echo FAILED: the week is measured but not published; see publish.py output above. >> "%LOG%"
 "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 3 --detail "The week is measured but not published (see .unprompted\status\publish.json). A committed week is pushed automatically by the next start or daily sync; anything else needs a look. Do not re-run the week." >> "%LOG%" 2>&1
+"%UNPROMPTED_PYTHON%" scripts\backup.py --deadline 1200 >> "%LOG%" 2>&1
 "%UNPROMPTED_PYTHON%" scripts\heartbeat.py finished --exit-code 3 >> "%LOG%" 2>&1
 exit /b 3
 
@@ -174,6 +175,10 @@ if errorlevel 1 set "SYNC_FAILED=1"
 "%UNPROMPTED_PYTHON%" scripts\sync_analytics.py >> "%LOG%" 2>&1
 if errorlevel 1 set "SYNC_FAILED=1"
 if defined SYNC_FAILED echo WARNING: vault or analytics sync failed after publishing; the week itself is published. >> "%LOG%"
+
+REM Evidence backup (append-only, never deletes) before the shadow reader, which
+REM can run long, and before the heartbeat, which reports its result.
+"%UNPROMPTED_PYTHON%" scripts\backup.py --deadline 1200 >> "%LOG%" 2>&1
 
 REM 4 only for an otherwise clean week: a held week stays 2.
 set "FINAL_EXIT=%RUN_EXIT%"

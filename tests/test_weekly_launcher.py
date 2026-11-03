@@ -52,7 +52,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
         "status=sys.argv[sys.argv.index('--status')+1]\n"
         "p=Path('.unprompted/attempt.json') if status=='failed' else Path('data/last-run.json')\n"
         "p.parent.mkdir(exist_ok=True);p.write_text(status)\n")
-    for name in ("sync_vault.py", "sync_analytics.py"):
+    for name in ("sync_vault.py", "sync_analytics.py", "backup.py"):
         (repo / "scripts" / name).write_text("# Offline no-op\n")
     # Heartbeat: records each call instead of setting a GitHub variable.
     (repo / "scripts/heartbeat.py").write_text(
