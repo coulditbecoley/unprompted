@@ -126,3 +126,24 @@ def test_a_damaged_intent_and_a_busy_lock_stop_safely(repo, monkeypatch, capsys)
     assert publish.main() == 3
     with run_lock(publish.STATE, "week.lock"):
         assert publish.main() == 4
+
+
+def test_a_held_week_issue_names_the_alias_file_and_the_free_command(tmp_path, monkeypatch):
+    from scripts import notify
+    monkeypatch.setattr(notify, "REPO", tmp_path)
+    held = tmp_path / "data/held/2026-11-02"
+    held.mkdir(parents=True)
+    (held / "ai-writing-tools.json").write_text(json.dumps({"extractions": [{"extracted": []}, {"extracted": [{"brand": "X"}]}]}))
+    (held / "ai-image-generators.json").write_text(json.dumps({"extractions": [{"extracted": None}]}))
+    summary = {"run_date": "2026-11-02", "categories": {
+        "ai-writing-tools": {"outcome": "held", "reasons": ["3 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: GitBook, DeepL Write"]},
+        "ai-image-generators": {"outcome": "held", "reasons": ["1 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: Getty", "perplexity failed 75 of its own 75 calls"]},
+        "ai-coding-assistants": {"outcome": "held", "reasons": ["perplexity failed 75 of its own 75 calls"]},
+    }}
+    text = "\n".join(notify.alias_steps(summary))
+    assert "`aliases/ai-writing-tools.yml`" in text and "GitBook, DeepL Write" in text
+    assert "reextract 2026-11-02 --category ai-writing-tools --renormalize" in text
+    assert "--category ai-image-generators --renormalize" not in text and "paid re-read" in text  # no raw names stored
+    assert "Also held for: perplexity" in text
+    assert "ai-coding-assistants" not in text  # held for something else entirely
+    assert notify.alias_steps(None) == [] and notify.alias_steps({"categories": {}}) == []

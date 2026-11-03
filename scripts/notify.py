@@ -84,7 +84,49 @@ def existing_issue(title: str) -> bool:
         return False
 
 
-def open_issue(status: str, detail: str, exit_code: int) -> bool:
+DECISION = "need a decision: "
+
+
+def alias_steps(summary: dict | None) -> list[str]:
+    """What to do for each category held on unrecognised names: the file, and the free command.
+
+    The decision itself stays a person's (aliases are the owner's); this only
+    removes the guesswork afterwards. The free re-read needs every answer's raw
+    names stored (readings from November 2026 on); otherwise only a paid re-read
+    can apply new aliases, and that is said instead of a command.
+    """
+    run_date = (summary or {}).get("run_date")
+    lines = []
+    for category, row in sorted(((summary or {}).get("categories") or {}).items()):
+        reasons = [r for r in (row or {}).get("reasons") or [] if isinstance(r, str)]
+        names = [r.split(DECISION, 1)[1] for r in reasons if DECISION in r]
+        if not names or not run_date:
+            continue
+        held = REPO / "data" / "held" / run_date / f"{category}.json"
+        try:
+            records = json.loads(held.read_text(encoding="utf-8"))["extractions"]
+            stored = bool(records) and all(e.get("extracted") is not None for e in records)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            stored = False
+        others = [r for r in reasons if DECISION not in r]
+        lines += [f"**{category}**: decide {names[0]}",
+                  f"1. Add each name to `aliases/{category}.yml` (an alias of an existing brand, a new brand, "
+                  "or `exclude`), commit and push."]
+        if stored:
+            lines.append(f"2. From the day after {run_date}, re-read for free: "
+                         f"`python -m unprompted.reextract {run_date} --category {category} --renormalize`, "
+                         "then commit and push the new reading. It keeps the original measurement date and "
+                         "reruns every check.")
+        else:
+            lines.append("2. This reading did not store raw names, so applying the new aliases to it needs a "
+                         "paid re-read; otherwise the next weekly run uses them.")
+        if others:
+            lines.append(f"   Also held for: {'; '.join(others)[:300]} (a re-read does not fix that).")
+        lines.append("")
+    return lines
+
+
+def open_issue(status: str, detail: str, exit_code: int, summary: dict | None = None) -> bool:
     """The half that reaches a phone. True once an issue for this exists."""
     day = datetime.now(timezone.utc).date().isoformat()
     title = f"Weekly run {HEADLINE.get(status, status)}: {day}"
@@ -101,6 +143,7 @@ def open_issue(status: str, detail: str, exit_code: int) -> bool:
             detail.strip() or "(no detail recorded)",
             "```",
             "",
+            *(["What to do about the unrecognised names:", "", *steps] if (steps := alias_steps(summary)) else []),
             "The log is at `.unprompted\\logs\\weekly.log` in the checkout on the machine that runs it.",
             "",
             "Categories can have different outcomes. Passed readings are in `data/runs/`;",
@@ -159,7 +202,7 @@ def main() -> int:
         print(f"  could not write the status file: {exc}", file=sys.stderr)
 
     if args.status in NEEDS_A_HUMAN and not args.no_issue:
-        delivered = open_issue(args.status, args.detail, args.exit_code)
+        delivered = open_issue(args.status, args.detail, args.exit_code, summary)
         # An alert nobody received is itself a failure, recorded where the
         # mid-week check and the heartbeat read it. Exit 3 tells the launcher;
         # the launcher never lets it stop publication.
