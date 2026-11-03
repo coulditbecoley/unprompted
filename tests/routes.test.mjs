@@ -264,11 +264,12 @@ test("admin latest-run panel and tile share the committed report, including lega
     "ai-image-generators": { outcome: "held", dollars: 17.49, minutes: 17.1, reasons: ["Unknown name: Generative AI by Getty Images"] },
     "ai-writing-tools": { outcome: "held", dollars: 13.71, minutes: 15, reasons: ["Three names need a decision"] },
   } };
-  const render = async (view = page) => {
-    const html = renderToStaticMarkup(await view({ searchParams: Promise.resolve({ category: "ai-writing-tools" }) }));
+  const render = async (view = page, category = "ai-writing-tools") => {
+    const html = renderToStaticMarkup(await view({ searchParams: Promise.resolve({ category }) }));
     return {
       html,
       needs: html.match(/<section aria-labelledby="needs-you-heading">([\s\S]*?)<\/section>/)?.[1],
+      quarantine: html.match(/<section class="cmp-pick" aria-labelledby="quarantine-heading">([\s\S]*?)<\/section>/)?.[1],
       tile: html.match(/<div class="mast-tile"[^>]*>([\s\S]*?)<\/div>/)[1],
       panel: html.match(/<section aria-labelledby="latest-run-heading">([\s\S]*?)<\/section>/)[1],
     };
@@ -353,18 +354,57 @@ test("admin latest-run panel and tile share the committed report, including lega
       assert.match(html, /local checkpoint spend is not included/);
     } finally { modules["@/lib/data"] = data; }
   });
-  const withReadings = async (runs, check, errors = []) => {
+  const withReadings = async (runs, check, errors = [], category = "ai-writing-tools") => {
     modules["@/lib/data"] = { ...data,
       loadAllRuns: () => ({ runs, errors }),
-      loadQuarantine: () => ({ entries: [], errors: [] }),
+      loadQuarantine: () => ({ entries: [], errors }),
       loadHeld: () => ({ runs: [], errors: [] }),
     };
-    try { await check(await render(compile("app/admin/page").default)); }
+    try { await check(await render(compile("app/admin/page").default, category)); }
     finally { modules["@/lib/data"] = data; }
   };
   const answer = { engine: "perplexity", error: null, refused: false, brands: [], sources: [] };
   const reading = (category, extra = {}) => ({ category, run_date: "2026-11-02", engines: ["perplexity"],
     extractions: Array.from({ length: 100 }, () => ({ ...answer })), quarantined: [], ...extra });
+  await t.test("quarantine follows the selected category's latest reading and shares the Needs you threshold", async t => {
+    status(t, current);
+    const runs = [
+      reading("ai-writing-tools", { run_date: "2026-10-28", quarantined: ["Old writing name"] }),
+      reading("ai-writing-tools", { quarantined: ["New name", "New name Inc", "Rare <script>"] }),
+      reading("ai-image-generators", { quarantined: ["Image name", "Image name"] }),
+    ];
+    await withReadings(runs, ({ quarantine, needs, html }) => {
+      assert.match(quarantine, /Quarantine: AI Writing Tools/);
+      assert.match(quarantine, /Latest readable run: 2026-11-02/);
+      assert.match(quarantine, /100 answered calls/);
+      assert.match(quarantine, /New name<b>2<\/b><span>review/);
+      assert.match(quarantine, /Rare &lt;script&gt;<b>1<\/b>/);
+      assert.doesNotMatch(quarantine, /Old writing name|Image name|<script>/);
+      assert.match(quarantine, /href="#alias-editor"/);
+      assert.match(html, /id="alias-editor"/);
+      assert.match(quarantine, /Decisions stay manual/);
+      assert.match(needs, /review 1 unrecognised name/);
+    });
+    await withReadings(runs, ({ quarantine }) => {
+      assert.match(quarantine, /Image name<b>2<\/b><span>review/);
+      assert.doesNotMatch(quarantine, /New name|Rare|Old writing name/);
+    }, [], "ai-image-generators");
+  });
+  await t.test("quarantine distinguishes an empty run from missing or unreadable evidence", async t => {
+    status(t, current);
+    await withReadings([reading("ai-writing-tools", { run_date: "2026-10-28" })], ({ quarantine }) => {
+      assert.match(quarantine, /Latest readable run: 2026-10-28/);
+      assert.match(quarantine, /No unrecognised names were recorded in this run/);
+    });
+    await withReadings([], ({ quarantine }) => {
+      assert.match(quarantine, /No readable run is available for this category/);
+      assert.doesNotMatch(quarantine, /No unrecognised names/);
+    });
+    await withReadings([reading("ai-writing-tools")], ({ quarantine }) => {
+      assert.match(quarantine, /Quarantine review is incomplete/);
+      assert.doesNotMatch(quarantine, /No unrecognised names/);
+    }, ["data/held/broken.json: invalid JSON"]);
+  });
   await t.test("Needs you shows exact engine errors once, four material names by category, and failed categories", async t => {
     status(t, { ...current, categories: { ...current.categories,
       "ai-coding-assistants": { outcome: "failed", reasons: ["Startup probe refused"] },

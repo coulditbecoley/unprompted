@@ -223,6 +223,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const needsReadings = allRuns.filter(r => r.run_date === needsDate);
   const explained = new Set<string>();
   const failures = new Map<string, { categories: Set<string>; errors: Map<string, number> }>();
+  const quarantines = allRuns.map(reading => {
+    const names = new Map<string, { name: string; count: number }>();
+    for (const name of Array.isArray(reading.quarantined) ? reading.quarantined : []) {
+      if (typeof name !== "string" || !name.trim()) continue;
+      const key = quarantineKey(name);
+      if (!key) continue;
+      const entry = names.get(key) ?? { name, count: 0 };
+      entry.count += 1;
+      names.set(key, entry);
+    }
+    const total = answered(reading).length;
+    return { reading, total, names: [...names.values()]
+      .map(n => ({ ...n, material: total > 0 && n.count / total >= QUARANTINE_MATERIAL }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) };
+  });
+  const selectedQuarantine = quarantines.filter(q => q.reading.category === category).at(-1);
+  const selectedNames = selectedQuarantine?.names ?? [];
   for (const reading of needsReadings) {
     for (const answer of reading.extractions) {
       if (typeof answer.error !== "string" || !answer.error.trim()) continue;
@@ -249,18 +266,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       details: [advice, `${needsDate}: ${[...failure.categories].map(categoryLabel).join(", ")}.`,
         ...[...failure.errors].map(([error, count]) => `${error} (${count} answer record${count === 1 ? "" : "s"})`)] });
   }
-  for (const reading of needsReadings) {
-    const names = new Map<string, { name: string; count: number }>();
-    for (const name of Array.isArray(reading.quarantined) ? reading.quarantined : []) {
-      if (typeof name !== "string" || !name.trim()) continue;
-      const key = quarantineKey(name);
-      if (!key) continue;
-      const entry = names.get(key) ?? { name, count: 0 };
-      entry.count += 1;
-      names.set(key, entry);
-    }
-    const total = answered(reading).length;
-    const material = [...names.values()].filter(n => total > 0 && n.count / total >= QUARANTINE_MATERIAL);
+  for (const { reading, names } of quarantines.filter(q => q.reading.run_date === needsDate)) {
+    const material = names.filter(n => n.material);
     if (material.length) {
       explained.add(reading.category);
       needs.push({ id: `names-${reading.category}`, title: `${categoryLabel(reading.category)}: review ${material.length} unrecognised name${material.length === 1 ? "" : "s"}`,
@@ -526,56 +533,50 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </p>
         </div>
 
-        <div className="cmp-pick">
+        <section className="cmp-pick" aria-labelledby="quarantine-heading">
           <TrimTop />
-          <h3 style={{ marginTop: 6 }}>Quarantine</h3>
+          <h3 id="quarantine-heading" style={{ marginTop: 6 }}>Quarantine: {categoryLabel(category)}</h3>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+            {selectedQuarantine
+              ? `Latest readable run: ${selectedQuarantine.reading.run_date}. ${selectedQuarantine.total} answered calls.`
+              : "No readable run is available for this category."}
+          </p>
+          <p><a href="#alias-editor">Review this category’s alias map</a></p>
           {quarantineErrors.length > 0 && <div><p>Quarantine review is incomplete. These sources could not be assessed:</p><ul>{quarantineErrors.map(error => <li key={error}>{error}</li>)}</ul></div>}
-          {quarantine.length === 0 ? (
+          {selectedNames.length === 0 ? (
             <p style={{ fontSize: 14, color: "var(--fg-3)", margin: 0 }}>
-              {quarantineErrors.length ? "No names are available from the readable records." : "No unresolved names in the latest archived readings."}
+              {!selectedQuarantine || quarantineErrors.length ? "No names are available from the readable evidence." : "No unrecognised names were recorded in this run."}
             </p>
           ) : (
             <>
-              {/*
-                The material count first. Leading with 549 made a tail of names
-                seen once look like a crisis, beside the number that actually
-                decides whether a Monday publishes. Both are a record of the run
-                that wrote them: aliases curated since are not reflected until
-                the next run is measured.
-              */}
               <div className="cmp-stat">
-                <span>{quarantineErrors.length ? "Material in readable records" : "Material at the last run"}</span>
-                <span>{materialQuarantine}</span>
+                <span>Names reaching the review threshold</span>
+                <span>{selectedNames.filter(q => q.material).length}</span>
               </div>
               <div className="cmp-stat">
                 <span style={{ color: "var(--fg-2)" }}>Seen at all</span>
-                <span style={{ color: "var(--fg-3)" }}>{quarantine.length}</span>
+                <span style={{ color: "var(--fg-3)" }}>{selectedNames.length}</span>
               </div>
               <p style={{ fontSize: 12.5, color: "var(--fg-3)", margin: "10px 0" }}>
-                Latest readable record of each category, most frequent first.
-                Unresolved names need contextual review; frequency does not establish product identity.
+                Most frequent first. Review threshold: {QUARANTINE_MATERIAL * 100}% of this run’s answered calls.
               </p>
-
-              {/* Only the names worth acting on are visible. The tail is real
-                  data but it is noise, so it collapses rather than filling the
-                  page above the editors. */}
               <div className="q-chips">
-                {quarantine.slice(0, 6).map((q) => (
+                {selectedNames.slice(0, 6).map((q) => (
                   <span className="q-chip" key={q.name}>
                     {q.name}
-                    <b>{q.count}</b>
+                    <b>{q.count}</b>{q.material && <span>review</span>}
                   </span>
                 ))}
               </div>
 
-              {quarantine.length > 6 && (
+              {selectedNames.length > 6 && (
                 <details className="q-more">
-                  <summary>{quarantine.length - 6} more</summary>
+                  <summary>{selectedNames.length - 6} more</summary>
                   <div className="q-chips" style={{ marginTop: 10 }}>
-                    {quarantine.slice(6).map((q) => (
+                    {selectedNames.slice(6).map((q) => (
                       <span className="q-chip q-chip-dim" key={q.name}>
                         {q.name}
-                        <b>{q.count}</b>
+                        <b>{q.count}</b>{q.material && <span>review</span>}
                       </span>
                     ))}
                   </div>
@@ -583,7 +584,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               )}
             </>
           )}
-        </div>
+          <p style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 12 }}>
+            Recorded names, not suggested aliases. Decisions stay manual; frequency does not establish product identity.
+            Check the current alias map: edits since this run are not reflected here.
+          </p>
+        </section>
       </div>
 
       <section style={{ marginBottom: 26 }}>
