@@ -53,6 +53,6 @@ For comparison, across all six assistants combined (450 answers), Cursor leads a
 
 I counted these myself from the raw answer file, because the published standings combine all six assistants. To check the method, I ran the same count across all assistants, and it matches the published standings exactly.
 
-The data was collected the week of 2026-09-28 and published on 2026-10-28, so it's about six weeks old.
+The data was collected the week of 2026-09-28 and re-read on 2026-10-28, so it's about six weeks old.
 
 Source: Unprompted, https://unprompted.report/chart/ai-coding-assistants
