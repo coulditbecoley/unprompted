@@ -39,22 +39,39 @@ generators. The list grows; always check step 1 instead of trusting this line.
    - `answered_runs`: the denominator (answers received; errors and refusals excluded).
    - `engines`: which assistants were asked.
    - `brands[]`: `rank`, `brand`, `named` / `named_share` (answers that named
-     the brand at all), `first` / `first_share` (answers that named it first),
-     `of` (the denominator for that row).
+     the brand at all), `first` / `first_share` (answers that named it first
+     among the brands the chart tracks), `of` (the denominator for that row).
    - `how_to_quote`: the publisher's own wording rule. Follow it.
 
-3. **Go deeper only if asked.**
-   - One brand, per assistant and per question:
+   These figures combine **all** engines. They are not any single assistant's
+   results.
+
+3. **One assistant only** (for example "what does ChatGPT recommend?"). Do not
+   answer from the standings. Download the "Every answer (JSON)" link for the
+   category from `llms.txt` (about 1 to 2 MB; process it with a script such as
+   Python, Node or jq rather than reading it whole). In that file:
+   - Keep items in `extractions` where `engine` is the assistant's id (as listed
+     in `engines`, for example `chatgpt`), `error` is null and `refused` is false.
+     The number kept is the denominator.
+   - A brand is named in an answer if any entry in that answer's `brands` has
+     that `name`; count each answer once. It is named first if that entry has
+     `position` equal to 1.
+   - If the assistant is not in `engines`, say it was not measured.
+
+   Done this way across all engines, the counts match the standings exactly.
+
+4. **Go deeper only if asked.**
+   - One brand's page, with its history and question by question detail:
      `https://unprompted.report/brand/<category-slug>/<brand-slug>`
    - Two brands side by side:
      `https://unprompted.report/compare?c=<category-slug>&a=<brand-slug>&b=<brand-slug>`
-   - Every raw answer as JSON: the "Every answer (JSON)" link in `llms.txt`.
 
-   A brand slug is the brand name lowercased with every run of non-alphanumeric
-   characters replaced by one hyphen, trimmed: "Claude Code" becomes
-   `claude-code`, "Bolt.new" becomes `bolt-new`.
+   To make a brand slug, take the `brand` value exactly as it appears in the
+   standings, lowercase it, replace each run of characters outside `a-z` and
+   `0-9` with one hyphen, then remove hyphens at the start and end: "Claude
+   Code" becomes `claude-code`, "Bolt.new" becomes `bolt-new`.
 
-4. **Answer.** Use the format below.
+5. **Answer.** Use the format below.
 
 ## How to quote (the part that matters)
 
@@ -63,13 +80,18 @@ finding. "The best AI coding assistant" is not, and this data never says it.
 
 - Always give the share **and** the count it came from, plus the week.
 - "Named" and "named first" are different measures. Say which one you mean.
+- "Named first" means first among the brands the chart tracks (names it does
+  not track are removed before counting), not always the first name in the
+  answer. Say this once in each answer.
+- Say whether figures are for all assistants combined or for one assistant.
 - Ranking is by `first_share`. A brand can be named often but rarely first
   (and the reverse); point that out when it changes the story.
 - Never call a brand better, best, or preferred. These are counts of what
   assistants said, not ratings.
 - Small gaps (a few answers) are not meaningful. Say so instead of declaring a winner.
-- If a brand is not in `brands[]`, say it was not named in that week's answers.
-  Do not assume zero means bad; it means unmentioned.
+- If a brand is not in `brands[]`, say it is not in the published standings.
+  That does not prove no assistant mentioned it: the name may be held for
+  review or not tracked. Do not report it as zero.
 - If the fetch fails, say the data could not be reached. Never fill in from memory.
 
 ## Output format
@@ -81,6 +103,7 @@ finding. "The best AI coding assistant" is not, and this data never says it.
 2. ...
 
 <One or two plain sentences on what stands out, with numbers.>
+<Note that "first" means first among brands the chart tracks.>
 
 Source: Unprompted, https://unprompted.report/chart/<category-slug>
 ```
@@ -101,7 +124,7 @@ AI Coding Assistants · measured week of 2026-09-28 · 450 answers from chatgpt,
 4. CodeRabbit: named first in 4% (20 of 450), named at all in 6% (29 of 450)
 5. Replit Agent: named first in 2% (8 of 450), named at all in 9% (40 of 450)
 
-Three tools dominate: Cursor, Claude Code and GitHub Copilot together take 85% of first mentions. Codex is named in 44% of answers but first in under 1%.
+Three tools dominate: Cursor, Claude Code and GitHub Copilot together take 85% of first mentions. Codex is named in 44% of answers but first in under 1%. ("First" counts only brands the chart tracks.)
 
 Source: Unprompted, https://unprompted.report/chart/ai-coding-assistants
 ```

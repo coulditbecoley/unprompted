@@ -20,15 +20,16 @@ It reads [Unprompted](https://unprompted.report), a free public chart that asks 
 
 - Answers "which brands do AI assistants recommend for X?" with counted, dated figures
 - Compares two brands on how often assistants name them, and how often first
-- Links straight to a brand's page, per assistant and per question
-- Says plainly when a category or brand is not measured, instead of making numbers up
+- Breaks results down for one assistant (just ChatGPT, say) from the published raw answers
+- Links straight to a brand's page and a side by side comparison
+- Says plainly when a category is not measured or a brand is not on the chart, instead of making numbers up
 - Never calls a brand "best": these are counts of what assistants said, not ratings
 
 **Categories today:** AI coding assistants, AI writing tools, AI image generators. New categories show up automatically, because the skill reads the live category list each time.
 
 **Who it is for:** marketers, founders and SEO teams working on AI visibility (GEO / AEO) who want a neutral, repeatable benchmark rather than a single screenshot of one chat.
 
-**Requirements:** an agent that can fetch a URL (web fetch or curl). No API key, no account, no cost.
+**Requirements:** an agent that can fetch a URL (web fetch or curl). Per assistant breakdowns also need it to run a small script (Python, Node or jq). No Unprompted API key or account needed. The skill and the data are free; your agent's usual costs still apply.
 
 **About the data:** Unprompted is run by [Skald Studio](https://skaldstudio.io). No placement is for sale, and the method, every question and every raw answer are public at [unprompted.report/methodology](https://unprompted.report/methodology) and on [GitHub](https://github.com/coulditbecoley/unprompted).
 
