@@ -105,7 +105,7 @@ def house_checks() -> list[str]:
     """Everything outside the providers that a Monday needs. Free: no provider calls.
 
     Each one is a way a week was, or could be, lost without any engine failing:
-    an expired GitHub sign-in (no push, no issues), a nearly full disk, a backup
+    a checkout left off main, an expired GitHub sign-in (no push, no issues), a nearly full disk, a backup
     or analytics export that quietly stopped, a week still waiting to be pushed,
     an alert nobody received, or the off-host watchdog disabled by GitHub.
     """
@@ -120,6 +120,11 @@ def house_checks() -> list[str]:
     auth = run(["gh", "auth", "status"], 60)
     if auth is None or auth.returncode != 0:
         issues.append("GitHub CLI is not signed in (gh auth status failed): alerts and publication need it")
+    # The launcher aborts off main (2026-11-09 was lost to a feature branch left checked out).
+    branch = run(["git", "branch", "--show-current"], 30)
+    current = branch.stdout.strip() if branch and branch.returncode == 0 else "unknown"
+    if current != "main":
+        issues.append(f"checkout is on '{current or 'detached HEAD'}', not main: the weekly run aborts before measuring")
     push = run(["git", "push", "--dry-run", "origin", "HEAD:main"])
     if push is None or push.returncode != 0:
         issues.append("git push --dry-run origin HEAD:main failed: the week could be measured but not published")
