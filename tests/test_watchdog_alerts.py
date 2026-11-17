@@ -16,7 +16,7 @@ def test_start_schedule_has_redundant_slots_and_dispatches_to_start():
     shell = workflow['jobs']['check']['steps'][-1]['run']
     assert f'"{schedule}") args+=(--mode start)' in shell
     assert workflow['jobs']['check']['timeout-minutes'] == '10'
-    assert workflow['concurrency']['cancel-in-progress'] == 'true'
+    assert workflow['concurrency']['cancel-in-progress'] == 'false'  # an alarm is queued, never cancelled
 
 import json
 import subprocess
