@@ -11,6 +11,8 @@
 
         Unregister-ScheduledTask -TaskName "Unprompted weekly run" -Confirm:$false
         Unregister-ScheduledTask -TaskName "Unprompted Monday readiness" -Confirm:$false
+        Unregister-ScheduledTask -TaskName "Unprompted mid-week check" -Confirm:$false
+        Unregister-ScheduledTask -TaskName "Unprompted Monday pre-run check" -Confirm:$false
 #>
 
 param(
@@ -25,6 +27,14 @@ $ErrorActionPreference = "Stop"
 $taskName = "Unprompted weekly run"
 $repo     = Split-Path -Parent $PSScriptRoot
 $script   = Join-Path $repo "scripts\weekly-run.cmd"
+$hidden   = Join-Path $env:USERPROFILE "scripts\hidden.vbs"
+
+function New-HiddenTaskAction {
+    param([string]$Executable, [string]$Arguments = "")
+    $command = '"{0}" "{1}"' -f $hidden, $Executable
+    if ($Arguments) { $command += " $Arguments" }
+    New-ScheduledTaskAction -Execute "wscript.exe" -Argument $command -WorkingDirectory $repo
+}
 
 if (-not (Test-Path $script)) { throw "not found: $script" }
 
@@ -38,7 +48,7 @@ while ($nextMonday.DayOfWeek -ne 'Monday' -or $nextMonday -le (Get-Date)) {
 $trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Monday -At $nextMonday
 # No UTC offset: keep 13:00 on the machine's local clock across DST changes.
 $trigger.StartBoundary = $nextMonday.ToString("yyyy-MM-dd'T'HH:mm:ss")
-$action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
+$action  = New-HiddenTaskAction -Executable $script
 
 # StartWhenAvailable matters more than the exact time: a laptop that was asleep
 # on Monday should still produce the week when it next wakes, because a missing
@@ -65,7 +75,7 @@ $readyName    = "Unprompted Monday readiness"
 $readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
 # Local 18:00 across DST, as for the weekly run above.
 $readyTrigger.StartBoundary = (Get-Date).Date.AddHours(18).ToString("yyyy-MM-dd'T'HH:mm:ss")
-$readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
+$readyAction  = New-HiddenTaskAction -Executable (Join-Path $repo ".venv\Scripts\python.exe") -Arguments "scripts\readiness.py"
 # The limit comes from the check's own budget (every allowed CLI retry, cleanup and
 # the issue), never a fixed number: a fixed 45 minutes let Windows end a slow check
 # before it could report. No fallback: a limit that cannot be computed stops here.
@@ -76,26 +86,49 @@ if ($LASTEXITCODE -ne 0 -or "$limitText".Trim() -notmatch '^\d+$' -or [int]"$lim
 }
 $readyLimit = New-TimeSpan -Seconds ([int]"$limitText".Trim())
 $readySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit $readyLimit -MultipleInstances IgnoreNew
-# Wednesday 09:00: the same checks without any provider call (configuration,
-# budget, GitHub sign-in, push access, disk, backup and export age, an unpushed
-# week, an undelivered alert, the watchdog). Five days' notice instead of one
-# evening's, at no cost.
-$midName     = "Unprompted mid-week check"
-$midTrigger  = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Wednesday -At ((Get-Date).Date.AddHours(9))
-$midTrigger.StartBoundary = (Get-Date).Date.AddHours(9).ToString("yyyy-MM-dd'T'HH:mm:ss")
-$midAction   = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py --free" -WorkingDirectory $repo
-$midSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
+# Free checks share their launcher, budget and registration: Wednesday warning,
+# then Monday noon catches changes made since Sunday's qualification.
+$freeLimitText = & $Python (Join-Path $repo "scripts\readiness.py") --print-task-limit --free
+if ($LASTEXITCODE -ne 0 -or "$freeLimitText".Trim() -notmatch '^\d+$' -or [int]"$freeLimitText".Trim() -le 0) {
+    throw "could not compute the free readiness time limit (got '$freeLimitText'); nothing registered"
+}
+$freeAction = New-HiddenTaskAction -Executable (Join-Path $repo ".venv\Scripts\python.exe") -Arguments "scripts\readiness.py --free"
+$freeSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]"$freeLimitText".Trim())) -MultipleInstances IgnoreNew
+$freeTasks = @(foreach ($check in @(
+    @{ Name = "Unprompted mid-week check"; Day = "Wednesday"; Hour = 9 },
+    @{ Name = "Unprompted Monday pre-run check"; Day = "Monday"; Hour = 12 }
+)) {
+    $at = (Get-Date).Date.AddHours($check.Hour)
+    $freeTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $check.Day -At $at
+    $freeTrigger.StartBoundary = $at.ToString("yyyy-MM-dd'T'HH:mm:ss")
+    [pscustomobject]@{ Name = $check.Name; Day = $check.Day; Trigger = $freeTrigger }
+})
 if ($DryRun) {
     [pscustomobject]@{
-        midweek_start           = $midTrigger.StartBoundary
-        midweek_limit_seconds   = [int][System.Xml.XmlConvert]::ToTimeSpan($midSettings.ExecutionTimeLimit).TotalSeconds
+        actions                = @(@(
+            @{ Name = $taskName; Action = $action },
+            @{ Name = $readyName; Action = $readyAction }
+            foreach ($check in $freeTasks) { @{ Name = $check.Name; Action = $freeAction } }
+        ) | ForEach-Object {
+            [pscustomobject]@{ name = $_.Name; execute = $_.Action.Execute;
+                arguments = $_.Action.Arguments; working_directory = $_.Action.WorkingDirectory }
+        })
+        midweek_start           = $freeTasks[0].Trigger.StartBoundary
+        midweek_limit_seconds   = [int]"$freeLimitText".Trim()
+        prerun_start            = $freeTasks[1].Trigger.StartBoundary
+        free_tasks              = @($freeTasks | ForEach-Object {
+            [pscustomobject]@{ name = $_.Name; day = $_.Day; days_of_week = [int]$_.Trigger.DaysOfWeek; start = $_.Trigger.StartBoundary;
+                execute = $freeAction.Execute; arguments = $freeAction.Arguments;
+                working_directory = $freeAction.WorkingDirectory; limit_seconds = [int]"$freeLimitText".Trim() }
+        })
         weekly_limit_seconds    = [int][System.Xml.XmlConvert]::ToTimeSpan($settings.ExecutionTimeLimit).TotalSeconds
         readiness_limit_seconds = [int]$readyLimit.TotalSeconds
         weekly_start            = $trigger.StartBoundary
         readiness_start         = $readyTrigger.StartBoundary
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Depth 4 -Compress
     return
 }
+if (-not (Test-Path -LiteralPath $hidden)) { throw "not found: $hidden; nothing registered" }
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
     Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action -Settings $settings -Principal $principal | Out-Null
 } else {
@@ -116,16 +149,18 @@ if (Get-ScheduledTask -TaskName $readyName -ErrorAction SilentlyContinue) {
         -Trigger $readyTrigger -Action $readyAction -Settings $readySettings -Principal $principal -Force | Out-Null
 }
 
-if (Get-ScheduledTask -TaskName $midName -ErrorAction SilentlyContinue) {
-    Set-ScheduledTask -TaskName $midName -Trigger $midTrigger -Action $midAction -Settings $midSettings -Principal $principal | Out-Null
-} else {
-    Register-ScheduledTask -TaskName $midName -Description "Free mid-week health check for the Unprompted weekly run; opens an issue if anything would stop Monday." `
-        -Trigger $midTrigger -Action $midAction -Settings $midSettings -Principal $principal -Force | Out-Null
+foreach ($check in $freeTasks) {
+    if (Get-ScheduledTask -TaskName $check.Name -ErrorAction SilentlyContinue) {
+        Set-ScheduledTask -TaskName $check.Name -Trigger $check.Trigger -Action $freeAction -Settings $freeSettings -Principal $principal | Out-Null
+    } else {
+        Register-ScheduledTask -TaskName $check.Name -Description "Free health check for the Unprompted weekly run; opens an issue if anything would stop Monday." `
+            -Trigger $check.Trigger -Action $freeAction -Settings $freeSettings -Principal $principal -Force | Out-Null
+    }
+    Write-Host "Registered '$($check.Name)' ($($check.Day), free)."
 }
 
 Write-Host "Registered '$taskName'."
 Write-Host "Registered '$readyName' (Sundays 18:00)."
-Write-Host "Registered '$midName' (Wednesdays 09:00, free)."
 Write-Host "  runs:   Mondays at 13:00 local; wake requested, catch up when available"
 Write-Host "  needs:  this machine powered on and the operator signed in (locking is fine)"
 Write-Host "  script: $script"

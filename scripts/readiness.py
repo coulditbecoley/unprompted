@@ -12,7 +12,8 @@ default model and the run refused on the day; this finds that the evening
 before. Scheduled by scripts/install-weekly-task.ps1 (Sundays 18:00).
 
 A late start is handled on purpose: Monday checks need enough time to finish
-before 13:00, and never start at or after noon. While a weekly run holds
+before 13:00. Paid checks never start at or after noon; free checks allow
+the Monday 12:00 pre-run check with a thirty-minute budget. While a weekly run holds
 week.lock, readiness does nothing.
 
 Exit 0 ready or skipped, 2 issues found (an issue is opened unless
@@ -47,15 +48,18 @@ WRAPPER_GRACE_SECONDS = TREE_KILL_SECONDS + CLEANUP_WAIT_SECONDS + 60
 NOTIFY_MARGIN_SECONDS = 10 * 60
 
 
-def task_limit_seconds() -> int:
+def task_limit_seconds(paid: bool = True) -> int:
     """The Task Scheduler ExecutionTimeLimit install-weekly-task.ps1 registers."""
-    return LIMIT_SECONDS + WRAPPER_GRACE_SECONDS + NOTIFY_MARGIN_SECONDS
+    return LIMIT_SECONDS + WRAPPER_GRACE_SECONDS + NOTIFY_MARGIN_SECONDS if paid else 30 * 60
 
 
-def target_monday(now: datetime) -> date | None:
+def target_monday(now: datetime, paid: bool = True) -> date | None:
     """The Monday to check, or None when it is too close to (or past) its start."""
     today = now.date()
     if today.weekday() == 0:
+        if not paid:
+            cutoff = now.replace(hour=13, minute=0, second=0, microsecond=0) - timedelta(seconds=task_limit_seconds(False))
+            return today if now < cutoff else None
         cutoff = min(now.replace(hour=12, minute=0, second=0, microsecond=0),
                      now.replace(hour=13, minute=0, second=0, microsecond=0)
                      - timedelta(seconds=LIMIT_SECONDS + WRAPPER_GRACE_SECONDS))
@@ -74,10 +78,12 @@ def qualify(monday: str, paid: bool = True) -> tuple[dict | None, str]:
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(REPO / "src"), os.environ.get("PYTHONPATH")]))}
     # Under timed.py, which ends the whole process tree at the limit, so a hung
     # harness cannot outlive the check.
-    argv = [sys.executable, str(REPO / "scripts" / "timed.py"), str(LIMIT_SECONDS),
+    # Free preflight has no provider probes; leave most of its task budget for house checks and the issue.
+    limit = LIMIT_SECONDS if paid else 5 * 60
+    argv = [sys.executable, str(REPO / "scripts" / "timed.py"), str(limit),
             sys.executable, "-m", "unprompted.run", "--preflight", *(["--qualify"] if paid else []), "--date", monday]
     try:
-        done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, env=env, timeout=LIMIT_SECONDS + WRAPPER_GRACE_SECONDS)
+        done = subprocess.run(argv, cwd=REPO, capture_output=True, text=True, env=env, timeout=limit + WRAPPER_GRACE_SECONDS)
     except (OSError, subprocess.SubprocessError) as exc:
         return None, f"could not start: {type(exc).__name__}: {exc}"
     try:
@@ -205,12 +211,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--no-issue", action="store_true", help="print the result without opening an issue")
     parser.add_argument("--print-task-limit", action="store_true", help="print the scheduled task's time limit in seconds and exit")
-    parser.add_argument("--free", action="store_true", help="mid-week check: configuration, budget and house checks only, no provider calls")
+    parser.add_argument("--free", action="store_true", help="configuration, budget and house checks only, no provider calls")
     args = parser.parse_args()
     if args.print_task_limit:
-        print(task_limit_seconds())
+        print(task_limit_seconds(paid=not args.free))
         return 0
-    monday = target_monday(datetime.now())
+    monday = target_monday(datetime.now(), paid=not args.free)
     if monday is None:
         print("Monday's run is due or under way; not checking now.")
         return 0
