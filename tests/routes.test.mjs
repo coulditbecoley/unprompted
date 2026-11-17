@@ -1020,3 +1020,36 @@ test("llms.txt names every category's published method version", async () => {
     assert.match(line, new RegExp(`method v${run.method_version}\\.`));
   }
 });
+
+
+test("methodology table reads current banks and latest published readings separately", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { load } = await import("js-yaml");
+  const data = await import("../lib/data.ts");
+  const categories = await import("../lib/categories.ts");
+  const source = fs.readFileSync(new URL("../app/methodology/page.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, require: id => {
+    if (id === "@/lib/data") return data;
+    if (id === "@/lib/categories") return categories;
+    if (id === "@/components/contact" || id === "@/components/ui") return new Proxy({}, { get: () => () => null });
+    return nativeRequire(id);
+  } });
+  const html = renderToStaticMarkup(exports.default());
+  const start = html.indexOf('aria-label="Method versions by category"');
+  const table = html.slice(start, html.indexOf("</table>", start));
+  assert.ok(start >= 0);
+  assert.match(html, /The current collection method can be newer than the latest published reading/);
+  assert.doesNotMatch(html, /Read recent changes/);
+  for (const category of categories.CATEGORIES) {
+    const bank = load(fs.readFileSync(path.join(data.REPO_ROOT, "questions", `${category.slug}.yml`), "utf8"));
+    const run = data.latestRun(category.slug);
+    const row = `<tr><td>${category.label}</td><td>v${bank.method_version}</td><td>v${run.method_version}</td><td>${run.measured_on || run.run_date}</td><td>${run.run_date}</td></tr>`;
+    assert.ok(table.includes(row), category.slug);
+  }
+});
