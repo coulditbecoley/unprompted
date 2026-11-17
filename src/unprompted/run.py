@@ -91,14 +91,24 @@ def load_local_env() -> None:
             os.environ[key] = value
 
 
+# The paths that decide what a published figure means. scripts/weekly-run.cmd
+# refuses to start when any of them is uncommitted, with the same list.
+METHOD_PATHS = ("src", "questions", "aliases", "providers.json", "agents.json",
+                "scripts", "requirements.lock", "pyproject.toml")
+
+
 def git_sha() -> str:
     """The commit this run executed from, or "" if that cannot be determined.
 
     Questions, alias maps and prompts all live in the repository, so the commit
     is what makes a published week reproducible: without it, two runs on the
-    same day are indistinguishable from each other. A dirty tree is marked,
-    because a run from uncommitted code is not reproducible at all and saying so
-    is more useful than a SHA that does not describe what ran.
+    same day are indistinguishable from each other. Uncommitted method is
+    marked, because a run from uncommitted code is not reproducible at all and
+    saying so is more useful than a SHA that does not describe what ran.
+
+    Only the method paths count. The run's own output under data/ and reports/
+    used to mark every category after the first "-dirty" (2026-11-02 and
+    2026-11-16), which made the flag useless for spotting a real one.
     """
     try:
         sha = subprocess.run(
@@ -106,7 +116,7 @@ def git_sha() -> str:
             cwd=ROOT, capture_output=True, text=True, timeout=10, check=True,
         ).stdout.strip()
         dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--", *METHOD_PATHS],
             cwd=ROOT, capture_output=True, text=True, timeout=10, check=True,
         ).stdout.strip()
         return f"{sha}-dirty" if dirty else sha
