@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -171,9 +172,67 @@ def last_reported() -> dict:
         return {}
 
 
+ALERT_TITLE = re.compile(
+    r"^(Weekly run (?:FAILED|has not started|has not finished|did not happen|incomplete|held for review|held, not published)"
+    r"|Site is not serving the latest week): (\d{4}-\d{2}-\d{2})$"
+)
+
+
+def close_resolved_issues(monday: date, *, site_current: bool) -> bool:
+    """Reconcile only our dated alerts against a clean published week."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues?state=open&per_page=100"],
+            cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+        )
+        for page in json.loads(result.stdout):
+            for issue in page:
+                match = ALERT_TITLE.fullmatch(issue.get("title", ""))
+                if not match or "pull_request" in issue:
+                    continue
+                day = date.fromisoformat(match[2])
+                if day > monday:
+                    continue
+                if match[1].startswith("Site ") and not site_current:
+                    continue
+                if "held" in match[1]:
+                    week = day - timedelta(days=day.weekday())
+                    categories = {p.stem for p in HELD.glob("*/*.json")}
+                    held = [c for c in categories if measured_in(HELD, week, c)]
+                    # No evidence identifying the held categories is not proof of resolution.
+                    if not held or any(not measured_in(RUNS, week, c) for c in held):
+                        continue
+                    reason = f"Closed automatically: all held categories for week {week} now have published readings."
+                else:
+                    reason = (f"Closed automatically: week {monday} is published in the archive."
+                              if day == monday else
+                              f"Closed automatically: the clean published week {monday} supersedes this older operational alert; missing historical readings are not implied recovered.")
+                subprocess.run(
+                    ["gh", "issue", "close", str(issue["number"]), "--comment", reason],
+                    cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+                )
+        return True
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        print(f"  could not reconcile alert issues: {exc}", file=sys.stderr)
+        return False
+
+
 def open_issue(title: str, body: str) -> None:
     """Reach a phone. Never raises: a broken alarm must not break the check."""
     try:
+        match = ALERT_TITLE.fullmatch(title)
+        if match and match[1] in {
+            "Weekly run has not started", "Weekly run has not finished",
+            "Weekly run did not happen", "Weekly run incomplete", "Weekly run held, not published",
+        }:
+            failed = f"Weekly run FAILED: {match[2]}"
+            found = subprocess.run(
+                ["gh", "issue", "list", "--state", "open", "--search", failed, "--json", "title"],
+                cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+            )
+            if any(row.get("title") == failed for row in json.loads(found.stdout or "[]")):
+                print(f"  already covered by {failed}", file=sys.stderr)
+                return
         existing = subprocess.run(
             ["gh", "issue", "list", "--state", "open", "--search", title, "--json", "title"],
             capture_output=True,
@@ -269,6 +328,7 @@ def stale_site(categories: list[str]) -> list[str]:
                 served = json.loads(response.read()).get("reading")
         except (OSError, ValueError, AttributeError) as exc:
             print(f"  could not read the live {category} standings: {exc}", file=sys.stderr)
+            lines.append(f"`{category}`: live standings could not be verified")
             continue
         if served != readings[-1]:
             lines.append(f"`{category}`: the site serves reading `{str(served)[:10]}`, the archive's newest is `{readings[-1]}`")
@@ -330,6 +390,9 @@ def main() -> int:
             # left the old week up while every check here stayed green.
             stale = [] if args.date else stale_site(produced)
             if not stale:
+                if args.issue and produced:
+                    if not close_resolved_issues(monday, site_current=not args.date):
+                        return 1
                 return 0
             title = f"Site is not serving the latest week: {monday}"
             body = "\n".join(["The archive has the week but the live site does not show it yet:", "",
