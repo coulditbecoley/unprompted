@@ -910,6 +910,51 @@ def test_renormalize_reapplies_aliases_for_free_and_refuses_older_readings(tmp_p
         reextract.main()
 
 
+def test_a_reread_carries_a_newer_method_only_when_the_operator_says_it_is_reading_alone(tmp_path, monkeypatch):
+    """Writing 6 -> 7 changed only how Superhuman is resolved. Re-reading an 11/16
+    (method 6) reading with today's rules must not publish them under 6."""
+    from unprompted import reextract
+    from unprompted.models import Extraction
+    monkeypatch.setattr(reextract, "ROOT", tmp_path)
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    monkeypatch.setattr(reextract, "load_local_env", lambda: None)
+    monkeypatch.setattr(reextract, "git_sha", lambda: "sha")
+    for paid in ("extract_run", "check_budget", "resolve_extractor"):
+        monkeypatch.setattr(reextract, paid, lambda *a, **k: pytest.fail("free mode touched paid machinery"))
+    asked = {"category": "alpha", "runs_per_question": 1, "questions": [{"id": "q1", "text": "Q?"}]}
+    (tmp_path / "questions").mkdir()
+    (tmp_path / "aliases").mkdir()
+    (tmp_path / "aliases/alpha.yml").write_text("canonical:\n  Acme: []\n")
+    row = Extraction("offline", "q1", 0, answer="Acme", extracted=[{"name": "Acme", "position": 1, "sentiment": "neutral"}])
+    source = RunRecord("alpha", "2026-09-01", 6, 1, ["offline"], extractor="x", extractions=[row]).to_dict()
+    source["methodology"] = {"questions": {**asked, "method_version": 6}}
+    write_json(tmp_path / "data/held/2026-09-01/alpha.json", source)
+
+    def reread(*extra, bank_version=7, bank_text="Q?"):
+        (tmp_path / "questions/alpha.yml").write_text(json.dumps(
+            {**asked, "method_version": bank_version, "questions": [{"id": "q1", "text": bank_text}]}))
+        monkeypatch.setattr(run.sys, "argv", ["reextract", "2026-09-01", "--category", "alpha",
+                                              "--out-date", "2026-09-14", "--renormalize", *extra])
+        return reextract.main()
+
+    with pytest.raises(SystemExit, match="measured under method 6 and the question bank is now method 7"):
+        reread()  # silently keeping 6 is the mislabel this refuses
+    with pytest.raises(SystemExit, match="current method_version"):
+        reread("--as-method", "8")
+    with pytest.raises(SystemExit, match="different questions"):
+        reread("--as-method", "7", bank_text="A different question?")
+    assert not list((tmp_path / "data").rglob("2026-09-14/*.json"))
+    reread("--as-method", "7")
+    fresh = json.loads(next((tmp_path / "data").rglob("2026-09-14/alpha.json")).read_text())
+    assert fresh["method_version"] == 7 and fresh["methodology"]["questions"]["method_version"] == 7
+    assert fresh["measured_on"] == "2026-09-01" and fresh["source_run"] == "2026-09-01/alpha"
+    # The usual case is untouched: an alias-only change keeps the source's version, no flag needed.
+    (tmp_path / "data").joinpath("held/2026-09-14/alpha.json").unlink(missing_ok=True)
+    (tmp_path / "data").joinpath("runs/2026-09-14/alpha.json").unlink(missing_ok=True)
+    reread(bank_version=6)
+    assert json.loads(next((tmp_path / "data").rglob("2026-09-14/alpha.json")).read_text())["method_version"] == 6
+
+
 def test_qualify_uses_the_runs_full_comparison_and_reports_failures_as_issues(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "ROOT", tmp_path)
     (tmp_path / "aliases").mkdir()

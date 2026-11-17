@@ -1,6 +1,6 @@
 # Methodology
 
-**Version 2** · effective 2026-08-24; **AI writing tools version 4** · effective 2026-11-23
+**Version 2** · effective 2026-08-24; **AI writing tools version 4** · effective 2026-11-17
 
 Writing version 4 (method version 7) widens the Superhuman context rule. On
 2026-11-16 the writing week was held because engines described Superhuman as an
@@ -11,7 +11,10 @@ calls it an email app or mentions an inbox, and "Superhuman AI" is read like bar
 Superhuman, as noise words already are everywhere else. The reviewed Grammarly
 parent phrases are set aside before that check, so a parent mention beside an
 inbox is still not read as the email product. Anything else stays quarantined.
-Week-over-week movement is not reported across the change.
+Week-over-week movement is not reported across the change. The stored 2026-11-16
+answers are re-read under version 4 and labelled method 7, rather than carrying
+the version 3 label over version 4 rules; the questions, repetitions and engines
+are unchanged, so only the reading differs.
 
 Writing version 3 (2026-09-14) raises its publication cap from 25 to 30 material brands to
 accommodate email-writing and documentation products already within its questions.
@@ -292,6 +295,13 @@ and the date the engines were actually queried. Re-reading stored answers with a
 corrected alias map produces a **new** file that carries the original
 measurement date and a pointer to the run it was read from, so a re-reading is
 never mistaken for a fresh week.
+
+A re-reading keeps its source's method version. When the method has since
+changed only how answers are read (aliases, normalisation or extraction), the
+operator may re-read under the newer version instead (`--as-method`); the
+re-reader refuses unless the questions and repetitions are the ones the answers
+were collected for, and refuses to stamp the old version on today's rules
+without that decision.
 
 New answers also carry `measurement_git_sha`, the measurement invocation's code
 revision. A resumed run can contain answers from multiple revisions, and each
