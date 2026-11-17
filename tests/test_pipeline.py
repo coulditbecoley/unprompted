@@ -116,6 +116,15 @@ def test_writing_ambiguities_require_answer_level_evidence():
         ("Superhuman", "Superhuman Mail drafts replies. Grammarly (now part of Superhuman).", ["Superhuman Mail"], []),
         ("Superhuman", "Grammarly (now part of Superhuman). Also consider Superhuman.", [], ["Superhuman"]),
         ("Superhuman", "Superhuman is useful.", [], ["Superhuman"]),
+        # Writing v4: the 2026-11-16 wordings that held the week.
+        ("Superhuman", "Superhuman: A premium email app with AI drafting built in.", ["Superhuman Mail"], []),
+        ("Superhuman", "Superhuman or Shortwave are email apps with AI built in.", ["Superhuman Mail"], []),
+        ("Superhuman", "Superhuman: A fast, premium inbox with AI drafts.", ["Superhuman Mail"], []),
+        ("Superhuman AI", "Superhuman AI: drafts replies and speeds up inbox management.", ["Superhuman Mail"], []),
+        ("Superhuman", "Superhuman: The top choice for high-volume email power users.", [], ["Superhuman"]),
+        # A parent phrase next to an inbox is still the parent, not the email product.
+        ("Superhuman", "Grammarly (now part of Superhuman) works in your inbox.", [], []),
+        ("Superhuman AI", "Superhuman AI is useful.", [], ["Superhuman AI"]),
     ]
     for name, answer, expected, unknown in cases:
         row = ex(brands=[name])
@@ -139,6 +148,7 @@ def test_writing_ambiguities_require_answer_level_evidence():
         "FLUX.2 Klein (4B)", "FLUX.2 [klein] 4B", "FLUX.2 klein 4B",
         "FLUX.2-klein-4B", "Microsoft Bing Image Creator", "Stable Diffusion XL",
         "Higgsfield AI", "Fooocus", "Alibaba", "Google AI Studio", "Alibaba Qwen",
+        "InvokeAI", "Invoke", "Invoke (InvokeAI)",  # 2026-11-17: excluded like ComfyUI
     ], ["Flux", "Bing Image Creator", "Stable Diffusion", "Higgsfield", "Qwen-Image"], []),
     ("ai-writing-tools", [
         "Claude by Anthropic", "Claude", "NovelCrafter", "Mintlify", "NovelAI",

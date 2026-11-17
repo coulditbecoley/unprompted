@@ -64,6 +64,13 @@ def _main() -> int:
         help="re-apply today's aliases to the stored raw brand names: FREE, no extraction calls "
              "(readings from 2026-11 on; older ones need the paid re-read)",
     )
+    parser.add_argument(
+        "--as-method",
+        type=int,
+        help="stamp the re-read with the question bank's newer method_version: only when the change "
+             "since the source affects reading alone (aliases, normalisation, extraction), never "
+             "what was asked or who answered",
+    )
     args = parser.parse_args()
 
     if args.in_place:
@@ -111,9 +118,11 @@ def _main() -> int:
     # anything. An operator edit during a batch must not change this reading.
     alias_data = yaml.safe_load((ROOT / "aliases" / f"{args.category}.yml").read_text(encoding="utf-8")) or {}
     aliases = AliasMap(alias_data.get("canonical", {}), alias_data.get("exclude", []))
-    spec = record.get("methodology", {}).get("questions") or yaml.safe_load(
-        (ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8")
-    )
+    bank = yaml.safe_load((ROOT / "questions" / f"{args.category}.yml").read_text(encoding="utf-8"))
+    spec = record.get("methodology", {}).get("questions") or bank
+    method_version = _method_version(record, spec, bank, args.as_method)
+    if method_version != record["method_version"]:
+        spec = bank
     reading_commit = git_sha()
     # Legacy readings lack the original grounding declaration. Retain the
     # existing current-policy fallback, but resolve it before any paid work.
@@ -165,11 +174,46 @@ def _main() -> int:
     extractions, quarantined = normalize(extractions, aliases)
 
     methodology = {**record.get("methodology", {}),
+                   **({"questions": spec} if method_version != record["method_version"] else {}),
                    "extraction_prompt": prompt,
                    "extractor": {"id": extractor_id, "model": extractor_model},
                    "aliases": alias_data}
     return _finish(args, record, out_date, methodology, extractions, quarantined, extractor_id, extractor_model,
-                   reading_commit, max_brands, grounding_engines)
+                   reading_commit, max_brands, grounding_engines, method_version)
+
+
+def _asked(spec: dict) -> tuple:
+    return ([(q.get("id"), q.get("text")) for q in spec.get("questions") or []], spec.get("runs_per_question"))
+
+
+def _method_version(record: dict, spec: dict, bank: dict, as_method: int | None) -> int:
+    """The method_version this re-read may honestly carry.
+
+    A re-read applies today's reading code and aliases, so when the bank has
+    moved on (writing 6 -> 7 changed only how Superhuman is resolved) stamping
+    the source's version would publish today's rules under yesterday's label.
+    Whether a bump touched only reading cannot be read off the bank: v6 itself
+    changed how the local engines ran. So the operator says so with
+    --as-method, and the questions and repetitions must still be the ones these
+    answers were collected for.
+    """
+    source = record["method_version"]
+    current = bank.get("method_version")
+    if as_method is None:
+        if isinstance(current, int) and current != source:  # a bank without one cannot disagree
+            raise SystemExit(
+                f"this reading was measured under method {source} and the question bank is now method {current}. "
+                f"Read METHODOLOGY.md for what changed: if it affects reading alone (aliases, normalisation, "
+                f"extraction), re-read with --as-method {current}; if it changed the questions, repetitions or "
+                "engines, these answers cannot be carried into it.")
+        return source
+    if as_method != current or as_method <= source:
+        raise SystemExit(f"--as-method must be the question bank's current method_version ({current}), "
+                         f"newer than the source's {source}")
+    if _asked(bank) != _asked(spec):
+        raise SystemExit(f"method {current} asks different questions or repetitions from the source reading, "
+                         "so its answers cannot be re-read into it")
+    return as_method
 
 
 def _renormalized(record: dict) -> list[Extraction]:
@@ -221,11 +265,11 @@ def _reread(answers: list[EngineAnswer], out_date: str, category: str):
 
 
 def _finish(args, record, out_date, methodology, extractions, quarantined, extractor_id, extractor_model,
-            reading_commit, max_brands, grounding_engines) -> int:
+            reading_commit, max_brands, grounding_engines, method_version) -> int:
     fresh = RunRecord(
         category=record["category"],
         run_date=out_date,
-        method_version=record["method_version"],
+        method_version=method_version,
         runs_per_question=record["runs_per_question"],
         engines=record["engines"],
         extractor=extractor_id,

@@ -167,6 +167,10 @@ exclude:
   # Stable Diffusion WebUI Forge: always "ComfyUI or Forge", a way to run a model
   - forge
   - sd webui forge
+  # Owner decision 2026-11-17: InvokeAI is a local canvas for running models, like ComfyUI and Forge
+  - invokeai
+  - invoke ai
+  - invoke
   - controlnet
   - ip-adapter
   - ipadapter
