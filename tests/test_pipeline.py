@@ -2295,7 +2295,7 @@ def test_watchdog_looks_back_to_the_monday_that_should_have_run(monkeypatch, tmp
     assert wd.most_recent_monday(monday) in {date(2026, 8, 24), monday}
 
 
-def test_watchdog_does_not_exempt_unstarted_categories_forever(
+def test_watchdog_distinguishes_unstarted_categories_from_missing(
     monkeypatch, tmp_path
 ):
     """A category added to the bank on a Tuesday has not missed a Monday.
@@ -2310,8 +2310,15 @@ def test_watchdog_does_not_exempt_unstarted_categories_forever(
     )
     produced, missing, unstarted = wd.week_status(date(2026, 8, 24))
 
-    assert missing == ["alpha", "brand-new"]
-    assert unstarted == [], "never measured is not the same as missed"
+    assert missing == ["alpha"]
+    assert unstarted == ["brand-new"], "never measured is not the same as missed"
+
+    # Once a category has any held or published reading, silence is a missing week.
+    path = wd.HELD / "2026-08-17" / "brand-new.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"category": "brand-new", "run_date": "2026-08-17",
+                                "extractions": [{"engine": "test"}]}))
+    assert wd.week_status(date(2026, 8, 24)) == ([], ["alpha", "brand-new"], [])
 
 
 def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp_path, capsys):

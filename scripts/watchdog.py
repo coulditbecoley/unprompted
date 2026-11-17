@@ -18,7 +18,7 @@ from the archive rather than from any status file the run itself had to survive
 long enough to write.
 
     python scripts/watchdog.py                # report, exit 1 if a week is missing
-    python scripts/watchdog.py --issue        # also open a GitHub issue
+    python scripts/watchdog.py --issue        # exit 0 once delivered, 1 on delivery/cleanup failure
     python scripts/watchdog.py --date 2026-08-24
 """
 
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -96,6 +97,8 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
         measured = measured_in(RUNS, monday, category) or measured_in(HELD, monday, category)
         if measured:
             produced.append(category)
+        elif not ever_measured(category):
+            unstarted.append(category)
         else:
             missing.append(category)
     return produced, missing, unstarted
@@ -171,9 +174,67 @@ def last_reported() -> dict:
         return {}
 
 
-def open_issue(title: str, body: str) -> None:
-    """Reach a phone. Never raises: a broken alarm must not break the check."""
+ALERT_TITLE = re.compile(
+    r"^(Weekly run (?:FAILED|has not started|has not finished|did not happen|incomplete|held for review|held, not published)"
+    r"|Site is not serving the latest week): (\d{4}-\d{2}-\d{2})$"
+)
+
+
+def close_resolved_issues(monday: date, *, site_current: bool) -> bool:
+    """Reconcile only our dated alerts against a clean published week."""
     try:
+        result = subprocess.run(
+            ["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues?state=open&per_page=100"],
+            cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+        )
+        for page in json.loads(result.stdout):
+            for issue in page:
+                match = ALERT_TITLE.fullmatch(issue.get("title", ""))
+                if not match or "pull_request" in issue:
+                    continue
+                day = date.fromisoformat(match[2])
+                if day > monday:
+                    continue
+                if match[1].startswith("Site ") and not site_current:
+                    continue
+                if "held" in match[1]:
+                    week = day - timedelta(days=day.weekday())
+                    categories = {p.stem for p in HELD.glob("*/*.json")}
+                    held = [c for c in categories if measured_in(HELD, week, c)]
+                    # No evidence identifying the held categories is not proof of resolution.
+                    if not held or any(not measured_in(RUNS, week, c) for c in held):
+                        continue
+                    reason = f"Closed automatically: all held categories for week {week} now have published readings."
+                else:
+                    reason = (f"Closed automatically: week {monday} is published in the archive."
+                              if day == monday else
+                              f"Closed automatically: the clean published week {monday} supersedes this older operational alert; missing historical readings are not implied recovered.")
+                subprocess.run(
+                    ["gh", "issue", "close", str(issue["number"]), "--comment", reason],
+                    cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+                )
+        return True
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError) as exc:
+        print(f"  could not reconcile alert issues: {exc}", file=sys.stderr)
+        return False
+
+
+def open_issue(title: str, body: str) -> bool:
+    """True once this alarm is delivered or covered by an existing issue."""
+    try:
+        match = ALERT_TITLE.fullmatch(title)
+        if match and match[1] in {
+            "Weekly run has not started", "Weekly run has not finished",
+            "Weekly run did not happen", "Weekly run incomplete", "Weekly run held, not published",
+        }:
+            failed = f"Weekly run FAILED: {match[2]}"
+            found = subprocess.run(
+                ["gh", "issue", "list", "--state", "open", "--search", failed, "--json", "title"],
+                cwd=REPO, capture_output=True, text=True, timeout=60, check=True,
+            )
+            if any(row.get("title") == failed for row in json.loads(found.stdout or "[]")):
+                print(f"  already covered by {failed}", file=sys.stderr)
+                return True
         existing = subprocess.run(
             ["gh", "issue", "list", "--state", "open", "--search", title, "--json", "title"],
             capture_output=True,
@@ -183,7 +244,7 @@ def open_issue(title: str, body: str) -> None:
         )
         if any(row.get("title") == title for row in json.loads(existing.stdout or "[]")):
             print(f"  an open issue already says this: {title}", file=sys.stderr)
-            return
+            return True
         subprocess.run(
             ["gh", "issue", "create", "--title", title, "--body", body],
             capture_output=True,
@@ -192,12 +253,14 @@ def open_issue(title: str, body: str) -> None:
             check=True,
         )
         print(f"  opened: {title}", file=sys.stderr)
+        return True
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"  could not open an issue: {exc}", file=sys.stderr)
+        return False
 
 
 # The run starts Mondays 13:00 on the measuring machine's clock (New York).
-# GitHub cron is UTC and drifts with DST, so each check runs in both UTC slots
+# GitHub cron is UTC and drifts with DST, so each check has multiple UTC slots
 # and acts only once local time has passed its gate.
 
 
@@ -269,6 +332,7 @@ def stale_site(categories: list[str]) -> list[str]:
                 served = json.loads(response.read()).get("reading")
         except (OSError, ValueError, AttributeError) as exc:
             print(f"  could not read the live {category} standings: {exc}", file=sys.stderr)
+            lines.append(f"`{category}`: live standings could not be verified")
             continue
         if served != readings[-1]:
             lines.append(f"`{category}`: the site serves reading `{str(served)[:10]}`, the archive's newest is `{readings[-1]}`")
@@ -292,7 +356,7 @@ def main() -> int:
             return 0
         print(alarm[0], file=sys.stderr)
         if args.issue:
-            open_issue(*alarm)
+            return 0 if open_issue(*alarm) else 1
         else:
             print(alarm[1], file=sys.stderr)
         return 1
@@ -330,6 +394,9 @@ def main() -> int:
             # left the old week up while every check here stayed green.
             stale = [] if args.date else stale_site(produced)
             if not stale:
+                if args.issue and produced:
+                    if not close_resolved_issues(monday, site_current=not args.date):
+                        return 1
                 return 0
             title = f"Site is not serving the latest week: {monday}"
             body = "\n".join(["The archive has the week but the live site does not show it yet:", "",
@@ -338,7 +405,7 @@ def main() -> int:
                               "", "_Opened by `scripts/watchdog.py`._"])
             print(f"\n{title}", file=sys.stderr)
             if args.issue:
-                open_issue(title, body)
+                return 0 if open_issue(title, body) else 1
             else:
                 print(body, file=sys.stderr)
             return 1
@@ -362,7 +429,7 @@ def main() -> int:
         ])
         print(f"\n{title}", file=sys.stderr)
         if args.issue:
-            open_issue(title, body)
+            return 0 if open_issue(title, body) else 1
         else:
             print(body, file=sys.stderr)
         return 1
@@ -406,7 +473,7 @@ def main() -> int:
 
     print(f"\n{title}", file=sys.stderr)
     if args.issue:
-        open_issue(title, body)
+        return 0 if open_issue(title, body) else 1
     else:
         print(body, file=sys.stderr)
 
