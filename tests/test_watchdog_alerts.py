@@ -125,3 +125,46 @@ def test_cleanup_failure_is_reported_and_unverifiable_site_is_not_healthy(monkey
         raise OSError('offline')
     monkeypatch.setattr(wd.urllib.request, 'urlopen', offline)
     assert 'could not be verified' in wd.stale_site(['alpha'])[0]
+
+
+@pytest.mark.parametrize('mode', ['start', 'finish', 'missing', 'held', 'stale'])
+@pytest.mark.parametrize('delivered', [True, False])
+def test_issue_mode_exit_tracks_delivery_not_measurement(monkeypatch, tmp_path, mode, delivered):
+    archive(monkeypatch, tmp_path)
+    args = ['watchdog', '--issue']
+    if mode in ('start', 'finish'):
+        args += ['--mode', mode]
+        monkeypatch.setattr(wd, 'heartbeat_alarm', lambda *a: ('alarm', 'offline'))
+    else:
+        args += ['--date', '2026-11-17']
+        if mode == 'held':
+            reading(wd.HELD, '2026-11-16')
+        elif mode == 'missing':
+            reading(wd.RUNS, '2026-11-09')
+        else:
+            reading(wd.RUNS, '2026-11-16')
+            args = ['watchdog', '--issue']
+            monkeypatch.setattr(wd, 'most_recent_monday', lambda *a: date(2026, 11, 16))
+            monkeypatch.setattr(wd, 'stale_site', lambda *a: ['offline stale reading'])
+    monkeypatch.setattr(wd, 'open_issue', lambda *a: delivered)
+    monkeypatch.setattr(sys, 'argv', args)
+    assert wd.main() == (0 if delivered else 1)
+    monkeypatch.setattr(sys, 'argv', [a for a in args if a != '--issue'])
+    assert wd.main() == 1  # report-only mode still reports the missing/held week
+
+
+def test_issue_delivery_result_includes_dedup_and_suppression(monkeypatch):
+    title = 'Weekly run has not started: 2026-11-16'
+    for issues in ([], [{'title': title}], [{'title': 'Weekly run FAILED: 2026-11-16'}]):
+        github(monkeypatch, issues)
+        assert wd.open_issue(title, 'offline') is True
+
+
+@pytest.mark.parametrize('fail_on', ['list', 'create'])
+def test_issue_delivery_failure_returns_false(monkeypatch, fail_on):
+    def run(args, **kwargs):
+        if args[2] == fail_on:
+            raise subprocess.CalledProcessError(1, args)
+        return SimpleNamespace(stdout='[]')
+    monkeypatch.setattr(wd.subprocess, 'run', run)
+    assert wd.open_issue('Weekly run has not started: 2026-11-16', 'offline') is False

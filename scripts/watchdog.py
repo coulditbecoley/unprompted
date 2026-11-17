@@ -18,7 +18,7 @@ from the archive rather than from any status file the run itself had to survive
 long enough to write.
 
     python scripts/watchdog.py                # report, exit 1 if a week is missing
-    python scripts/watchdog.py --issue        # also open a GitHub issue
+    python scripts/watchdog.py --issue        # exit 0 once delivered, 1 on delivery/cleanup failure
     python scripts/watchdog.py --date 2026-08-24
 """
 
@@ -219,8 +219,8 @@ def close_resolved_issues(monday: date, *, site_current: bool) -> bool:
         return False
 
 
-def open_issue(title: str, body: str) -> None:
-    """Reach a phone. Never raises: a broken alarm must not break the check."""
+def open_issue(title: str, body: str) -> bool:
+    """True once this alarm is delivered or covered by an existing issue."""
     try:
         match = ALERT_TITLE.fullmatch(title)
         if match and match[1] in {
@@ -234,7 +234,7 @@ def open_issue(title: str, body: str) -> None:
             )
             if any(row.get("title") == failed for row in json.loads(found.stdout or "[]")):
                 print(f"  already covered by {failed}", file=sys.stderr)
-                return
+                return True
         existing = subprocess.run(
             ["gh", "issue", "list", "--state", "open", "--search", title, "--json", "title"],
             capture_output=True,
@@ -244,7 +244,7 @@ def open_issue(title: str, body: str) -> None:
         )
         if any(row.get("title") == title for row in json.loads(existing.stdout or "[]")):
             print(f"  an open issue already says this: {title}", file=sys.stderr)
-            return
+            return True
         subprocess.run(
             ["gh", "issue", "create", "--title", title, "--body", body],
             capture_output=True,
@@ -253,8 +253,10 @@ def open_issue(title: str, body: str) -> None:
             check=True,
         )
         print(f"  opened: {title}", file=sys.stderr)
+        return True
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"  could not open an issue: {exc}", file=sys.stderr)
+        return False
 
 
 # The run starts Mondays 13:00 on the measuring machine's clock (New York).
@@ -354,7 +356,7 @@ def main() -> int:
             return 0
         print(alarm[0], file=sys.stderr)
         if args.issue:
-            open_issue(*alarm)
+            return 0 if open_issue(*alarm) else 1
         else:
             print(alarm[1], file=sys.stderr)
         return 1
@@ -403,7 +405,7 @@ def main() -> int:
                               "", "_Opened by `scripts/watchdog.py`._"])
             print(f"\n{title}", file=sys.stderr)
             if args.issue:
-                open_issue(title, body)
+                return 0 if open_issue(title, body) else 1
             else:
                 print(body, file=sys.stderr)
             return 1
@@ -427,7 +429,7 @@ def main() -> int:
         ])
         print(f"\n{title}", file=sys.stderr)
         if args.issue:
-            open_issue(title, body)
+            return 0 if open_issue(title, body) else 1
         else:
             print(body, file=sys.stderr)
         return 1
@@ -471,7 +473,7 @@ def main() -> int:
 
     print(f"\n{title}", file=sys.stderr)
     if args.issue:
-        open_issue(title, body)
+        return 0 if open_issue(title, body) else 1
     else:
         print(body, file=sys.stderr)
 
