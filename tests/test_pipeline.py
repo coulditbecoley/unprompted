@@ -2937,3 +2937,40 @@ def test_the_mid_week_check_calls_no_provider_and_files_its_own_issue(monkeypatc
     assert "--preflight" in run and "--qualify" not in run  # configuration only, nothing paid
     create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
     assert create[create.index("--title") + 1] == "Mid-week check: problems before 2026-11-02"
+
+
+def test_git_sha_marks_uncommitted_method_not_the_runs_own_output(tmp_path, monkeypatch):
+    import subprocess as sp
+    from unprompted import run
+    def git(*args):
+        sp.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-b", "main")
+    git("config", "user.name", "t")
+    git("config", "user.email", "t@example.invalid")
+    for path in ("src/unprompted/x.py", "questions/q.yml", "data/runs/old.json", "README.md"):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text("v1")
+    git("add", ".")
+    git("commit", "-m", "base")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    sha = run.git_sha()
+    assert len(sha) == 40
+    # What an earlier category of the same run writes, plus an unrelated doc edit.
+    (tmp_path / "data/runs/2026-11-16").mkdir(parents=True)
+    (tmp_path / "data/runs/2026-11-16/first.json").write_text("{}")
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports/r.md").write_text("r")
+    (tmp_path / "README.md").write_text("v2")
+    assert run.git_sha() == sha
+    (tmp_path / "questions/new.yml").write_text("q")   # untracked method counts
+    assert run.git_sha() == sha + "-dirty"
+    (tmp_path / "questions/new.yml").unlink()
+    (tmp_path / "src/unprompted/x.py").write_text("v2")
+    assert run.git_sha() == sha + "-dirty"
+
+
+def test_git_sha_and_the_launcher_guard_the_same_method_paths():
+    from unprompted.run import METHOD_PATHS
+    launcher = (Path(__file__).resolve().parents[1] / "scripts/weekly-run.cmd").read_text(encoding="utf-8")
+    line = next(l for l in launcher.splitlines() if l.startswith("git status --porcelain -- src "))
+    assert line.split(" -- ", 1)[1].split(" >", 1)[0].split() == list(METHOD_PATHS)
