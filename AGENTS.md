@@ -47,8 +47,8 @@ for the coming Monday every Sunday at 18:00 and opens a GitHub issue if it
 finds anything (registered by `scripts/install-weekly-task.ps1`, which takes
 that task's time limit from `readiness.py --print-task-limit`; re-run the
 installer from the main checkout after changing probe budgets). It and the
-free Wednesday 09:00 mid-week check (`readiness.py --free`, no provider
-calls) also check GitHub sign-in, push access, free disk, the age of the
+free Wednesday 09:00 mid-week and Monday 12:00 pre-run checks
+(`readiness.py --free`, no provider calls) also check GitHub sign-in, push access, free disk, the age of the
 backup and sync status files, an unpushed week, an undelivered alert and
 whether the GitHub watchdog is still enabled.
 
@@ -94,6 +94,8 @@ unrecognised brand names · `.unprompted/` local checkpoints and batch state
 and newsletter drafts (gitignored).
 
 **Rules that are easy to break.**
+- Never switch branches or commit in the main checkout; use git worktrees.
+  No merges to main on Mondays from 13:00 until the finished heartbeat.
 - Changing questions, engines, an engine's model, prompt or CLI arguments, or
   the extractor is a method change: bump `method_version` in `questions/*.yml`
   and add a dated section to `METHODOLOGY.md`, then commit both: the launcher

@@ -2782,6 +2782,11 @@ def test_readiness_targets_the_right_monday_and_never_overlaps_the_run():
     assert rd.target_monday(dt(2026, 11, 2, 9)) == date(2026, 11, 2)    # a late start Monday morning
     assert rd.target_monday(dt(2026, 11, 2, 12)) is None                # too close to 13:00: skip
     assert rd.target_monday(dt(2026, 11, 4, 10)) == date(2026, 11, 9)   # midweek -> next Monday
+    assert rd.target_monday(dt(2026, 11, 2, 12), paid=False) == date(2026, 11, 2)
+    assert rd.target_monday(dt(2026, 11, 2, 12, 29), paid=False) == date(2026, 11, 2)
+    assert rd.target_monday(dt(2026, 11, 2, 12, 30), paid=False) is None
+    assert rd.target_monday(dt(2026, 11, 2, 13), paid=False) is None
+    assert rd.target_monday(dt(2026, 11, 4, 10), paid=False) == date(2026, 11, 9)
 
 
 def _readiness(monkeypatch, replies):
@@ -2795,7 +2800,7 @@ def _readiness(monkeypatch, replies):
             raise reply
         return reply
     monkeypatch.setattr(rd.subprocess, "run", fake)
-    monkeypatch.setattr(rd, "target_monday", lambda now: date(2026, 11, 2))
+    monkeypatch.setattr(rd, "target_monday", lambda now, paid=True: date(2026, 11, 2))
     monkeypatch.setattr(rd.sys, "argv", ["readiness"])
     monkeypatch.setattr(rd, "house_checks", lambda: [])  # tested on its own below
     return rd, calls
@@ -2997,3 +3002,35 @@ def test_git_sha_and_the_launcher_guard_the_same_method_paths():
     launcher = (Path(__file__).resolve().parents[1] / "scripts/weekly-run.cmd").read_text(encoding="utf-8")
     line = next(l for l in launcher.splitlines() if l.startswith("git status --porcelain -- src "))
     assert line.split(" -- ", 1)[1].split(" >", 1)[0].split() == list(METHOD_PATHS)
+
+
+def test_free_readiness_at_monday_noon_checks_today_without_paid_probes(monkeypatch, tmp_path):
+    from contextlib import nullcontext
+    from datetime import datetime as dt
+    from scripts import readiness as rd
+
+    class Noon(dt):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 2, 12)
+
+    calls = []
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=0, stdout=json.dumps({'issues': []}), stderr='')
+    monkeypatch.setattr(rd, 'datetime', Noon)
+    monkeypatch.setattr(rd, 'REPO', tmp_path)
+    monkeypatch.setattr(rd, 'run_lock', lambda *a, **k: nullcontext())
+    monkeypatch.setattr(rd.subprocess, 'run', run)
+    monkeypatch.setattr(rd, 'house_checks', lambda: ['checkout needs attention'])
+    delivered = []
+    monkeypatch.setattr(rd, 'open_issue', lambda *a: delivered.append(a) or True)
+    monkeypatch.setattr(sys, 'argv', ['readiness', '--free'])
+    assert rd.main() == 2
+    argv, kwargs = calls[0]
+    assert len(calls) == 1 and '--preflight' in argv and '--qualify' not in argv
+    assert argv[argv.index('--date') + 1] == '2026-11-02'
+    assert argv[2] == '300'
+    assert kwargs['timeout'] == 300 + rd.WRAPPER_GRACE_SECONDS
+    assert kwargs['timeout'] + rd.NOTIFY_MARGIN_SECONDS < rd.task_limit_seconds(paid=False)
+    assert delivered == [('2026-11-02', ['checkout needs attention'], [], 'Mid-week check')]

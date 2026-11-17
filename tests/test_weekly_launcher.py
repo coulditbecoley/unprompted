@@ -1,5 +1,6 @@
 """Run the real Windows launcher against a disposable local Git remote."""
 import json
+from datetime import datetime
 import os
 from pathlib import Path
 import shutil
@@ -229,13 +230,27 @@ def test_installer_registers_readiness_with_its_own_budget_and_refuses_a_bad_one
     assert settings["weekly_limit_seconds"] == 8 * 3600
     assert settings["weekly_start"].endswith("T13:00:00") and settings["readiness_start"].endswith("T18:00:00")
     assert settings["midweek_start"].endswith("T09:00:00") and settings["midweek_limit_seconds"] == 1800
-    source = (ROOT / "scripts" / "install-weekly-task.ps1").read_text()
-    assert '"scripts\\readiness.py --free"' in source  # a stray \r once turned this path into "scripts<CR>eadiness"
+    assert settings["prerun_start"].endswith("T12:00:00")
+    free = settings["free_tasks"]
+    assert [(t["name"], t["day"]) for t in free] == [
+        ("Unprompted mid-week check", "Wednesday"), ("Unprompted Monday pre-run check", "Monday")]
+    assert [t["days_of_week"] for t in free] == [8, 2]
+    for task in free:
+        assert task["execute"] == "wscript.exe"
+        assert task["arguments"].endswith('" scripts\\readiness.py --free')
+        assert 'scripts\\hidden.vbs" "' in task["arguments"]
+        assert task["working_directory"] == str(ROOT)
+        assert task["limit_seconds"] == readiness.task_limit_seconds(paid=False)
+        assert datetime.fromisoformat(task["start"]).tzinfo is None  # local clock across DST
 
     garbage = tmp_path / "python.cmd"
     garbage.write_text("@echo not-a-number\n")
     refused = install(garbage)
     assert refused.returncode != 0 and "nothing registered" in refused.stderr + refused.stdout
+
+    garbage.write_text('@echo off\nif "%~3"=="--free" (echo not-a-number) else (echo 1800)\n')
+    refused = install(garbage)
+    assert refused.returncode != 0 and "free readiness time limit" in refused.stderr + refused.stdout
 
 
 def _watchdog():
