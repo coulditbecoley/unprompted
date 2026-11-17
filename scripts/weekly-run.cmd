@@ -61,6 +61,16 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM A local commit on main that no run recorded makes publish.py final refuse,
+REM but only after hours of paid measurement (and the dirty data it leaves then
+REM blocks the next Monday too). The same rule, asked before any paid work.
+"%UNPROMPTED_PYTHON%" scripts\publish.py check --wait 600 >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo ABORT: local main has commits that are not on origin, see publish.py output above >> "%LOG%"
+  "%UNPROMPTED_PYTHON%" scripts\notify.py --status failed --exit-code 1 --detail "Local main had commits that are not on origin and that no run recorded, so nothing was measured: publication would have refused them after the paid run. Push or remove them (git log origin/main..main)." >> "%LOG%" 2>&1
+  exit /b 1
+)
+
 REM Never include someone else's staged work in the measurement commit.
 git diff --cached --quiet
 if errorlevel 1 (

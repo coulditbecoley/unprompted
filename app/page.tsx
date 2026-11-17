@@ -92,9 +92,15 @@ export default function Home() {
   const otherBoards = CATEGORIES.filter((c) => c.slug !== CATEGORY)
     .map((c) => ({ c, r: latestRun(c.slug) }))
     .filter((x) => x.r)
-    .map(({ c, r }) => ({ c, board: standings(r!), date: r!.measured_on || r!.run_date }))
+    .map(({ c, r }) => ({
+      c,
+      board: standings(r!),
+      date: r!.measured_on || r!.run_date,
+      method: r!.method_version,
+      assistants: r!.engines.length,
+    }))
     .filter((x) => x.board[0])
-    .map(({ c, board, date }) => ({ c, top: board[0], date, lead: boardTakeaways(board).lead }));
+    .map(({ c, board, date, method, assistants }) => ({ c, top: board[0], date, method, assistants, lead: boardTakeaways(board).lead }));
 
   // Plain answers to what a first-time visitor asks before believing a chart.
   // Facts only from METHODOLOGY.md and the data; nothing promotional.
@@ -359,14 +365,14 @@ export default function Home() {
           <div className="sec-head">
             <div>
               <p className="label">Other boards</p>
-              <h2>Measured the same way</h2>
+              <h2>Latest published reading in each category</h2>
             </div>
             <Link className="btn btn-sm btn-ghost" href="/categories">
               All categories <span className="arr" aria-hidden="true">→</span>
             </Link>
           </div>
           <div className="ob-grid">
-            {otherBoards.map(({ c, top, date, lead }) => (
+            {otherBoards.map(({ c, top, date, method, assistants, lead }) => (
               <Link key={c.slug} href={`/chart/${c.slug}`} className="ob-card card-lift">
                 <span className="label">{c.label}</span>
                 <span className="ob-lead">{top.brand}</span>
@@ -379,7 +385,7 @@ export default function Home() {
                 <span className="meter" aria-hidden="true">
                   <i style={{ "--v": top.firstShare } as React.CSSProperties} />
                 </span>
-                <span className="mono ob-date">{date}</span>
+                <span className="mono ob-date">{date} · method v{method} · {assistants} assistants</span>
               </Link>
             ))}
           </div>

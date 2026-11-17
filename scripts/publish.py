@@ -2,6 +2,7 @@
 
     python scripts/publish.py final --message "Run: ..."   # the launcher, after measuring
     python scripts/publish.py pending                       # launcher start, and the daily sync
+    python scripts/publish.py check                         # launcher, before paid work
 
 Before this existed the commit and push lived in weekly-run.cmd. A push that failed
 on a network blip left the week on this machine only, and the next Monday refused
@@ -14,6 +15,16 @@ still points at it; anything else (diverged remote, extra local commits, a moved
 HEAD) is reported for a person and left alone. A commit that failed, or a crash
 between commit and intent, is also left for a person: dirty or unclaimed output is
 never adopted automatically.
+
+One divergence is common and safe, and is repaired: origin/main moved on during the
+run (a PR merged on a Monday afternoon) without touching data/ or reports/, and the
+week's commit touches nothing else. Recovery then replays that one commit onto
+origin/main and pushes the result. This happens in `pending` (the next start or the
+daily sync), never inside `final`: the launcher is still executing its .cmd file
+then, cmd reads that file by offset, and swapping in newer code under it would also
+run the rest of the evening (vault sync, backup, shadow reader) from code that did
+not measure the week. The readings keep the git_sha recorded when each category was
+measured, which stays in history because it is an ancestor of origin/main.
 
 Exit 0 published (or nothing to do), 3 not published (reason on stderr), 4 busy.
 """
@@ -84,6 +95,9 @@ def push(commit: str, started: float) -> str:
             done = git("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120",
                        "push", "origin", f"{commit}:refs/heads/main", timeout=ATTEMPT_SECONDS)
             why = done.stderr.strip()[-300:] if done.returncode else ""
+            # Git's hints follow the rejection line, so look at all of stderr.
+            if done.returncode and "[rejected]" in done.stderr:
+                return f"origin/main moved on, push rejected without retrying: {why}"
         except subprocess.TimeoutExpired:
             why = f"push timed out after {ATTEMPT_SECONDS}s"
         if not why:
@@ -96,6 +110,54 @@ def push(commit: str, started: float) -> str:
             print(f"push attempt {attempt + 1} failed: {why}; retrying", file=sys.stderr)
             time.sleep(BACKOFF[attempt])
     return why
+
+
+def unclaimed(fetch: bool = False) -> str:
+    """Why publication would refuse local commits no intent claims, or "".
+
+    `final` refuses these after measuring; the launcher and the readiness check
+    ask the same question before any paid work, so an agent's local commit on
+    main costs an alert instead of a measured week that cannot be published.
+    """
+    if fetch:
+        fetched = git("fetch", "origin", "main", timeout=ATTEMPT_SECONDS)
+        if fetched.returncode != 0:
+            return f"could not fetch origin to look for unpushed commits: {fetched.stderr.strip()[-300:]}"
+    commits = out("rev-list", "origin/main..HEAD").split()
+    if not commits:
+        return ""
+    return (f"local main has {len(commits)} commit(s) not on origin that no run recorded; "
+            "inspect `git log origin/main..main` before publishing.")
+
+
+DATA_PATHS = ("data", "reports")
+
+
+def changed(base: str, tip: str, *pathspec: str) -> list[str]:
+    return out("diff", "--name-only", base, tip, "--", *pathspec).split()
+
+
+def replay_onto_origin(intent: dict) -> tuple[str, str]:
+    """(new commit, "") after replaying the week onto origin/main, or ("", why not).
+
+    Only when nothing can conflict: the week's commit touches only data/ and
+    reports/, origin/main still contains the commit the week was built on, and
+    nothing it added since touches data/ or reports/.
+    """
+    commit, parent = intent["commit"], intent["parent"]
+    if out("branch", "--show-current") != "main":
+        return "", "the checkout is not on main"
+    if not contains(parent, "origin/main"):
+        return "", "origin/main no longer contains the commit the week was built on"
+    if changed(parent, commit, ".", *(f":(exclude){p}" for p in DATA_PATHS)):
+        return "", "the week's commit changes files outside data/ and reports/"
+    if changed(parent, "origin/main", *DATA_PATHS):
+        return "", "origin/main changed data/ or reports/ since the week was built"
+    done = git(*BOT, "rebase", "--onto", "origin/main", parent, timeout=ATTEMPT_SECONDS)
+    if done.returncode != 0:
+        git("rebase", "--abort")
+        return "", f"replaying the week failed and was undone: {done.stderr.strip()[-300:]}"
+    return out("rev-parse", "HEAD"), ""
 
 
 def finish_pending(started: float | None = None) -> tuple[int, str]:
@@ -114,14 +176,22 @@ def finish_pending(started: float | None = None) -> tuple[int, str]:
     if out("rev-parse", "main") != commit:
         return 3, (f"local main moved away from the unpushed week {commit[:12]}; "
                    "inspect `git log origin/main..main` and push or reconcile by hand")
+    note = ""
     if not contains("origin/main", commit):
-        return 3, (f"origin/main has diverged from the unpushed week {commit[:12]}; "
-                   "reconcile by hand (never force-push the archive)")
+        replayed, why = replay_onto_origin(intent)
+        if not replayed:
+            return 3, (f"origin/main has diverged from the unpushed week {commit[:12]} ({why}); "
+                       "reconcile by hand (never force-push the archive)")
+        # Recorded before pushing, so a failed push retries the replayed commit.
+        intent = {**intent, "commit": replayed, "parent": out("rev-parse", "origin/main"),
+                  "replayed_from": commit}
+        write_json(INTENT, intent, replace=True)
+        commit, note = replayed, f" (replayed from {intent['replayed_from'][:12]} onto origin/main)"
     why = push(commit, started)
     if why:
-        return 3, f"pushing {commit[:12]} failed: {why}"
+        return 3, f"pushing {commit[:12]}{note} failed: {why}"
     write_json(INTENT, {**intent, "state": "pushed"}, replace=True)
-    return 0, f"pushed {commit[:12]}"
+    return 0, f"pushed {commit[:12]}{note}"
 
 
 def final(message: str, started: float | None = None) -> tuple[int, str]:
@@ -133,10 +203,9 @@ def final(message: str, started: float | None = None) -> tuple[int, str]:
         return 3, "the checkout left main during the run; nothing committed"
     # A commit that no intent claims (a crash between commit and intent, or a
     # hand commit) would otherwise ride along with this week's push.
-    unclaimed = out("rev-list", "origin/main..HEAD")
-    if unclaimed:
-        return 3, (f"local main has {len(unclaimed.split())} commit(s) not on origin that no run recorded; "
-                   "inspect `git log origin/main..main` before publishing. Nothing committed.")
+    why = unclaimed()
+    if why:
+        return 3, f"{why} Nothing committed."
     added = git("add", "data", "reports")
     if added.returncode != 0:
         return 3, f"git add failed, the week is on this machine only: {added.stderr.strip()[-300:]}"
@@ -160,7 +229,7 @@ def final(message: str, started: float | None = None) -> tuple[int, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mode", choices=["final", "pending"])
+    parser.add_argument("mode", choices=["final", "pending", "check"])
     parser.add_argument("--message", default="Run: measured and published")
     parser.add_argument("--wait", type=float, default=0, help="seconds to wait for a busy week.lock")
     args = parser.parse_args()
@@ -170,14 +239,19 @@ def main() -> int:
         # released both by the time the launcher publishes.
         with run_lock(STATE, "week.lock", wait=args.wait), run_lock(STATE, "run.lock", wait=args.wait):
             try:
-                code, why = final(args.message, started) if args.mode == "final" else finish_pending(started)
+                if args.mode == "check":
+                    why = unclaimed(fetch=True)
+                    code, why = (3, why) if why else (0, "no unpushed commits on main")
+                else:
+                    code, why = final(args.message, started) if args.mode == "final" else finish_pending(started)
             except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
                 code, why = 3, str(exc)
     except OSError:
         print("a weekly run or another job holds the lock; publication not attempted now", file=sys.stderr)
         return 4
     print(why, file=sys.stderr if code else sys.stdout)
-    record_status(STATE / "status", "publish", code == 0, "" if code == 0 else why, mode=args.mode)
+    if args.mode != "check":  # a check publishes nothing, so it must not overwrite the publish status
+        record_status(STATE / "status", "publish", code == 0, "" if code == 0 else why, mode=args.mode)
     return code
 
 

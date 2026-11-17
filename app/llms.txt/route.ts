@@ -78,8 +78,8 @@ export async function GET() {
     const week = run.measured_on || run.run_date;
     const detail = leader
       ? `${leader.brand} was named first in ${Math.round(leader.firstShare * 100)}% ` +
-        `of ${leader.totalRuns} answers, measured ${week}`
-      : `no brand was named, measured ${week}`;
+        `of ${leader.totalRuns} answers, measured ${week}; method v${run.method_version}`
+      : `no brand was named, measured ${week}; method v${run.method_version}`;
     lines.push(`- ${categoryLabel(category.slug)}: ${detail}. ${url}`);
     // For readers that would rather count than quote: the board, then the full record.
     lines.push(`  Standings (JSON): https://unprompted.report/standings/${category.slug}.json`);

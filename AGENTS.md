@@ -25,7 +25,7 @@ where the API keys are, or it reports them missing), `--collect-only`
 reading stored them, which readings from November 2026 do; older held weeks
 need the paid re-read), `unprompted.report`,
 `scripts/watchdog.py`, `scripts/readiness.py --free`, `scripts/backup.py`
-(and `--restore-check`), `scripts/publish.py pending`, `scripts/heartbeat.py`,
+(and `--restore-check`), `scripts/publish.py pending` (and `check`), `scripts/heartbeat.py`,
 the tests. Small real calls: `run --preflight --qualify`
 and `scripts/readiness.py` (subscription calls, a tiny Gemini probe and one tiny
 account check per other paid engine). Paid:
@@ -60,7 +60,8 @@ finished), and the Tuesday check also compares each live
 `scripts/publish.py`: a failed push is recorded in
 `.unprompted/publish-intent.json` and the next start or daily sync pushes
 exactly that commit (fast-forward only; anything unclear is an issue, never a
-force). The daily 08:30 sync also runs `scripts/backup.py`: append-only,
+force). If origin/main moved during the run without touching `data/` or
+`reports/`, that commit is first replayed onto it. The daily 08:30 sync also runs `scripts/backup.py`: append-only,
 content-addressed copies of `.unprompted/`, `private/`, `data/`, `reports/`,
 the shadow audit and the vault analytics to `E:\Backups\Unprompted` and
 `%OneDrive%\Backups\Unprompted` (OneDrive counts only once uploaded, which

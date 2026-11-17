@@ -46,6 +46,10 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
         "p=Path('.unprompted/invocations');p.parent.mkdir(exist_ok=True)\n"
         "p.write_text(p.read_text()+'run\\n' if p.exists() else 'run\\n')\n"
         "Path('data/test.json').write_text('{}')\n"
+        "import subprocess\n"
+        "o=os.environ.get('TEST_MERGE_DURING_RUN')\n"
+        "o and subprocess.run(['git','-C',o,'-c','user.name=t','-c','user.email=t@e','commit','-q','--allow-empty','-m','merged during the run'],check=True)\n"
+        "o and subprocess.run(['git','-C',o,'push','-q','origin','main'],check=True)\n"
         "raise SystemExit(int(os.environ.get('TEST_PIPELINE_EXIT','0')))\n")
     (repo / "scripts/notify.py").write_text(
         "from pathlib import Path\nimport sys\n"
@@ -99,12 +103,24 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     launch(1)
     assert invocations.read_text() == "run\n"
     git("restore", "scripts/sync_vault.py")
+    # A local commit on main that no run recorded: refused before any paid work.
+    (repo / "notes.txt").write_text("agent work")
+    git("add", "notes.txt")
+    git("commit", "-m", "local only")
+    attempt.unlink(missing_ok=True)
+    launch(1)
+    assert invocations.read_text() == "run\n"
+    assert attempt.read_text() == "failed"
+    log = (repo / ".unprompted/logs/weekly.log").read_text(errors="replace")
+    assert log.rstrip().endswith("ABORT: local main has commits that are not on origin, see publish.py output above")
+    git("reset", "--hard", "HEAD~1")
     git("switch", "-c", "feature")
     attempt.unlink()
     launch(1)
     assert invocations.read_text() == "run\n"
     assert attempt.read_text() == "failed"  # so did a checkout left on another branch
     git("switch", "main")
+    attempt.unlink()
     # Fetch remains valid while the push endpoint is unavailable: no paid calls.
     git("config", "remote.origin.pushurl", str(tmp_path / "unavailable.git"))
     launch(1)
@@ -118,6 +134,25 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     assert git("rev-parse", "HEAD") == git("ls-remote", "origin", "refs/heads/main").split()[0]
     assert (repo / ".unprompted/jev-hook").read_text() == "jev\njev\n"
 
+    # A PR merged on origin while the week was measuring: the push is refused at
+    # once (no retries), the week stays recorded, and the next `pending` (start or
+    # daily sync) replays it onto origin/main without touching the measured data.
+    other = tmp_path / "other clone"
+    subprocess.run(["git", "clone", "-q", "-b", "main", str(remote), str(other)], check=True, env=env)
+    env["TEST_MERGE_DURING_RUN"] = str(other)
+    env["TEST_PIPELINE_EXIT"] = "0"
+    launch(3)
+    del env["TEST_MERGE_DURING_RUN"]
+    merged = git("ls-remote", "origin", "refs/heads/main").split()[0]
+    assert git("rev-parse", "HEAD") != merged
+    assert "push rejected without retrying" in (repo / ".unprompted/logs/weekly.log").read_text(errors="replace")
+    pending = subprocess.run([str(repo / ".venv/Scripts/python.exe"), "scripts/publish.py", "pending"],
+                             cwd=repo, env=env, capture_output=True, text=True, timeout=60)
+    assert pending.returncode == 0 and "replayed from" in pending.stdout, pending.stdout + pending.stderr
+    assert git("rev-parse", "HEAD") == git("ls-remote", "origin", "refs/heads/main").split()[0]
+    assert git("rev-parse", "HEAD~1") == merged
+    assert git("status", "--porcelain") == ""
+
     # No .venv: no Python, so no notify.py. gh still opens the issue directly.
     bin_dir = tmp_path / "fake bin"
     bin_dir.mkdir()
@@ -130,7 +165,7 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     called = (Path(env["TEMP"]) / "gh-called.txt").read_text()
     assert "issue create" in called and "Weekly run FAILED" in called and "--body-file" in called
     assert "missing" in (Path(env["TEMP"]) / "unprompted-alert.txt").read_text()
-    assert invocations.read_text() == "run\nrun\n"  # nothing measured
+    assert invocations.read_text() == "run\nrun\nrun\n"  # nothing measured
 
 
 def test_watchdog_requires_this_weeks_measurement_not_a_reread(tmp_path, monkeypatch):

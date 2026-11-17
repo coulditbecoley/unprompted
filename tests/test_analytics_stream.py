@@ -184,3 +184,25 @@ def test_namespace_mirrors_the_site(monkeypatch):
     monkeypatch.setenv("ANALYTICS_NAMESPACE", "unprompted")
     with pytest.raises(sa.Unreachable):
         sa.namespace()
+
+
+def test_counter_export_uses_the_site_namespace(monkeypatch):
+    monkeypatch.setenv("ANALYTICS_NAMESPACE", "test-abcdefgh")
+    def read(request, timeout=None):
+        assert request.full_url.endswith("/hgetall/test-abcdefgh%3Ad%3A2026-11-17")
+        return io.BytesIO(b'{"result": ["t:human", "2"]}')
+    monkeypatch.setattr(sa.urllib.request, "urlopen", read)
+    assert sa.fetch_day("https://r", "t", "2026-11-17") == {"t:human": 2}
+
+
+def test_stream_disappearing_during_export_is_not_success(stream, tmp_path, monkeypatch):
+    stream.add("1762000000000-0", "u0")
+    original = stream.urlopen
+    def read(request, timeout=None):
+        if json.loads(request.data)[0] == "XRANGE":
+            stream.entries.clear()
+        return original(request, timeout)
+    monkeypatch.setattr(sa.urllib.request, "urlopen", read)
+    with pytest.raises(sa.Unreachable, match="ended before"):
+        sa.export_events("https://r", "t", tmp_path, NS)
+    assert not (tmp_path / "events/cursor.json").exists()

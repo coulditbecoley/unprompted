@@ -32,7 +32,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 from unprompted.storage import run_lock  # noqa: E402 - stdlib-only module
+import publish  # noqa: E402 - the publication rules, asked ahead of time
 from unprompted.cli_provider import CLEANUP_WAIT_SECONDS, TREE_KILL_SECONDS, readiness_limit_seconds  # noqa: E402
 
 # Cover every allowed local probe attempt, including version checks and cleanup.
@@ -105,7 +107,7 @@ def house_checks() -> list[str]:
     """Everything outside the providers that a Monday needs. Free: no provider calls.
 
     Each one is a way a week was, or could be, lost without any engine failing:
-    an expired GitHub sign-in (no push, no issues), a nearly full disk, a backup
+    a checkout left off main, a local commit publication would refuse, an expired GitHub sign-in (no push, no issues), a nearly full disk, a backup
     or analytics export that quietly stopped, a week still waiting to be pushed,
     an alert nobody received, or the off-host watchdog disabled by GitHub.
     """
@@ -120,6 +122,17 @@ def house_checks() -> list[str]:
     auth = run(["gh", "auth", "status"], 60)
     if auth is None or auth.returncode != 0:
         issues.append("GitHub CLI is not signed in (gh auth status failed): alerts and publication need it")
+    # The launcher aborts off main (2026-11-09 was lost to a feature branch left checked out).
+    branch = run(["git", "branch", "--show-current"], 30)
+    current = branch.stdout.strip() if branch and branch.returncode == 0 else "unknown"
+    if current != "main":
+        issues.append(f"checkout is on '{current or 'detached HEAD'}', not main: the weekly run aborts before measuring")
+    try:
+        why = publish.unclaimed(fetch=True)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        why = f"could not look for unpushed commits: {exc}"
+    if why:
+        issues.append(f"{why} The weekly run refuses to start until then.")
     push = run(["git", "push", "--dry-run", "origin", "HEAD:main"])
     if push is None or push.returncode != 0:
         issues.append("git push --dry-run origin HEAD:main failed: the week could be measured but not published")

@@ -2295,7 +2295,7 @@ def test_watchdog_looks_back_to_the_monday_that_should_have_run(monkeypatch, tmp
     assert wd.most_recent_monday(monday) in {date(2026, 8, 24), monday}
 
 
-def test_watchdog_does_not_exempt_unstarted_categories_forever(
+def test_watchdog_distinguishes_unstarted_categories_from_missing(
     monkeypatch, tmp_path
 ):
     """A category added to the bank on a Tuesday has not missed a Monday.
@@ -2310,8 +2310,15 @@ def test_watchdog_does_not_exempt_unstarted_categories_forever(
     )
     produced, missing, unstarted = wd.week_status(date(2026, 8, 24))
 
-    assert missing == ["alpha", "brand-new"]
-    assert unstarted == [], "never measured is not the same as missed"
+    assert missing == ["alpha"]
+    assert unstarted == ["brand-new"], "never measured is not the same as missed"
+
+    # Once a category has any held or published reading, silence is a missing week.
+    path = wd.HELD / "2026-08-17" / "brand-new.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"category": "brand-new", "run_date": "2026-08-17",
+                                "extractions": [{"engine": "test"}]}))
+    assert wd.week_status(date(2026, 8, 24)) == ([], ["alpha", "brand-new"], [])
 
 
 def test_watchdog_alarms_when_a_measured_week_published_nothing(monkeypatch, tmp_path, capsys):
@@ -2897,11 +2904,28 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     monkeypatch.setattr(rd, "REPO", tmp_path)
     status = tmp_path / ".unprompted" / "status"
     ok = SimpleNamespace(returncode=0, stdout="active", stderr="")
-    monkeypatch.setattr(rd.subprocess, "run", lambda argv, **k: ok)
+    on = {"branch": "main", "ahead": ""}  # never the real checkout's branch or commits
+
+    def fake_run(argv, **k):
+        if argv[:2] == ["git", "branch"]:
+            return SimpleNamespace(returncode=0, stdout=on["branch"], stderr="")
+        if "rev-list" in argv:
+            return SimpleNamespace(returncode=0, stdout=on["ahead"], stderr="")
+        return ok
+    monkeypatch.setattr(rd.subprocess, "run", fake_run)
     monkeypatch.setattr(rd.shutil, "disk_usage", lambda p: SimpleNamespace(free=50 * 2**30))
     for name in rd.STALE_HOURS:
         record_status(status, name, True)
     assert rd.house_checks() == []
+    # A checkout left off main (how 2026-11-09 was lost) is named, and so is a detached HEAD.
+    on["branch"] = "agensi-skill"
+    assert any("on 'agensi-skill', not main" in i for i in rd.house_checks())
+    on["branch"] = ""
+    assert any("on 'detached HEAD', not main" in i for i in rd.house_checks())
+    on["branch"] = "main"
+    # A local commit publication would refuse, asked through publish.py's own rule.
+    on["ahead"] = "a" * 40 + "\n" + "b" * 40
+    assert any("2 commit(s) not on origin" in i and "refuses to start" in i for i in rd.house_checks())
     # Every failure is named.
     bad = SimpleNamespace(returncode=1, stdout="disabled_inactivity", stderr="")
     monkeypatch.setattr(rd.subprocess, "run", lambda argv, **k: bad)
@@ -2911,7 +2935,7 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     record_status(status, "alert", False, "x", alert_status="failed")
     (tmp_path / ".unprompted" / "publish-intent.json").write_text(json.dumps({"state": "committed", "commit": "a" * 40}))
     found = " | ".join(rd.house_checks())
-    for text in ("not signed in", "push --dry-run", "GiB free", "backup last succeeded", "E: missing",
+    for text in ("not signed in", "not main", "could not fetch origin", "push --dry-run", "GiB free", "backup last succeeded", "E: missing",
                  "sync_analytics has never recorded", "not pushed yet", "could not be delivered", "watchdog"):
         assert text in found, text
 
@@ -2926,3 +2950,40 @@ def test_the_mid_week_check_calls_no_provider_and_files_its_own_issue(monkeypatc
     assert "--preflight" in run and "--qualify" not in run  # configuration only, nothing paid
     create = next(c for c in calls if c[:3] == ["gh", "issue", "create"])
     assert create[create.index("--title") + 1] == "Mid-week check: problems before 2026-11-02"
+
+
+def test_git_sha_marks_uncommitted_method_not_the_runs_own_output(tmp_path, monkeypatch):
+    import subprocess as sp
+    from unprompted import run
+    def git(*args):
+        sp.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+    git("init", "-b", "main")
+    git("config", "user.name", "t")
+    git("config", "user.email", "t@example.invalid")
+    for path in ("src/unprompted/x.py", "questions/q.yml", "data/runs/old.json", "README.md"):
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text("v1")
+    git("add", ".")
+    git("commit", "-m", "base")
+    monkeypatch.setattr(run, "ROOT", tmp_path)
+    sha = run.git_sha()
+    assert len(sha) == 40
+    # What an earlier category of the same run writes, plus an unrelated doc edit.
+    (tmp_path / "data/runs/2026-11-16").mkdir(parents=True)
+    (tmp_path / "data/runs/2026-11-16/first.json").write_text("{}")
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports/r.md").write_text("r")
+    (tmp_path / "README.md").write_text("v2")
+    assert run.git_sha() == sha
+    (tmp_path / "questions/new.yml").write_text("q")   # untracked method counts
+    assert run.git_sha() == sha + "-dirty"
+    (tmp_path / "questions/new.yml").unlink()
+    (tmp_path / "src/unprompted/x.py").write_text("v2")
+    assert run.git_sha() == sha + "-dirty"
+
+
+def test_git_sha_and_the_launcher_guard_the_same_method_paths():
+    from unprompted.run import METHOD_PATHS
+    launcher = (Path(__file__).resolve().parents[1] / "scripts/weekly-run.cmd").read_text(encoding="utf-8")
+    line = next(l for l in launcher.splitlines() if l.startswith("git status --porcelain -- src "))
+    assert line.split(" -- ", 1)[1].split(" >", 1)[0].split() == list(METHOD_PATHS)
