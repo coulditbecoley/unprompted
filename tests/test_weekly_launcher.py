@@ -99,12 +99,24 @@ def test_weekly_launcher_publishes_and_guards_without_paid_calls(tmp_path):
     launch(1)
     assert invocations.read_text() == "run\n"
     git("restore", "scripts/sync_vault.py")
+    # A local commit on main that no run recorded: refused before any paid work.
+    (repo / "notes.txt").write_text("agent work")
+    git("add", "notes.txt")
+    git("commit", "-m", "local only")
+    attempt.unlink(missing_ok=True)
+    launch(1)
+    assert invocations.read_text() == "run\n"
+    assert attempt.read_text() == "failed"
+    log = (repo / ".unprompted/logs/weekly.log").read_text(errors="replace")
+    assert log.rstrip().endswith("ABORT: local main has commits that are not on origin, see publish.py output above")
+    git("reset", "--hard", "HEAD~1")
     git("switch", "-c", "feature")
     attempt.unlink()
     launch(1)
     assert invocations.read_text() == "run\n"
     assert attempt.read_text() == "failed"  # so did a checkout left on another branch
     git("switch", "main")
+    attempt.unlink()
     # Fetch remains valid while the push endpoint is unavailable: no paid calls.
     git("config", "remote.origin.pushurl", str(tmp_path / "unavailable.git"))
     launch(1)

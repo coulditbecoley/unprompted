@@ -2,6 +2,7 @@
 
     python scripts/publish.py final --message "Run: ..."   # the launcher, after measuring
     python scripts/publish.py pending                       # launcher start, and the daily sync
+    python scripts/publish.py check                         # launcher, before paid work
 
 Before this existed the commit and push lived in weekly-run.cmd. A push that failed
 on a network blip left the week on this machine only, and the next Monday refused
@@ -98,6 +99,24 @@ def push(commit: str, started: float) -> str:
     return why
 
 
+def unclaimed(fetch: bool = False) -> str:
+    """Why publication would refuse local commits no intent claims, or "".
+
+    `final` refuses these after measuring; the launcher and the readiness check
+    ask the same question before any paid work, so an agent's local commit on
+    main costs an alert instead of a measured week that cannot be published.
+    """
+    if fetch:
+        fetched = git("fetch", "origin", "main", timeout=ATTEMPT_SECONDS)
+        if fetched.returncode != 0:
+            return f"could not fetch origin to look for unpushed commits: {fetched.stderr.strip()[-300:]}"
+    commits = out("rev-list", "origin/main..HEAD").split()
+    if not commits:
+        return ""
+    return (f"local main has {len(commits)} commit(s) not on origin that no run recorded; "
+            "inspect `git log origin/main..main` before publishing.")
+
+
 def finish_pending(started: float | None = None) -> tuple[int, str]:
     started = time.monotonic() if started is None else started
     intent = read_intent()
@@ -133,10 +152,9 @@ def final(message: str, started: float | None = None) -> tuple[int, str]:
         return 3, "the checkout left main during the run; nothing committed"
     # A commit that no intent claims (a crash between commit and intent, or a
     # hand commit) would otherwise ride along with this week's push.
-    unclaimed = out("rev-list", "origin/main..HEAD")
-    if unclaimed:
-        return 3, (f"local main has {len(unclaimed.split())} commit(s) not on origin that no run recorded; "
-                   "inspect `git log origin/main..main` before publishing. Nothing committed.")
+    why = unclaimed()
+    if why:
+        return 3, f"{why} Nothing committed."
     added = git("add", "data", "reports")
     if added.returncode != 0:
         return 3, f"git add failed, the week is on this machine only: {added.stderr.strip()[-300:]}"
@@ -160,7 +178,7 @@ def final(message: str, started: float | None = None) -> tuple[int, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("mode", choices=["final", "pending"])
+    parser.add_argument("mode", choices=["final", "pending", "check"])
     parser.add_argument("--message", default="Run: measured and published")
     parser.add_argument("--wait", type=float, default=0, help="seconds to wait for a busy week.lock")
     args = parser.parse_args()
@@ -170,14 +188,19 @@ def main() -> int:
         # released both by the time the launcher publishes.
         with run_lock(STATE, "week.lock", wait=args.wait), run_lock(STATE, "run.lock", wait=args.wait):
             try:
-                code, why = final(args.message, started) if args.mode == "final" else finish_pending(started)
+                if args.mode == "check":
+                    why = unclaimed(fetch=True)
+                    code, why = (3, why) if why else (0, "no unpushed commits on main")
+                else:
+                    code, why = final(args.message, started) if args.mode == "final" else finish_pending(started)
             except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
                 code, why = 3, str(exc)
     except OSError:
         print("a weekly run or another job holds the lock; publication not attempted now", file=sys.stderr)
         return 4
     print(why, file=sys.stderr if code else sys.stdout)
-    record_status(STATE / "status", "publish", code == 0, "" if code == 0 else why, mode=args.mode)
+    if args.mode != "check":  # a check publishes nothing, so it must not overwrite the publish status
+        record_status(STATE / "status", "publish", code == 0, "" if code == 0 else why, mode=args.mode)
     return code
 
 

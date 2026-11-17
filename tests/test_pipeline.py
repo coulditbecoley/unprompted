@@ -2897,11 +2897,13 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     monkeypatch.setattr(rd, "REPO", tmp_path)
     status = tmp_path / ".unprompted" / "status"
     ok = SimpleNamespace(returncode=0, stdout="active", stderr="")
-    on = {"branch": "main"}  # what `git branch --show-current` prints; never the real checkout's branch
+    on = {"branch": "main", "ahead": ""}  # never the real checkout's branch or commits
 
     def fake_run(argv, **k):
         if argv[:2] == ["git", "branch"]:
             return SimpleNamespace(returncode=0, stdout=on["branch"], stderr="")
+        if "rev-list" in argv:
+            return SimpleNamespace(returncode=0, stdout=on["ahead"], stderr="")
         return ok
     monkeypatch.setattr(rd.subprocess, "run", fake_run)
     monkeypatch.setattr(rd.shutil, "disk_usage", lambda p: SimpleNamespace(free=50 * 2**30))
@@ -2913,6 +2915,10 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     assert any("on 'agensi-skill', not main" in i for i in rd.house_checks())
     on["branch"] = ""
     assert any("on 'detached HEAD', not main" in i for i in rd.house_checks())
+    on["branch"] = "main"
+    # A local commit publication would refuse, asked through publish.py's own rule.
+    on["ahead"] = "a" * 40 + "\n" + "b" * 40
+    assert any("2 commit(s) not on origin" in i and "refuses to start" in i for i in rd.house_checks())
     # Every failure is named.
     bad = SimpleNamespace(returncode=1, stdout="disabled_inactivity", stderr="")
     monkeypatch.setattr(rd.subprocess, "run", lambda argv, **k: bad)
@@ -2922,7 +2928,7 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     record_status(status, "alert", False, "x", alert_status="failed")
     (tmp_path / ".unprompted" / "publish-intent.json").write_text(json.dumps({"state": "committed", "commit": "a" * 40}))
     found = " | ".join(rd.house_checks())
-    for text in ("not signed in", "not main", "push --dry-run", "GiB free", "backup last succeeded", "E: missing",
+    for text in ("not signed in", "not main", "could not fetch origin", "push --dry-run", "GiB free", "backup last succeeded", "E: missing",
                  "sync_analytics has never recorded", "not pushed yet", "could not be delivered", "watchdog"):
         assert text in found, text
 

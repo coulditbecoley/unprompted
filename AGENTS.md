@@ -25,7 +25,7 @@ where the API keys are, or it reports them missing), `--collect-only`
 reading stored them, which readings from November 2026 do; older held weeks
 need the paid re-read), `unprompted.report`,
 `scripts/watchdog.py`, `scripts/readiness.py --free`, `scripts/backup.py`
-(and `--restore-check`), `scripts/publish.py pending`, `scripts/heartbeat.py`,
+(and `--restore-check`), `scripts/publish.py pending` (and `check`), `scripts/heartbeat.py`,
 the tests. Small real calls: `run --preflight --qualify`
 and `scripts/readiness.py` (subscription calls, a tiny Gemini probe and one tiny
 account check per other paid engine). Paid:

@@ -116,6 +116,22 @@ def test_divergence_moved_head_and_unclaimed_commits_are_left_for_a_person(repo)
     assert code == 3 and "not on origin that no run recorded" in why
 
 
+def test_check_names_unclaimed_commits_before_paid_work_and_records_nothing(repo, monkeypatch):
+    work, remote = repo
+    monkeypatch.setattr(sys, "argv", ["publish.py", "check"])
+    assert publish.main() == 0
+    (work / "notes.txt").write_text("agent work")
+    run(work, "add", "notes.txt")
+    run(work, "commit", "-m", "local only")
+    assert "1 commit(s) not on origin" in publish.unclaimed(fetch=True)
+    assert publish.main() == 3
+    assert not (publish.STATE / "status" / "publish.json").exists()  # a check is not a publication
+    run(work, "push", "origin", "main")
+    assert publish.unclaimed(fetch=True) == ""
+    run(work, "config", "remote.origin.url", str(work.parent / "missing.git"))
+    assert "could not fetch origin" in publish.unclaimed(fetch=True)
+
+
 def test_a_damaged_intent_and_a_busy_lock_stop_safely(repo, monkeypatch, capsys):
     work, _ = repo
     publish.INTENT.parent.mkdir(parents=True, exist_ok=True)
