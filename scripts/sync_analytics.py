@@ -103,7 +103,7 @@ class Unreachable(Exception):
 
 def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     """One day's counters, or {} when the key has expired or never existed."""
-    key = urllib.parse.quote(f"a:d:{day}", safe="")
+    key = urllib.parse.quote(f"{namespace()}:d:{day}", safe="")
     request = urllib.request.Request(
         f"{url}/hgetall/{key}", headers={"Authorization": f"Bearer {token}"}
     )
@@ -260,7 +260,7 @@ def export_events(url: str, token: str, out_dir: Path, ns: str) -> tuple[int, st
     while cursor < high:
         page = entries(command(url, token, "XRANGE", key, f"({fmt(cursor)}", fmt(high), "COUNT", PAGE))
         if not page:
-            break
+            raise Unreachable(f"stream ended before high-water mark {fmt(high)} after {fmt(cursor)}")
         ids = [i for i, _ in page]
         if ids[0] <= cursor or ids != sorted(set(ids)) or ids[-1] > high:
             raise Unreachable(f"stream returned out-of-range ids after {fmt(cursor)}")
