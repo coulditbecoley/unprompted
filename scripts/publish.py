@@ -16,6 +16,16 @@ HEAD) is reported for a person and left alone. A commit that failed, or a crash
 between commit and intent, is also left for a person: dirty or unclaimed output is
 never adopted automatically.
 
+One divergence is common and safe, and is repaired: origin/main moved on during the
+run (a PR merged on a Monday afternoon) without touching data/ or reports/, and the
+week's commit touches nothing else. Recovery then replays that one commit onto
+origin/main and pushes the result. This happens in `pending` (the next start or the
+daily sync), never inside `final`: the launcher is still executing its .cmd file
+then, cmd reads that file by offset, and swapping in newer code under it would also
+run the rest of the evening (vault sync, backup, shadow reader) from code that did
+not measure the week. The readings keep the git_sha recorded when each category was
+measured, which stays in history because it is an ancestor of origin/main.
+
 Exit 0 published (or nothing to do), 3 not published (reason on stderr), 4 busy.
 """
 
@@ -85,6 +95,9 @@ def push(commit: str, started: float) -> str:
             done = git("-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=120",
                        "push", "origin", f"{commit}:refs/heads/main", timeout=ATTEMPT_SECONDS)
             why = done.stderr.strip()[-300:] if done.returncode else ""
+            # Git's hints follow the rejection line, so look at all of stderr.
+            if done.returncode and "[rejected]" in done.stderr:
+                return f"origin/main moved on, push rejected without retrying: {why}"
         except subprocess.TimeoutExpired:
             why = f"push timed out after {ATTEMPT_SECONDS}s"
         if not why:
@@ -117,6 +130,36 @@ def unclaimed(fetch: bool = False) -> str:
             "inspect `git log origin/main..main` before publishing.")
 
 
+DATA_PATHS = ("data", "reports")
+
+
+def changed(base: str, tip: str, *pathspec: str) -> list[str]:
+    return out("diff", "--name-only", base, tip, "--", *pathspec).split()
+
+
+def replay_onto_origin(intent: dict) -> tuple[str, str]:
+    """(new commit, "") after replaying the week onto origin/main, or ("", why not).
+
+    Only when nothing can conflict: the week's commit touches only data/ and
+    reports/, origin/main still contains the commit the week was built on, and
+    nothing it added since touches data/ or reports/.
+    """
+    commit, parent = intent["commit"], intent["parent"]
+    if out("branch", "--show-current") != "main":
+        return "", "the checkout is not on main"
+    if not contains(parent, "origin/main"):
+        return "", "origin/main no longer contains the commit the week was built on"
+    if changed(parent, commit, ".", *(f":(exclude){p}" for p in DATA_PATHS)):
+        return "", "the week's commit changes files outside data/ and reports/"
+    if changed(parent, "origin/main", *DATA_PATHS):
+        return "", "origin/main changed data/ or reports/ since the week was built"
+    done = git(*BOT, "rebase", "--onto", "origin/main", parent, timeout=ATTEMPT_SECONDS)
+    if done.returncode != 0:
+        git("rebase", "--abort")
+        return "", f"replaying the week failed and was undone: {done.stderr.strip()[-300:]}"
+    return out("rev-parse", "HEAD"), ""
+
+
 def finish_pending(started: float | None = None) -> tuple[int, str]:
     started = time.monotonic() if started is None else started
     intent = read_intent()
@@ -133,14 +176,22 @@ def finish_pending(started: float | None = None) -> tuple[int, str]:
     if out("rev-parse", "main") != commit:
         return 3, (f"local main moved away from the unpushed week {commit[:12]}; "
                    "inspect `git log origin/main..main` and push or reconcile by hand")
+    note = ""
     if not contains("origin/main", commit):
-        return 3, (f"origin/main has diverged from the unpushed week {commit[:12]}; "
-                   "reconcile by hand (never force-push the archive)")
+        replayed, why = replay_onto_origin(intent)
+        if not replayed:
+            return 3, (f"origin/main has diverged from the unpushed week {commit[:12]} ({why}); "
+                       "reconcile by hand (never force-push the archive)")
+        # Recorded before pushing, so a failed push retries the replayed commit.
+        intent = {**intent, "commit": replayed, "parent": out("rev-parse", "origin/main"),
+                  "replayed_from": commit}
+        write_json(INTENT, intent, replace=True)
+        commit, note = replayed, f" (replayed from {intent['replayed_from'][:12]} onto origin/main)"
     why = push(commit, started)
     if why:
-        return 3, f"pushing {commit[:12]} failed: {why}"
+        return 3, f"pushing {commit[:12]}{note} failed: {why}"
     write_json(INTENT, {**intent, "state": "pushed"}, replace=True)
-    return 0, f"pushed {commit[:12]}"
+    return 0, f"pushed {commit[:12]}{note}"
 
 
 def final(message: str, started: float | None = None) -> tuple[int, str]:

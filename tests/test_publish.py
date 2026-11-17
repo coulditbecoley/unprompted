@@ -103,11 +103,12 @@ def test_divergence_moved_head_and_unclaimed_commits_are_left_for_a_person(repo)
     # Someone else published meanwhile: diverged.
     other = work.parent / "other"
     run(work.parent, "clone", str(remote), str(other))
-    run(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "elsewhere", "--allow-empty")
+    (other / "data/a.json").write_text('{"edited": "elsewhere"}')
+    run(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qam", "elsewhere")
     run(other, "push", "origin", "main")
     before = remote_head(remote)
     code, why = publish.finish_pending()
-    assert code == 3 and "diverged" in why and remote_head(remote) == before  # never forced
+    assert code == 3 and "diverged" in why and "changed data/" in why and remote_head(remote) == before  # never forced
     # A commit no intent claims never rides along with a new week.
     publish.INTENT.unlink()
     run(work, "fetch", "origin")
@@ -130,6 +131,58 @@ def test_check_names_unclaimed_commits_before_paid_work_and_records_nothing(repo
     assert publish.unclaimed(fetch=True) == ""
     run(work, "config", "remote.origin.url", str(work.parent / "missing.git"))
     assert "could not fetch origin" in publish.unclaimed(fetch=True)
+
+
+def _week_unpushed_while_origin_moves(work, remote, files):
+    """A week committed but not pushed, while someone else lands `files` on origin."""
+    run(work, "config", "remote.origin.pushurl", str(work.parent / "missing.git"))
+    measure(work)
+    code, why = publish.final("Run: measured and published")
+    assert code == 3 and "Do not re-run" in why
+    run(work, "config", "--unset", "remote.origin.pushurl")
+    other = work.parent / "other"
+    run(work.parent, "clone", str(remote), str(other))
+    for name, text in files.items():
+        (other / name).parent.mkdir(parents=True, exist_ok=True)
+        (other / name).write_text(text)
+    run(other, "add", ".")
+    run(other, "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "merged PR")
+    run(other, "push", "origin", "main")
+    return json.loads(publish.INTENT.read_text()), remote_head(remote)
+
+
+def test_a_week_is_replayed_onto_code_merged_during_the_run(repo):
+    work, remote = repo
+    intent, merged = _week_unpushed_while_origin_moves(work, remote, {"src/new.py": "x = 1\n"})
+    code, why = publish.finish_pending()
+    assert code == 0 and "replayed from" in why, why
+    head = run(work, "rev-parse", "HEAD")
+    assert remote_head(remote) == head and head != intent["commit"]
+    assert run(work, "rev-parse", "HEAD~1") == merged                     # on top, nothing forced
+    assert run(work, "show", "HEAD:data/a.json") == '{"week": 1}'         # the measured week, unchanged
+    assert (work / "src/new.py").exists()
+    assert run(work, "log", "-1", "--format=%an %s") == "unprompted-bot Run: measured and published"
+    assert run(work, "status", "--porcelain") == ""
+    saved = json.loads(publish.INTENT.read_text())
+    assert saved == {**intent, "commit": head, "parent": merged, "replayed_from": intent["commit"], "state": "pushed"}
+    assert publish.finish_pending() == (0, "nothing pending")
+
+
+def test_a_replay_is_refused_off_main_or_when_the_week_touched_more_than_data(repo):
+    work, remote = repo
+    intent, merged = _week_unpushed_while_origin_moves(work, remote, {"src/new.py": "x = 1\n"})
+    run(work, "switch", "-qc", "feature")
+    code, why = publish.finish_pending()
+    assert code == 3 and "not on main" in why and remote_head(remote) == merged
+    run(work, "switch", "-q", "main")
+    # A week commit that also carried a code change is never replayed automatically.
+    (work / "src").mkdir(exist_ok=True)
+    (work / "src/hand.py").write_text("y = 2\n")
+    run(work, "add", "src/hand.py")
+    run(work, "commit", "-q", "--amend", "--no-edit")
+    publish.write_json(publish.INTENT, {**intent, "commit": run(work, "rev-parse", "HEAD")}, replace=True)
+    code, why = publish.finish_pending()
+    assert code == 3 and "outside data/" in why and remote_head(remote) == merged
 
 
 def test_a_damaged_intent_and_a_busy_lock_stop_safely(repo, monkeypatch, capsys):
