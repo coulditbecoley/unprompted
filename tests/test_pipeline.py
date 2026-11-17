@@ -148,6 +148,7 @@ def test_writing_ambiguities_require_answer_level_evidence():
         "FLUX.2 Klein (4B)", "FLUX.2 [klein] 4B", "FLUX.2 klein 4B",
         "FLUX.2-klein-4B", "Microsoft Bing Image Creator", "Stable Diffusion XL",
         "Higgsfield AI", "Fooocus", "Alibaba", "Google AI Studio", "Alibaba Qwen",
+        "InvokeAI", "Invoke", "Invoke (InvokeAI)",  # 2026-11-17: excluded like ComfyUI
     ], ["Flux", "Bing Image Creator", "Stable Diffusion", "Higgsfield", "Qwen-Image"], []),
     ("ai-writing-tools", [
         "Claude by Anthropic", "Claude", "NovelCrafter", "Mintlify", "NovelAI",
