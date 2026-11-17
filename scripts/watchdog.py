@@ -197,7 +197,7 @@ def open_issue(title: str, body: str) -> None:
 
 
 # The run starts Mondays 13:00 on the measuring machine's clock (New York).
-# GitHub cron is UTC and drifts with DST, so each check runs in both UTC slots
+# GitHub cron is UTC and drifts with DST, so each check has multiple UTC slots
 # and acts only once local time has passed its gate.
 
 
