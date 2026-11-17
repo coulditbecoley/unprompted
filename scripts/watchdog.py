@@ -97,6 +97,8 @@ def week_status(monday: date) -> tuple[list[str], list[str], list[str]]:
         measured = measured_in(RUNS, monday, category) or measured_in(HELD, monday, category)
         if measured:
             produced.append(category)
+        elif not ever_measured(category):
+            unstarted.append(category)
         else:
             missing.append(category)
     return produced, missing, unstarted
