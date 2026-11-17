@@ -34,8 +34,8 @@ export function Freshness({
   /** Set on an older reading: where the newest board is. Its absence means this is the newest. */
   latestHref?: string;
 }) {
-  // Rendered only after mount: server and client clocks differ, and a
-  // countdown baked into static HTML is stale the moment it is built.
+  // Clock-derived age and countdown render only after mount: server and client
+  // clocks differ, and a countdown baked into static HTML is stale once built.
   const [when, setWhen] = useState<string | null>(null);
   const [age, setAge] = useState<number | null>(null);
 
@@ -54,13 +54,14 @@ export function Freshness({
     <div className="freshness">
       <span>Measured {runDate}</span>
       {/* Only the newest reading may say nothing newer exists; an older one
-          says it is older and points to the newest. */}
+          says it is older and points to the newest. The clock-free statement is
+          present in static HTML; the exact age is a client-side enhancement. */}
       {latestHref ? (
         <span role="status">
           An older reading · <a href={latestHref}>see the latest board</a>
         </span>
       ) : (
-        age !== null && age > 8 && <span role="status">{age} days old · no newer measurement published yet</span>
+        <span role="status">No newer measurement has published{age !== null && age > 8 ? ` · ${age} days old` : ""}</span>
       )}
       <span className="next" suppressHydrationWarning>
         {when ? `Next update ${when}` : "Updates every Monday"}

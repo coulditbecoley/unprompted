@@ -2,8 +2,10 @@ import { SectionLink } from "@/components/contact";
 import type { Metadata } from "next";
 import fs from "node:fs";
 import path from "node:path";
+import { load as loadYaml } from "js-yaml";
 
-import { REPO_ROOT } from "@/lib/data";
+import { CATEGORIES } from "@/lib/categories";
+import { latestRun, REPO_ROOT } from "@/lib/data";
 import { TrimTop } from "@/components/ui";
 
 export const metadata: Metadata = {
@@ -23,11 +25,14 @@ export default function MethodologyPage() {
   const raw = fs.readFileSync(path.join(REPO_ROOT, "METHODOLOGY.md"), "utf-8");
   const body = raw.replace(/^# Methodology\s*\n/, "");
   const introAt = body.indexOf("Unprompted measures");
-  const changes = introAt > 0 && body.startsWith("**Version") ? body.slice(0, introAt).trim() : "";
-  const content = (changes ? body.slice(introAt) : body).replace(
+  const content = (introAt > 0 ? body.slice(introAt) : body).replace(
     "A brand that was named last week and not once this week",
     "A brand that was named in the previous measurement and not once in the latest measurement",
   );
+  const versions = CATEGORIES.map(category => {
+    const bank = loadYaml(fs.readFileSync(path.join(REPO_ROOT, "questions", `${category.slug}.yml`), "utf-8")) as { method_version: number };
+    return { category, current: bank.method_version, run: latestRun(category.slug) };
+  });
   const blocks = renderMarkdown(content);
   const headings = [...content.matchAll(/^#{2,3} (.+)$/gm)].map(m => ({ text: m[1].trim(), id: headingId(m[1].trim()) }));
 
@@ -41,14 +46,21 @@ export default function MethodologyPage() {
         <a href="#glossary">Start with the glossary</a>
         <a href="/categories">Explore published results</a>
       </nav>
-      {changes && <>
-        <p className="label codex-section-label">Version history</p>
-        <h2 className="sub-h" id="recent-changes">What changed recently</h2>
-        <p className="cmp-note">Read the latest updates to the collection and counting rules.</p>
-        <details className="panel method-changes">
-        <summary>Read recent changes</summary>
-        <div className="prose">{renderMarkdown(changes)}</div>
-      </details></>}
+      <p className="label codex-section-label">Version history</p>
+      <h2 className="sub-h" id="recent-changes">Method versions by category</h2>
+      <p className="cmp-note">The current collection method can be newer than the latest published reading when a newer run is held.</p>
+      <div className="method-table" role="region" aria-label="Method versions by category" tabIndex={0}>
+        <table>
+          <caption className="sr-only">Current collection and latest published method versions</caption>
+          <thead><tr><th scope="col">Category</th><th scope="col">Current collection method</th><th scope="col">Latest published method</th><th scope="col">Measured</th><th scope="col">Reading</th></tr></thead>
+          <tbody>{versions.map(({ category, current, run }) => <tr key={category.slug}>
+            <td>{category.label}</td><td>v{current}</td>
+            {run ? <>
+              <td>v{run.method_version}</td><td>{run.measured_on || run.run_date}</td><td>{run.run_date}</td>
+            </> : <td colSpan={3}>No published reading</td>}
+          </tr>)}</tbody>
+        </table>
+      </div>
       <p className="label codex-section-label">Process</p>
       <h2 className="sub-h">From questions to published results</h2>
       <p className="cmp-note">Five steps connect each question to its public evidence.</p>

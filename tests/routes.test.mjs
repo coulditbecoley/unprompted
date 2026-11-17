@@ -946,3 +946,110 @@ test("editor requires current review, retains conflicts and resets errors on edi
   change("method_version: 2\nquestions: [New]\n"); review();
   assert.equal(button("COMMIT TO REPO").props.disabled, false);
 });
+
+
+test("homepage names each other board's own method and assistant count", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const data = await import("../lib/data.ts");
+  const categories = await import("../lib/categories.ts");
+  const providers = await import("../lib/providers.ts");
+  const shared = await import("../lib/shared.ts");
+  const source = fs.readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, process, console, URLSearchParams, require: id => {
+    if (id === "@/lib/data") return data;
+    if (id === "@/lib/categories") return categories;
+    if (id === "@/lib/providers") return providers;
+    if (id === "@/lib/shared") return shared;
+    if (id === "next/link") return ({ href, children, ...props }) => createElement("a", { href, ...props }, children);
+    if (id.startsWith("@/components/")) return new Proxy({}, { get: () => () => null });
+    return nativeRequire(id);
+  } });
+  const html = renderToStaticMarkup(exports.default());
+  assert.match(html, /Latest published reading in each category/);
+  assert.doesNotMatch(html, /Measured the same way/);
+  for (const category of categories.CATEGORIES.filter(c => c.slug !== categories.DEFAULT_CATEGORY)) {
+    const run = data.latestRun(category.slug);
+    const start = html.indexOf(`href="/chart/${category.slug}"`);
+    const card = html.slice(start, html.indexOf("</a>", start));
+    assert.ok(start >= 0, category.slug);
+    assert.ok(card.includes(`${run.measured_on || run.run_date} · method v${run.method_version} · ${run.engines.length} assistants`), category.slug);
+  }
+});
+
+
+test("latest-reading freshness notice is present in server-rendered HTML", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const schedule = await import("../lib/schedule.ts");
+  const source = fs.readFileSync(new URL("../components/freshness.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, require: id => id === "@/lib/schedule" ? schedule : nativeRequire(id) });
+  const { Freshness } = exports;
+  const latest = renderToStaticMarkup(createElement(Freshness, { runDate: "2026-08-22" }));
+  assert.match(latest, /Measured 2026-08-22/);
+  assert.match(latest, /No newer measurement has published/);
+  assert.match(latest, /Updates every Monday/);
+  assert.doesNotMatch(latest, /days old/);
+  const older = renderToStaticMarkup(createElement(Freshness, { runDate: "2026-08-22", latestHref: "/chart/example" }));
+  assert.match(older, /An older reading/);
+  assert.match(older, /href="\/chart\/example"/);
+  assert.doesNotMatch(older, /No newer measurement has published/);
+});
+
+test("llms.txt names every category's published method version", async () => {
+  const { GET } = await import("../app/llms.txt/route.ts");
+  const { CATEGORIES } = await import("../lib/categories.ts");
+  const { latestRun } = await import("../lib/data.ts");
+  const text = await (await GET()).text();
+  for (const category of CATEGORIES) {
+    const run = latestRun(category.slug);
+    const line = text.split("\n").find(l => l.startsWith(`- ${category.label}:`));
+    assert.ok(line, category.slug);
+    assert.match(line, new RegExp(`method v${run.method_version}\\.`));
+  }
+});
+
+
+test("methodology table reads current banks and latest published readings separately", async () => {
+  const ts = await import("typescript");
+  const { runInNewContext } = await import("node:vm");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { load } = await import("js-yaml");
+  const data = await import("../lib/data.ts");
+  const categories = await import("../lib/categories.ts");
+  const source = fs.readFileSync(new URL("../app/methodology/page.tsx", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
+  } }).outputText;
+  const exports = {}, nativeRequire = createRequire(import.meta.url);
+  runInNewContext(compiled, { exports, require: id => {
+    if (id === "@/lib/data") return data;
+    if (id === "@/lib/categories") return categories;
+    if (id === "@/components/contact" || id === "@/components/ui") return new Proxy({}, { get: () => () => null });
+    return nativeRequire(id);
+  } });
+  const html = renderToStaticMarkup(exports.default());
+  const start = html.indexOf('aria-label="Method versions by category"');
+  const table = html.slice(start, html.indexOf("</table>", start));
+  assert.ok(start >= 0);
+  assert.match(html, /The current collection method can be newer than the latest published reading/);
+  assert.doesNotMatch(html, /Read recent changes/);
+  for (const category of categories.CATEGORIES) {
+    const bank = load(fs.readFileSync(path.join(data.REPO_ROOT, "questions", `${category.slug}.yml`), "utf8"));
+    const run = data.latestRun(category.slug);
+    const row = `<tr><td>${category.label}</td><td>v${bank.method_version}</td><td>v${run.method_version}</td><td>${run.measured_on || run.run_date}</td><td>${run.run_date}</td></tr>`;
+    assert.ok(table.includes(row), category.slug);
+  }
+});
