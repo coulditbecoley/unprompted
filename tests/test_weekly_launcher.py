@@ -224,6 +224,18 @@ def test_installer_registers_readiness_with_its_own_budget_and_refuses_a_bad_one
     done = install(sys.executable)
     assert done.returncode == 0, done.stderr
     settings = json.loads(done.stdout.strip().splitlines()[-1])
+    hidden = Path(os.environ["USERPROFILE"]) / "scripts" / "hidden.vbs"
+    python = ROOT / ".venv" / "Scripts" / "python.exe"
+    expected_arguments = {
+        "Unprompted weekly run": f'"{hidden}" "{ROOT / "scripts" / "weekly-run.cmd"}"',
+        "Unprompted Monday readiness": f'"{hidden}" "{python}" scripts\\readiness.py',
+        "Unprompted mid-week check": f'"{hidden}" "{python}" scripts\\readiness.py --free',
+        "Unprompted Monday pre-run check": f'"{hidden}" "{python}" scripts\\readiness.py --free',
+    }
+    assert settings["actions"] == [
+        {"name": name, "execute": "wscript.exe", "arguments": arguments, "working_directory": str(ROOT)}
+        for name, arguments in expected_arguments.items()
+    ]
     # Windows must never end the check before its own retries, cleanup and issue can finish.
     assert settings["readiness_limit_seconds"] == readiness.task_limit_seconds()
     assert settings["readiness_limit_seconds"] > readiness.LIMIT_SECONDS + readiness.WRAPPER_GRACE_SECONDS

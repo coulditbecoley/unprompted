@@ -27,6 +27,14 @@ $ErrorActionPreference = "Stop"
 $taskName = "Unprompted weekly run"
 $repo     = Split-Path -Parent $PSScriptRoot
 $script   = Join-Path $repo "scripts\weekly-run.cmd"
+$hidden   = Join-Path $env:USERPROFILE "scripts\hidden.vbs"
+
+function New-HiddenTaskAction {
+    param([string]$Executable, [string]$Arguments = "")
+    $command = '"{0}" "{1}"' -f $hidden, $Executable
+    if ($Arguments) { $command += " $Arguments" }
+    New-ScheduledTaskAction -Execute "wscript.exe" -Argument $command -WorkingDirectory $repo
+}
 
 if (-not (Test-Path $script)) { throw "not found: $script" }
 
@@ -40,7 +48,7 @@ while ($nextMonday.DayOfWeek -ne 'Monday' -or $nextMonday -le (Get-Date)) {
 $trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Monday -At $nextMonday
 # No UTC offset: keep 13:00 on the machine's local clock across DST changes.
 $trigger.StartBoundary = $nextMonday.ToString("yyyy-MM-dd'T'HH:mm:ss")
-$action  = New-ScheduledTaskAction -Execute $script -WorkingDirectory $repo
+$action  = New-HiddenTaskAction -Executable $script
 
 # StartWhenAvailable matters more than the exact time: a laptop that was asleep
 # on Monday should still produce the week when it next wakes, because a missing
@@ -67,7 +75,7 @@ $readyName    = "Unprompted Monday readiness"
 $readyTrigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At ((Get-Date).Date.AddHours(18))
 # Local 18:00 across DST, as for the weekly run above.
 $readyTrigger.StartBoundary = (Get-Date).Date.AddHours(18).ToString("yyyy-MM-dd'T'HH:mm:ss")
-$readyAction  = New-ScheduledTaskAction -Execute (Join-Path $repo ".venv\Scripts\python.exe") -Argument "scripts\readiness.py" -WorkingDirectory $repo
+$readyAction  = New-HiddenTaskAction -Executable (Join-Path $repo ".venv\Scripts\python.exe") -Arguments "scripts\readiness.py"
 # The limit comes from the check's own budget (every allowed CLI retry, cleanup and
 # the issue), never a fixed number: a fixed 45 minutes let Windows end a slow check
 # before it could report. No fallback: a limit that cannot be computed stops here.
@@ -84,8 +92,7 @@ $freeLimitText = & $Python (Join-Path $repo "scripts\readiness.py") --print-task
 if ($LASTEXITCODE -ne 0 -or "$freeLimitText".Trim() -notmatch '^\d+$' -or [int]"$freeLimitText".Trim() -le 0) {
     throw "could not compute the free readiness time limit (got '$freeLimitText'); nothing registered"
 }
-$hidden = Join-Path $env:USERPROFILE "scripts\hidden.vbs"
-$freeAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument ('"{0}" "{1}" scripts\readiness.py --free' -f $hidden, (Join-Path $repo ".venv\Scripts\python.exe")) -WorkingDirectory $repo
+$freeAction = New-HiddenTaskAction -Executable (Join-Path $repo ".venv\Scripts\python.exe") -Arguments "scripts\readiness.py --free"
 $freeSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds ([int]"$freeLimitText".Trim())) -MultipleInstances IgnoreNew
 $freeTasks = @(foreach ($check in @(
     @{ Name = "Unprompted mid-week check"; Day = "Wednesday"; Hour = 9 },
@@ -98,6 +105,14 @@ $freeTasks = @(foreach ($check in @(
 })
 if ($DryRun) {
     [pscustomobject]@{
+        actions                = @(@(
+            @{ Name = $taskName; Action = $action },
+            @{ Name = $readyName; Action = $readyAction }
+            foreach ($check in $freeTasks) { @{ Name = $check.Name; Action = $freeAction } }
+        ) | ForEach-Object {
+            [pscustomobject]@{ name = $_.Name; execute = $_.Action.Execute;
+                arguments = $_.Action.Arguments; working_directory = $_.Action.WorkingDirectory }
+        })
         midweek_start           = $freeTasks[0].Trigger.StartBoundary
         midweek_limit_seconds   = [int]"$freeLimitText".Trim()
         prerun_start            = $freeTasks[1].Trigger.StartBoundary
