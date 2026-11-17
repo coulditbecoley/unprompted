@@ -234,27 +234,31 @@ class AliasMap:
                 ):
                     return "Writer.com"
             return None
-        if key != "superhuman" or "Superhuman Mail" not in self.canonical_names:
+        # "Superhuman AI" is the same name wearing a noise word, as in resolve().
+        if "superhuman" not in (key, *_strippings(name)) or "Superhuman Mail" not in self.canonical_names:
             return None
 
-        # Ignore URL spellings; a link is not another recommendation. Explicit
-        # Mail or an email-client description supports the product, including
-        # answers which ALSO mention its parent company.
+        # Ignore URL spellings; a link is not another recommendation.
         visible = re.sub(r"https?://\S+", "", answer)
         if re.search(r"\bSuperhuman Mail\b", visible):
             return "Superhuman Mail"
-        if any(re.search(r"\bSuperhuman\b", line) and re.search(
-            r"\bemail clients?\b", line, re.I
-        ) for line in visible.splitlines()):
-            return "Superhuman Mail"
-
-        # Exclude only when every occurrence is accounted for by these reviewed
-        # parent-company phrases. Any additional ambiguous use keeps the hold.
+        # Reviewed parent-company phrases come out before looking for an email
+        # description, so "Grammarly (now part of Superhuman) works in your
+        # inbox" is not read as the email product.
         remainder = re.sub(
             r"\bGrammarly\s*\(now part of (?:the )?Superhuman(?: suite| platform)?\s*\)"
             r"|\bGrammarly['’]s parent company renamed itself Superhuman\b",
             "", visible, flags=re.I,
         )
+        # An email-client, email-app or inbox description on the same line
+        # supports the product, including answers which ALSO mention its parent.
+        if any(re.search(r"\bSuperhuman\b", line) and re.search(
+            r"\bemail (?:clients?|apps?)\b|\binbox(?:es)?\b", line, re.I
+        ) for line in remainder.splitlines()):
+            return "Superhuman Mail"
+
+        # Exclude only when every occurrence is accounted for by the reviewed
+        # parent-company phrases. Any additional ambiguous use keeps the hold.
         if remainder != visible and not re.search(r"\bSuperhuman\b", remainder, re.I):
             return ""
         return None

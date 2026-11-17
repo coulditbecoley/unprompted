@@ -1,8 +1,19 @@
 # Methodology
 
-**Version 2** · effective 2026-08-24; **AI writing tools version 3** · effective 2026-09-14
+**Version 2** · effective 2026-08-24; **AI writing tools version 4** · effective 2026-11-23
 
-Writing version 3 raises its publication cap from 25 to 30 material brands to
+Writing version 4 (method version 7) widens the Superhuman context rule. On
+2026-11-16 the writing week was held because engines described Superhuman as an
+"email app" or a "premium inbox" rather than an "email client", so eleven of the
+fourteen answers that named it left it quarantined, although each one plainly
+meant the email product. Bare Superhuman now also resolves to Superhuman Mail when the same line
+calls it an email app or mentions an inbox, and "Superhuman AI" is read like bare
+Superhuman, as noise words already are everywhere else. The reviewed Grammarly
+parent phrases are set aside before that check, so a parent mention beside an
+inbox is still not read as the email product. Anything else stays quarantined.
+Week-over-week movement is not reported across the change.
+
+Writing version 3 (2026-09-14) raises its publication cap from 25 to 30 material brands to
 accommodate email-writing and documentation products already within its questions.
 It also adds narrow answer-context rules for two ambiguous writing names:
 bare Writer resolves only with a same-line Writer product label and a writer.com
