@@ -11,9 +11,9 @@ import { TrimTop } from "@/components/ui";
 export const metadata: Metadata = {
   title: "How we measure AI brand mentions",
   alternates: { canonical: "/methodology" },
-  openGraph: { url: "/methodology", type: "website", siteName: "Unprompted", title: "Unprompted methodology", description: "How questions, repeated answers, and publication checks produce the public chart." },
+  openGraph: { url: "/methodology", type: "website", siteName: "Unprompted", title: "Unprompted methodology", description: "How buying questions, repeated answers and checks become the public chart." },
   description:
-    "How we count brands once per answer, exclude errors and refusals, and keep method changes out of trend comparisons. Read the glossary and full published method.",
+    "How we count each brand once per answer, leave out failed or declined answers, and keep rule changes out of trend lines. A plain summary, the words we use and the full method.",
 };
 
 /**
@@ -38,78 +38,120 @@ export default function MethodologyPage() {
 
   return (
     <section className="shell section method-page">
-      <h1 className="display page-title rise">How the measurement works.</h1>
+      <h1 className="display page-title rise">How Unprompted works.</h1>
       <p className="section-lead">
-        How we count mentions, check results and decide which measurements can be compared.
+        We ask AI assistants the questions real buyers ask, count which brands
+        they mention, and publish every answer so you can check us.
       </p>
       <nav className="evidence-links" aria-label="Start here">
-        <a href="#glossary">Start with the glossary</a>
-        <a href="/categories">Explore published results</a>
+        <a href="#glossary">The words we use</a>
+        <a href="#full-method">The full technical method</a>
+        <a href="/categories">See the results</a>
       </nav>
-      <p className="label codex-section-label">Version history</p>
-      <h2 className="sub-h" id="recent-changes">Method versions by category</h2>
-      <p className="cmp-note">The current collection method can be newer than the latest published reading when a newer run is held.</p>
-      <div className="method-table" role="region" aria-label="Method versions by category" tabIndex={0}>
-        <table>
-          <caption className="sr-only">Current collection and latest published method versions</caption>
-          <thead><tr><th scope="col">Category</th><th scope="col">Current collection method</th><th scope="col">Latest published method</th><th scope="col">Measured</th><th scope="col">Reading</th></tr></thead>
-          <tbody>{versions.map(({ category, current, run }) => <tr key={category.slug}>
-            <td>{category.label}</td><td>v{current}</td>
-            {run ? <>
-              <td>v{run.method_version}</td><td>{run.measured_on || run.run_date}</td><td>{run.run_date}</td>
-            </> : <td colSpan={3}>No published reading</td>}
-          </tr>)}</tbody>
-        </table>
-      </div>
       <p className="label codex-section-label">Process</p>
       <h2 className="sub-h">From questions to published results</h2>
-      <p className="cmp-note">Five steps connect each question to its public evidence.</p>
+      <p className="cmp-note">Five steps, every week.</p>
       <ol className="method-flow" role="list" aria-label="From questions to published results">
         {[
-          ["Ask", "Use the fixed set of buying questions for the category."],
-          ["Repeat", "Ask each active assistant each question five times."],
-          ["Read", "Record brands, order and sources. Set aside unrecognised names."],
-          ["Check", "Keep results off the chart if they fail the checks."],
-          ["Publish", "Publish checked results with their original answers."],
+          ["Ask", "We keep a fixed list of buying questions for each category."],
+          ["Repeat", "Each assistant gets each question five times."],
+          ["Read", "We record the brands, their order and the sources. Names we do not recognise are set aside."],
+          ["Check", "Results that fail our checks stay off the chart."],
+          ["Publish", "Results that pass are published with the full answers."],
         ].map(([title, detail], i) => <li className="panel rise" key={title} style={{ "--i": i } as React.CSSProperties}>
           <span className="mono method-step" aria-hidden="true">{i + 1}</span>
           <h3 id={`process-${title.toLowerCase()}`}>{title}</h3><p>{detail}</p>
           {i < 4 && <span className="method-arrow" aria-hidden="true">&rarr;</span>}
         </li>)}
       </ol>
+
+      <p className="label codex-section-label">In plain words</p>
+      <h2 className="sub-h" id="what-the-numbers-mean">What the numbers mean, and what they do not</h2>
+      <p className="cmp-note">Ten things worth knowing before you quote a number from this site.</p>
+      <div className="method-points">
+        {POINTS.map(([title, detail]) => <div className="panel" key={title}><h3>{title}</h3><p>{detail}</p></div>)}
+      </div>
+
+      <div className="methodology-copy">
+        <p className="label codex-section-label">Definitions</p>
+        <h2 className="sub-h" id="glossary">The words we use <SectionLink id="glossary" label="The words we use" /></h2>
+        <p className="cmp-note">Six terms that appear on every chart.</p>
+        <dl className="method-glossary">
+          <dt id="glossary-answer">Answer</dt><dd>One response to one question from one assistant. Failed or declined answers are left out of the percentages.</dd>
+          <dt id="glossary-named">Mentioned</dt><dd>The brand appears anywhere in an answer. Repeating it in the same answer still counts once.</dd>
+          <dt id="glossary-first">Named first</dt><dd>The first charted brand in an answer. This shows visibility, not product quality.</dd>
+          <dt id="glossary-reading">Results</dt><dd>One published set of answers and the numbers counted from them. Results can be re-checked later without asking the assistants again. When that happens, the page shows the date the answers were collected and the date of the re-check.</dd>
+          <dt id="glossary-method-version">Counting rules</dt><dd>The numbered version of the rules for collecting and counting answers. When the rules change, earlier results cannot be fairly compared with later ones.</dd>
+          <dt id="glossary-too-close">Too close to call</dt><dd>A gap or change small enough that it could be chance. We still show the number, but we do not call it a lead or a move.</dd>
+        </dl>
+      </div>
+
+      <p className="label codex-section-label">Version history</p>
+      <h2 className="sub-h" id="recent-changes">Counting rules by category</h2>
+      <p className="cmp-note">The rules in use today can be newer than the latest published results, when newer results are being held back for checks.</p>
+      <div className="method-table" role="region" aria-label="Method versions by category" tabIndex={0}>
+        <table>
+          <caption className="sr-only">Counting rules in use now and for the latest published results</caption>
+          <thead><tr><th scope="col">Category</th><th scope="col">Rules in use now</th><th scope="col">Rules for the latest results</th><th scope="col">Measured</th><th scope="col">Published</th></tr></thead>
+          <tbody>{versions.map(({ category, current, run }) => <tr key={category.slug}>
+            <td>{category.label}</td><td>v{current}</td>
+            {run ? <>
+              <td>v{run.method_version}</td><td>{run.measured_on || run.run_date}</td><td>{run.run_date}</td>
+            </> : <td colSpan={3}>No published results</td>}
+          </tr>)}</tbody>
+        </table>
+      </div>
+
       <div className="panel reveal method-source">
         <TrimTop />
         <p style={{ fontSize: 14.5, margin: 0, color: "var(--fg-2)" }}>
-          The full method below comes from{" "}
-          <a href="https://github.com/coulditbecoley/unprompted/blob/main/METHODOLOGY.md">
-            METHODOLOGY.md
-          </a>{" "}
-          in the public repository. Each published measurement records the
-          method version used at the time.
+          Found a mistake? <a href="https://github.com/coulditbecoley/unprompted/issues">Open an issue</a>.
+          Corrections are added as new records. Old ones are never edited. The questions, the
+          code and every answer are public in the{" "}
+          <a href="https://github.com/coulditbecoley/unprompted">repository</a>, so anyone can
+          run the same steps and check the result.
         </p>
       </div>
-      <div className="method-layout">
-        <details className="method-toc panel" open>
-          <summary>On this page</summary>
-          <nav aria-label="Methodology sections"><a href="#glossary">Quick glossary</a>{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
-        </details>
-        <div className="prose methodology-copy">
-          <p className="label codex-section-label">Definitions</p>
-          <h2 className="sub-h" id="glossary">Quick glossary <SectionLink id="glossary" label="Quick glossary" /></h2>
-          <p className="cmp-note">Five terms used throughout the charts and recorded answers.</p>
-          <dl className="method-glossary">
-            <dt id="glossary-answer">Answer</dt><dd>One recorded response to one question from one assistant. Errors and refusals are excluded from mention percentages.</dd>
-            <dt id="glossary-named">Named</dt><dd>A brand appears anywhere in an answer. Naming it repeatedly still counts as one answer naming it.</dd>
-            <dt id="glossary-first">First</dt><dd>The first brand named in an answer. This measures visibility, not product quality.</dd>
-            <dt id="glossary-reading">Reading</dt><dd>A published analysis of recorded answers. A later reading can recheck those answers without asking the assistants again.</dd>
-            <dt id="glossary-method-version">Method version</dt><dd>The recorded version of the rules used to collect and count answers. Method changes can prevent fair comparisons between measurements.</dd>
-          </dl>
-          {blocks}
+
+      <details className="method-full" id="full-method">
+        <summary>
+          <span className="sub-h">The full technical method</span>
+          <span className="cmp-note">Every rule, every check and the dated change log, written for people who want to audit the work.</span>
+        </summary>
+        <p className="cmp-note">
+          This text comes straight from{" "}
+          <a href="https://github.com/coulditbecoley/unprompted/blob/main/METHODOLOGY.md">METHODOLOGY.md</a>{" "}
+          in the public repository. It uses the project&rsquo;s working terms: an engine is an
+          assistant, a reading or run is a set of results, and the method version is the
+          counting rules.
+        </p>
+        <div className="method-layout">
+          <details className="method-toc panel" open>
+            <summary>In the full method</summary>
+            <nav aria-label="Methodology sections">{headings.map(h => <a key={h.id} href={`#${h.id}`}>{h.text}</a>)}</nav>
+          </details>
+          <div className="prose methodology-copy">
+            {blocks}
+          </div>
         </div>
-      </div>
+      </details>
     </section>
   );
 }
+
+/** The reader's version. METHODOLOGY.md is the method and wins any conflict. */
+const POINTS: [string, string][] = [
+  ["It shows visibility, not quality", "A brand that is named first is the one the assistant said first. That does not make it the better product."],
+  ["Every question is asked five times", "Assistants answer differently each time, so one answer tells you little. Each assistant gets each question five times, and every answer is counted."],
+  ["Counts sit beside percentages", "A percentage is shown with the number of answers behind it, so you can see how much it rests on."],
+  ["Small gaps can be chance", "With a few hundred answers, a difference of a few points can happen by luck. We call those too close to call and show no arrow. Five repeats of one question are not five independent tests either, so treat even a clear lead with care."],
+  ["Failed or declined answers are left out", "If a request fails, the assistant declines to recommend anything, or the answer cannot be read, it stays in the records but is not counted for or against any brand."],
+  ["Only brands on the chart are ranked", "Named first means first among the brands this chart tracks. A name we do not recognise is set aside and never appears on the chart."],
+  ["Changed rules break the trend", "When the questions, the assistants or the counting rules change, we do not show a change against earlier results. The comparison would not be fair."],
+  ["We ask through developer access, not the apps", "We ask each assistant through the direct connection its maker offers to developers, with web search switched on where it has one. The apps people use add their own instructions, personalisation and shopping features, so their answers can differ."],
+  ["An AI reads the answers", "By default a Claude model reads each answer and lists the brands in it. Claude is also one of the assistants we measure, so it is counting answers about its own maker’s products. We do not know how much that affects the results. Tone is judged by an AI too, so trust it less than the counts."],
+  ["Who runs this", "Unprompted is run by Skald Studio, which sells AI visibility work. No company on a chart has a say in the questions, the rules or the results. No placement is for sale, and no charted company is a Skald Studio client."],
+];
 
 /**
  * A deliberately small markdown renderer: headings, tables, lists, rules,

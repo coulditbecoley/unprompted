@@ -52,9 +52,9 @@ export async function generateMetadata({
   if (brand && !history.some(r => answered(r).some(e => e.brands.some(b => b.name === brand)))) notFound();
   const count = run ? answered(run).filter(e => (!engine || e.engine === engine) && (!brand || e.brands.some(b => b.name === brand))).length : 0;
   const assistant = engine ? loadProviders().find(p => p.id === engine)?.label ?? engine : "all assistants";
-  const title = `${brand ? `Answers naming ${brand}` : "Recorded AI answers"}: ${label}${params.question ? `: ${params.question}` : ""}`;
+  const title = `${brand ? `Answers mentioning ${brand}` : "Recorded AI answers"}: ${label}${params.question ? `: ${params.question}` : ""}`;
   const description = run
-    ? `${count} answers${brand ? ` name ${brand}` : " recorded"} across the reading's questions for ${assistant}. Measured ${run.measured_on || run.run_date}; reading ${run.run_date}. Errors and refusals excluded. Inspect the evidence.`
+    ? `${count} answers${brand ? ` mention ${brand}` : " recorded"} across the questions for ${assistant}. Measured ${run.measured_on || run.run_date}; published ${run.run_date}. Failed or declined answers are left out. Read the full answers.`
     : `Read the questions about ${inSentence(label)}. No answers have been published yet.`;
   const url = `/questions?${new URLSearchParams({ c: category, ...(params.date && run ? { date: run.run_date } : {}), ...(engine ? { engine } : {}), ...(brand ? { brand } : {}), ...(params.question ? { question: params.question } : {}) })}`;
   return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
@@ -144,19 +144,19 @@ export default async function QuestionsPage({
   return (
     <section className="shell section q-page">
       <CategoryTabs category={category} />
-      <p className="label">{categoryLabel(category)} · measured {run.measured_on || run.run_date} · reading {run.run_date}</p>
+      <p className="label">{categoryLabel(category)} · measured {run.measured_on || run.run_date} · published {run.run_date}</p>
       <h1 className="display page-title rise">
         Check the answers behind the chart.
       </h1>
       <p className="section-lead">
-        Read the original AI answers behind each brand mention. Each question is scheduled for
-        {" "}{run.runs_per_question} attempts per assistant.
-        Errors and refusals are shown but excluded
-        from mention percentages.
+        Read the saved AI answers behind the numbers. Each question is asked
+        {" "}{run.runs_per_question} times per assistant.
+        Failed or declined answers are shown here, but left out of the
+        percentages.
       </p>
       <nav className="evidence-links" aria-label="Explore this evidence">
         <a className="btn btn-sm" href={params.question ? `#${params.question}` : "#question-list"}>{params.question ? "Jump to the selected question" : "Jump to questions"}</a>
-        <a href={`/chart/${category}/${run.run_date}`}>View this reading's chart</a>
+        <a href={`/chart/${category}/${run.run_date}`}>See the chart for these results</a>
         <a href="/methodology#glossary">How the answers are counted</a>
       </nav>
       <form action="/questions" className="q-reading">
@@ -166,7 +166,7 @@ export default async function QuestionsPage({
           <input type="hidden" name="filter" value="1" />
         </>}
         <div className="q-filter">
-          <label htmlFor="evidence-date">Published reading</label>
+          <label htmlFor="evidence-date">Results from</label>
           <select className="select" id="evidence-date" name="date" defaultValue={run.run_date}>
             {history.map(r => <option key={r.run_date}>{r.run_date}</option>)}
           </select>
@@ -179,7 +179,7 @@ export default async function QuestionsPage({
           </select>
         </div>
         <div className="q-filter">
-          <label htmlFor="evidence-brand">Brand named</label>
+          <label htmlFor="evidence-brand">Brand mentioned</label>
           <select className="select" id="evidence-brand" name="brand" defaultValue={selectedBrand ?? ""}>
             <option value="">All brands</option>
             {brands.map(brand => <option key={brand}>{brand}</option>)}
@@ -187,21 +187,21 @@ export default async function QuestionsPage({
         </div>
         <button type="submit" className="btn btn-go">Show answers</button>
       </form>
-      {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list. Answers remain as recorded.</p>}
+      {!run.methodology?.questions && <p className="cmp-note">These older results did not save the question wording, so the questions below are shown in today’s wording. The answers are shown as recorded.</p>}
       {selectedBrand && <p className="cmp-note q-filter-result">
-        {matching.length} {matching.length === 1 ? "answer names" : "answers name"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
+        {matching.length} {matching.length === 1 ? "answer mentions" : "answers mention"} <strong>{selectedBrand}</strong> with these filters. Each answer counts once.
         {" "}<a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedEngine ? { engine: selectedEngine } : {}), ...(params.question ? { question: params.question } : {}) })}${params.question ? `#${params.question}` : ""}`}>Show all brands</a>
       </p>}
-      {selectedBrand && matching.length === 0 && <p className="panel q-empty">No answers name this brand with these filters. Try another assistant or reading, or show all brands.</p>}
+      {selectedBrand && matching.length === 0 && <p className="panel q-empty">No answers mention this brand with these filters. Try another assistant or date, or show all brands.</p>}
       {selectedEngine && <p className="cmp-note">Showing {labels.get(selectedEngine) ?? selectedEngine}. <a href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, ...(selectedBrand ? { brand: selectedBrand } : {}), ...(params.question ? { question: params.question } : {}) })}${params.question ? `#${params.question}` : ""}`}>Show all assistants</a></p>}
       <div className="kpi-row">
-        <Kpi label="Questions in reading" value={spec.questions.length} note="The question list for this reading." />
-        <Kpi i={1} label="Answers" value={usable} note={`Of ${run.extractions.length} attempts in the full reading, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
-        <Kpi i={2} label="Errors or refusals" value={run.extractions.length - usable} note="Excluded from brand mention percentages." />
+        <Kpi label="Questions" value={spec.questions.length} note="The questions asked for these results." />
+        <Kpi i={1} label="Answers" value={usable} note={`Out of ${run.extractions.length} tries in total, before filters.`} meter={usable / Math.max(run.extractions.length, 1)} />
+        <Kpi i={2} label="Failed or declined" value={run.extractions.length - usable} note="Left out of the percentages." />
       </div>
       <p className="label codex-section-label">Coverage</p>
-        <h2 className="sub-h" id="coverage">Answer coverage by assistant</h2>
-        <p className="cmp-note">The share of recorded attempts that produced an answer, before filters.</p>
+        <h2 className="sub-h" id="coverage">Answers received from each assistant</h2>
+        <p className="cmp-note">How many tries produced a usable answer, before filters.</p>
         <div className="panel q-coverage reveal">
         {counts.map(c => <div className="q-coverage-row" key={c.engine}>
           <span>{labels.get(c.engine) ?? c.engine}</span>
@@ -215,9 +215,9 @@ export default async function QuestionsPage({
         Each line lists the brands found in one answer.
       </p>
       <p className="cmp-note">
-        Choose a question to load
-        its original answers and recorded source links. Sources may be citations or
-        search results; a link alone does not show which brand it supports.
+        Choose a question to read its full answers and the links recorded with
+        them. A link may be quoted in the answer or simply found in a web search, so a link alone
+        does not show which brand it supports.
       </p>
 
       <nav id="question-list" className="q-jump" aria-label="Jump to a question">
@@ -232,7 +232,7 @@ export default async function QuestionsPage({
             <p className="label">{q.id}</p>
             <h2 className="q-text">{q.text} <SectionLink id={q.id} label={q.text} /></h2>
             <p className="cmp-note q-first-pick">{firstPickSummary(rows)}</p>
-            <p className="cmp-note">{rows.length} recorded attempts with these filters.</p>
+            <p className="cmp-note">{rows.length} recorded {rows.length === 1 ? "try" : "tries"} with these filters.</p>
             {rows.length > 0 && <p className="q-load-answers">
               <a className="btn btn-sm" href={`/questions?${new URLSearchParams({
                 c: category, date: run.run_date,
@@ -243,7 +243,7 @@ export default async function QuestionsPage({
                 {params.question === q.id ? "Hide full answer text" : "Read full answers to this question"}
               </a>
             </p>}
-            {rows.length === 0 && <p className="cmp-note">{selectedBrand ? `No answers to this question name ${selectedBrand} with these filters.` : "No attempts for this question were recorded in this reading."}</p>}
+            {rows.length === 0 && <p className="cmp-note">{selectedBrand ? `No answers to this question mention ${selectedBrand} with these filters.` : "No tries match these filters for this question."}</p>}
 
             {engines.map((engine) => {
               const runs = rows

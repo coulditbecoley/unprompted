@@ -44,7 +44,7 @@ export async function generateMetadata({
   const score = run ? consensusScore(consensus(run, loadQuestionText(category, run))) : null;
   const title = `Do AI assistants agree? ${label}`;
   const description = run && score && run.engines.length >= 2
-    ? `AI assistants agree on the first pick for ${score.settled} of ${score.total} questions about ${inSentence(label)}. Measured ${run.measured_on || run.run_date}. See each assistant's picks.`
+    ? `AI assistants name the same brand first on ${score.settled} of ${score.total} questions about ${inSentence(label)}. Measured ${run.measured_on || run.run_date}. See each assistant's picks.`
     : `Not enough published assistant results to compare agreement for ${inSentence(label)} yet.`;
   const url = `/consensus?${new URLSearchParams({ c: category })}`;
   return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
@@ -104,8 +104,8 @@ export default async function ConsensusPage({
         )}
       </p>
       <p className="cmp-note">
-        An assistant's pick is the brand it names first most often. Agreement means every assistant has the same pick.
-        It does not mean that product is best. Percentages exclude failed attempts and refusals.
+        An assistant’s pick is the brand it names first most often. When every assistant has the same pick, they agree.
+        That does not mean the product is best.
       </p>
 
       <div style={{ marginTop: 20 }}>
@@ -135,15 +135,22 @@ export default async function ConsensusPage({
 
           <p className="label codex-section-label">Questions</p>
           <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
-          {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list.</p>}
+          {!run.methodology?.questions && <p className="cmp-note">These older results did not save the question wording, so the questions below are shown in today’s wording.</p>}
           <p className="cmp-note">
-            Each assistant’s most frequent first pick for every question.
+            The brand each assistant named first most often, for every question.
           </p>
-          <p className="cmp-note">
-            Percentages show how often the leading brand was named first. "No unique pick" means tied leaders or no first pick.
-            Follow a "No unique pick" or question link to read its answers. Bold marks picks outside the majority, or all picks when there is no majority.
-            A majority means more than half the assistants chose the same brand. Missing picks prevent full agreement.
-          </p>
+          <details className="how">
+            <summary>How to read this</summary>
+            <ul>
+              <li>The percentage is how often the assistant named that brand first.</li>
+              <li><b>No single pick</b> means the brands named first most often are tied, or no brand was named first.</li>
+              <li>Select a question, or a “No single pick” link, to read the answers.</li>
+              <li><b>Bold</b> marks a pick that differs from most assistants. With no majority, every pick is bold.</li>
+              <li>A majority means more than half the assistants picked the same brand.</li>
+              <li>A missing pick means no full agreement on that question.</li>
+              <li>Failed or declined answers are left out of the percentages.</li>
+            </ul>
+          </details>
 
           <p className="table-scroll-note">Scroll sideways to compare assistants. The question stays in view.</p>
           <div className="panel cns reveal" role="table" aria-label="Assistant picks by question" tabIndex={0}>
@@ -169,11 +176,11 @@ export default async function ConsensusPage({
           <p className="label codex-section-label">Assistants</p>
           <h2 className="sub-h" id="differences">How often each assistant differs from the majority <SectionLink id="differences" label="How often each assistant differs from the majority" /></h2>
           <p className="cmp-note">
-            Questions where an assistant differs from the majority.
+            How many questions each assistant answered differently from most of the others.
           </p>
           <p className="cmp-note">
-            Counts include a different brand or no pick, out of all questions shown.
-            Questions without a majority add no differences.
+            A different brand and no pick both count. Questions with no majority
+            are not counted against anyone.
           </p>
           <div className="panel cns-div reveal">
             {divergence.map((d) => (
@@ -225,8 +232,8 @@ function Row({ row, engines, labels, category, date }: { row: QuestionConsensus;
         const differs = !row.settled && (threeWay || pick.brand !== row.majority);
         return (
           <span className="cns-pick" role="cell" key={pick.engine} data-differs={differs}
-            aria-label={`${labels.get(pick.engine) ?? pick.engine}: ${pick.brand ? `${pick.brand}, ${Math.round(pick.share * 100)}% named first` : "No unique pick"}`}>
-            {pick.brand ?? <a href={`/questions?${new URLSearchParams({ c: category, date, engine: pick.engine, question: row.questionId })}#${row.questionId}`}>No unique pick</a>}
+            aria-label={`${labels.get(pick.engine) ?? pick.engine}: ${pick.brand ? `${pick.brand}, ${Math.round(pick.share * 100)}% named first` : "No single pick"}`}>
+            {pick.brand ?? <a href={`/questions?${new URLSearchParams({ c: category, date, engine: pick.engine, question: row.questionId })}#${row.questionId}`}>No single pick</a>}
             {pick.brand && <><i className="cns-share mono">
               {Math.round(pick.share * 100)}%
             </i>

@@ -719,6 +719,12 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .cmp-bar { display: block; margin-bottom: 12px; }
 .cmp-absent { color: var(--fg-3); font-size: 13.5px; margin: 4px 0 0; }
 .cmp-note { color: var(--fg-2); font-size: 13.5px; max-width: 68ch; margin: 0 0 12px; }
+/* Fine print a reader can open: keeps the caveats without burying the lead. */
+.how { color: var(--fg-2); font-size: 13.5px; max-width: 68ch; margin: 0 0 16px; }
+.how > summary { cursor: pointer; width: fit-content; color: var(--fg); font-weight: 500; padding: 4px 0; }
+.how > summary:hover { color: var(--accent); }
+.how ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 5px; line-height: 1.5; }
+.how b { color: var(--fg); font-weight: 600; }
 
 .h2h { padding: 0 16px; }
 .h2h-row {
@@ -1751,6 +1757,21 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 .method-changes { margin: 0; }
 .method-flow { margin: 0; }
 .method-source { margin: 52px 0; padding: 16px 20px 16px 28px; }
+.method-points { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 700px) { .method-points { grid-template-columns: 1fr; } }
+.method-points + .methodology-copy { margin-top: 52px; }
+.method-full > summary .sub-h { font-weight: 600; letter-spacing: -0.02em; }
+.method-points .panel { padding: 18px 20px; }
+.method-points h3 { font-size: 16px; margin: 0 0 6px; }
+.method-points p { color: var(--fg-2); font-size: 14px; line-height: 1.6; margin: 0; }
+.method-full { border-top: var(--rule-w) solid var(--rule); padding-top: 20px; }
+.method-full > summary { cursor: pointer; list-style: none; display: grid; gap: 4px; }
+.method-full > summary::-webkit-details-marker { display: none; }
+.method-full > summary .sub-h { margin: 0; font-size: clamp(20px, 2.4vw, 24px); }
+.method-full > summary .sub-h::after { content: " +"; color: var(--fg-3); font-weight: 400; }
+.method-full[open] > summary .sub-h::after { content: " \2212"; }
+.method-full > summary .cmp-note { margin: 0; }
+.method-full[open] > summary { margin-bottom: 20px; }
 .methodology-copy > .codex-section-label { margin: 52px 0 4px; }
 .methodology-copy > .codex-section-label:first-child { margin-top: 0; }
 .methodology-copy > hr { display: none; }

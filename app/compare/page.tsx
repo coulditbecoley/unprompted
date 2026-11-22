@@ -69,7 +69,7 @@ export async function generateMetadata({
   const board = run ? standings(run) : [];
   const first = (brand: string) => Math.round((board.find(row => row.brand === brand)?.firstShare ?? 0) * 100);
   const description = run && left && right && board.length
-    ? `${left} is named first in ${first(left)}% of answers; ${right} in ${first(right)}%. ${categoryLabel(category)}, measured ${run.measured_on || run.run_date}. Errors and refusals excluded.`
+    ? `${left} is named first in ${first(left)}% of answers; ${right} in ${first(right)}%. ${categoryLabel(category)}, measured ${run.measured_on || run.run_date}. Failed or declined answers are left out.`
     : `Compare recorded brand mentions for ${inSentence(categoryLabel(category))}. No published comparison is available yet.`;
   const url = `/compare?${new URLSearchParams({ c: category, ...(left ? { a: slugify(left) } : {}), ...(right ? { b: slugify(right) } : {}) })}`;
   return { title, description, alternates: { canonical: url }, openGraph: { title, description, url, type: "website", siteName: "Unprompted" } };
@@ -102,7 +102,7 @@ export default async function ComparePage({
   const gap = [...board].sort((a, b) => (b.named - b.firstNamed) - (a.named - a.firstNamed))[0];
   const rival = board.find(row => row.brand !== gap?.brand);
   if (gap && rival && gap.named > gap.firstNamed) presets.push({
-    label: `Largest mention/first-pick gap: ${gap.brand} vs ${rival.brand}`,
+    label: `Often mentioned, less often named first: ${gap.brand} vs ${rival.brand}`,
     category, a: gap.brand, b: rival.brand,
   });
   const rowFor = (brand: string) => board.find((s) => s.brand === brand) ?? null;
@@ -139,19 +139,26 @@ export default async function ComparePage({
       <nav className="cmp-presets" aria-label="Suggested comparisons">
         <p className="cmp-note">Choose a suggested comparison.</p>
         <div>{presets.map(p => <a className="btn btn-sm" key={p.label} href={`/compare?${new URLSearchParams({ c: p.category, a: slugify(p.a), b: slugify(p.b) })}`}>{p.label}</a>)}</div>
-        <p className="cmp-note">The gap counts answers that mention a brand without naming it first.</p>
       </nav>
       <div className="kpi-row">
         <Kpi label="Answers" value={total} note="The same answers are used for both brands." />
         <Kpi i={1} label="Questions answered" value={order.length} note="Compare mentions for each question below." />
-        <Kpi i={2} label="Measurements" value={weeks} note="Lines stop where methods differ." />
+        <Kpi i={2} label="Sets of results" value={weeks} note="Lines stop where the counting rules changed." />
       </div>
       <p className="cmp-note">
-        Named means mentioned anywhere in an answer; named first means the first
-        brand mentioned. Percentages exclude failed attempts and refusals. They
-        measure visibility, not product quality. Typical place in the list is the middle
-        position among answers that mention the brand. Repeating a question can produce similar answers. A clear lead here does not prove a lasting preference.
+        These numbers show how visible a brand is in AI answers. They do not say which product is better.
       </p>
+      <details className="how">
+        <summary>How to read this</summary>
+        <ul>
+          <li><b>Mentioned</b> means the brand appears anywhere in an answer.</li>
+          <li><b>Named first</b> means it is the first brand in the answer.</li>
+          <li>Failed or declined answers are left out of the percentages.</li>
+          <li><b>Typical place in the list</b> is the middle position among the answers that mention the brand.</li>
+          <li>Asking the same question several times can give similar answers.</li>
+          <li>A clear lead here does not prove a lasting preference.</li>
+        </ul>
+      </details>
 
       <nav className="evidence-links" aria-label="Check this comparison">
         <Link href={`/questions?${new URLSearchParams({ c: category, date: run.run_date })}`}>Read the recorded answers</Link>
@@ -159,7 +166,7 @@ export default async function ComparePage({
       </nav>
       <p className="label codex-section-label">Overview</p>
       <h2 className="sub-h">The two brands</h2>
-      <p className="cmp-note">First picks and mentions in this reading.</p>
+      <p className="cmp-note">How often each brand was named first and mentioned in these results.</p>
       <div className="cmp-grid cmp-cards">
         {sides.map(({ brand, row, history }, index) => (
           <div className="cmp-pick reveal" key={`${brand}-${index}`}>
@@ -189,7 +196,7 @@ export default async function ComparePage({
                   <span>{questionsLed(row, sides[index === 0 ? 1 : 0].row)}</span>
                 </div>
                 <div className="cmp-stat">
-                  <span>Measurements tracked</span>
+                  <span>Sets of results tracked</span>
                   <span>{history.length}</span>
                 </div>
                 {(() => {
@@ -198,14 +205,14 @@ export default async function ComparePage({
                     <div className="cmp-tone">
                       <span className="label">Tone of mentions</span>
                       <ToneBar tone={tone} />
-                      <p className="cmp-note">An AI model judges the tone of each mention.</p>
+                      <p className="cmp-note">A separate AI judged the tone, so trust it less than the counts.</p>
                     </div>
                   ) : null;
                 })()}
               </>
             ) : (
               <p className="cmp-absent">
-                Not named in any answer measured on {run.measured_on || run.run_date}.
+                Not mentioned in any answer measured on {run.measured_on || run.run_date}.
               </p>
             )}
           </div>
@@ -215,12 +222,12 @@ export default async function ComparePage({
       <p className="label codex-section-label">Assistants</p>
       <h2 className="sub-h" id="assistants">Assistant by assistant <SectionLink id="assistants" label="Assistant by assistant" /></h2>
       <p className="cmp-note" id="assistant-counting">
-        Each assistant’s count and share of answers mentioning each brand.
+        How many of each assistant’s answers mentioned each brand.
       </p>
       <p className="cmp-note">
-        Both brands use the same answers, excluding errors and refusals. Assistants with no remaining answers are left out.
+        Both brands are counted from the same answers, leaving out failed or declined ones. An assistant with no answers left is not shown.
       </p>
-      {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in this reading.</p> : (
+      {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in these results.</p> : (
         <div className="panel cmp-assistants">
           <table aria-describedby="assistant-counting">
             <caption className="sr-only">Brand mentions by assistant</caption>
@@ -230,7 +237,7 @@ export default async function ComparePage({
               return <tr key={l.engine} data-engine={l.engine}>
                 <th scope="row">{labels.get(l.engine) ?? l.engine}</th>
                 {[l, r].map((entry, i) => <td key={i}>
-                  <span className="mono cmp-assistant-count">{entry.named}/{entry.of} <span className="sr-only">answers named {sides[i].brand}; </span></span>
+                  <span className="mono cmp-assistant-count">{entry.named}/{entry.of} <span className="sr-only">answers mentioned {sides[i].brand}; </span></span>
                   <span className="mono cmp-assistant-share">{Math.round(entry.named / entry.of * 100)}%</span>
                   <span className="meter" aria-hidden="true"><i style={{ "--v": entry.named / entry.of } as React.CSSProperties} /></span>
                 </td>)}
@@ -244,13 +251,13 @@ export default async function ComparePage({
         <>
           <p className="label codex-section-label">Questions</p>
       <h2 className="sub-h" id="questions">Question by question <SectionLink id="questions" label="Question by question" /></h2>
-          {!run.methodology?.questions && <p className="cmp-note">This older reading did not save its question wording. The questions below use today’s list.</p>}
+          {!run.methodology?.questions && <p className="cmp-note">These older results did not save the question wording, so the questions below are shown in today’s wording.</p>}
           <p className="cmp-note">
-            The share of answers mentioning each brand, question by question.
+            How often each brand was mentioned, question by question.
           </p>
           <p className="cmp-note">
-            Bold marks the larger share, not a proven
-            difference in quality. Select a question to read its answers.
+            Bold marks the higher number. It does not prove a difference in
+            quality. Select a question to read its answers.
           </p>
           <div className="panel h2h reveal" role="table" aria-label="Brand mentions by question">
             <div className="h2h-row h2h-head" role="row">
@@ -278,11 +285,11 @@ export default async function ComparePage({
           <p className="label codex-section-label">History</p>
       <h2 className="sub-h" id="history">Mentions over time <SectionLink id="history" label="Mentions over time" /></h2>
           <p className="cmp-note">
-            Each point shows the share of answers that mention a brand.
+            Each point shows the percentage of answers that mentioned a brand.
           </p>
           <p className="cmp-note">
-            Zero means none mentioned it. Points are evenly spaced by measurement,
-            not by elapsed time.
+            Zero means no answer mentioned it. Points are evenly spaced, one per
+            set of results, not by the time between them.
           </p>
           <TwoLines a={L} b={R} weeks={weeks} />
         </>
@@ -386,16 +393,16 @@ function Verdict({ left, right, leftName, rightName, total }: {
   total: number;
 }) {
   if (leftName === rightName) return <>Both selections show {leftName}. Choose two different brands to compare.</>;
-  if (!total) return <>No answers are available to compare these brands in this reading.</>;
+  if (!total) return <>No answers are available to compare these brands in these results.</>;
   const a = left?.firstNamed ?? 0;
   const b = right?.firstNamed ?? 0;
   const aShare = Math.round(a / total * 100);
   const bShare = Math.round(b / total * 100);
-  if (a === b) return <>{leftName} and {rightName} were each named first in {a} of {total} answers ({aShare}%). Neither has a first-pick lead.</>;
+  if (a === b) return <>{leftName} and {rightName} were each named first in {a} of {total} answers ({aShare}%). Neither leads.</>;
   if (!leadIsClear(Math.max(a, b), Math.min(a, b), total)) {
-    return <>{leftName} was named first in {aShare}% of answers; {rightName} in {bShare}%. This sample does not establish a clear first-pick lead.</>;
+    return <>{leftName} was named first in {aShare}% of answers; {rightName} in {bShare}%. That is too close to call.</>;
   }
-  return <>{a > b ? leftName : rightName} has a clear first-pick lead in this sample. {Math.max(aShare, bShare)}% versus {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
+  return <>{a > b ? leftName : rightName} has a clear lead in these results: named first in {Math.max(aShare, bShare)}% of answers, against {Math.min(aShare, bShare)}% for {a > b ? rightName : leftName}.</>;
 }
 
 function QuestionRow({
@@ -476,7 +483,7 @@ function TwoLines({
       <div className="cmp-plot">
         <div className="cmp-axis mono" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
         <svg viewBox={`0 0 ${W} ${H}`} className="cmp-history-svg" preserveAspectRatio="none" role="img"
-          aria-label={`Share of answers mentioning ${a.brand} and ${b.brand} across ${weeks} measurements. Lines stop at method changes.`}>
+          aria-label={`Percentage of answers mentioning ${a.brand} and ${b.brand} across ${weeks} sets of results. Lines stop where the counting rules changed.`}>
           {[0, 0.5, 1].map(t => <line key={t} className="spark-grid" x1={pad} x2={W-pad} y1={y(t)} y2={y(t)} />)}
           {[a, b].map((side, index) => <g key={index}>
             <path className={`cmp-history-line${index ? " is-b" : ""}`} d={side.history.map((h, i) =>
@@ -505,7 +512,7 @@ function TwoLines({
         : <div className="cmp-history-dates mono"><span>{dates[0]}</span><span>{dates.at(-1)}</span></div>}
       </div></div>
       <div className="cmp-legend"><span><i className="cmp-key" aria-hidden="true" /> {a.brand} (solid dot)</span><span><i className="cmp-key is-b" aria-hidden="true" /> {b.brand} (open square)</span></div>
-      {hasBreak && <p className="kpi-note">{allMethodChanges ? "The method changed between every measurement shown. These points cannot be read as a trend." : allBreaks ? "None of these measurements can be compared as a trend; focus a point to read why." : "Gaps in the lines mark measurements that cannot be compared; focus a point to read why."}</p>}
+      {hasBreak && <p className="kpi-note">{allMethodChanges ? "The counting rules changed between every set of results shown, so these points are not a trend." : allBreaks ? "None of these results can be fairly compared as a trend. Select a point to see why." : "Gaps in the lines mark results that cannot be fairly compared. Select a point to see why."}</p>}
     </div>
   );
 }

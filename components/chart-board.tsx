@@ -108,7 +108,7 @@ export function ChartBoard({
             "@context": "https://schema.org",
             "@type": "Dataset",
             name: `${category.label}: which brands AI assistants recommend (${run.measured_on || run.run_date})`,
-            description: `How often ${engineNames.join(", ")} named each brand across ${questionText.length} buying questions about ${inSentence(category.label)}, each asked ${run.runs_per_question} times.`,
+            description: `How often ${engineNames.join(", ")} mentioned each brand across ${questionText.length} buying questions about ${inSentence(category.label)}, each asked ${run.runs_per_question} times.`,
             url: `https://unprompted.report/chart/${category.slug}/${run.run_date}`,
             dateModified: run.measured_on || run.run_date,
             isAccessibleForFree: true,
@@ -280,7 +280,7 @@ export function ChartBoard({
           </h2>
           <p className="section-lead">
             Some products here are made by the same companies whose assistants we ask.
-            This compares how often an assistant named its own product with how often
+            This compares how often an assistant mentioned its own product with how often
             the other assistants did. A gap is not proof of bias, and a small gap could
             just be chance.
           </p>
@@ -322,8 +322,8 @@ export function ChartBoard({
                   }
                   title={
                     exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
-                      ? "How much more often its maker's assistant named it than the others did, in percentage points"
-                      : "How much more often its maker's assistant named it than the others did, in percentage points. Too small a gap to call."
+                      ? "How much more often its maker's assistant mentioned it than the others did, in percentage points"
+                      : "How much more often its maker's assistant mentioned it than the others did, in percentage points. Too small a gap to call."
                   }
                 >
                   {p.gap > 0 ? "+" : ""}
