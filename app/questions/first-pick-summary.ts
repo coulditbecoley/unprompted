@@ -2,7 +2,7 @@ import type { Extraction } from "@/lib/metrics";
 
 export function firstPickSummary(rows: Extraction[]): string {
   const answers = rows.filter(row => !row.error && !row.refused);
-  if (!answers.length) return "No answers with these filters; no first pick to compare.";
+  if (!answers.length) return "No answers with these filters, so no brand was named first.";
   const population = `${answers.length} ${answers.length === 1 ? "answer" : "answers"}`;
   const counts = new Map<string, number>();
   for (const answer of answers) {
