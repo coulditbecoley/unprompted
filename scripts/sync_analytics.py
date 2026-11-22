@@ -148,6 +148,34 @@ def expand(counters: dict[str, int], meta: dict[str, dict[str, str]]) -> dict[st
     return {**counters, **{f: max(counters.get(f, 0), n) for f, n in derived.items()}}
 
 
+BUDGET = 500_000  # Upstash free tier: billed commands per calendar month (UTC)
+SHED_AT = 0.8     # past this, crawler counting is paused and the rest is kept for people
+
+
+def month_commands(out_dir: Path, month: str) -> int:
+    """About how many billed Redis commands the site has spent in `month`.
+
+    An estimate from the archive, because the store offers no free way to ask
+    (INFO is refused once the allowance is gone, which is when it matters). An
+    agent hit is two commands plus an occasional third; a browser event is
+    counted generously at ten, limiter included; 150 a day covers this script's
+    own reads and the dashboard. Days before 22 November 2026 cost about five
+    times more per agent hit than this says.
+    """
+    total = 0
+    for path in (out_dir / "data").glob(f"{month}-*.json"):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if not well_formed(record):
+            continue
+        agents = record.get("t:agent", 0)
+        people = sum(v for k, v in record.items() if k.startswith(("v:", "c:", "x:")))
+        total += agents * 2 + agents // 10 + people * 10 + 150
+    return total
+
+
 def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     """One day's counters, or {} when the key has expired or never existed."""
     key = urllib.parse.quote(f"{namespace()}:d:{day}", safe="")
@@ -727,6 +755,22 @@ def _main(detail: dict) -> int:
 
     write_index(out_dir, meta)
     print(f"{fresh} day(s) archived, {written} note(s) written to {out_dir}")
+
+    # The reserve: pause crawler counting before the month's free commands run
+    # out, so browser counts and this archive keep working until it turns.
+    month = today.isoformat()[:7]
+    used = month_commands(out_dir, month)
+    detail.update(redis_month_estimate=used)
+    print(f"about {used:,} of {BUDGET:,} Redis commands used in {month}")
+    if used >= SHED_AT * BUDGET:
+        warning = (f"about {used:,} of {BUDGET:,} free Redis commands used in {month}: crawler counting is "
+                   f"paused until next month so visitors and the archive are still recorded")
+        try:
+            command(url, token, "SET", f"{namespace()}:shed", month)
+        except Unreachable as exc:
+            warning += f" (the pause could NOT be set: {exc})"
+        detail.update(warning=warning)
+        print(f"WARNING: {warning}", file=sys.stderr)
 
     # The journal: every accepted event, not just the counters and the last 200.
     stream_failed = False

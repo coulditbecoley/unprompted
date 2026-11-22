@@ -155,6 +155,8 @@ def house_checks() -> list[str]:
             error = status.get("error") if isinstance(status, dict) else None
             issues.append(f"{name} has never recorded a success" + (f" (last error: {error})" if error else ""))
             continue
+        if status.get("warning"):  # a job that worked and still has something to say
+            issues.append(f"{name}: {status['warning']}")
         if now - last > timedelta(hours=hours):
             issues.append(f"{name} last succeeded {last:%Y-%m-%d %H:%M} UTC; last error: {status.get('error') or 'none recorded'}")
     try:

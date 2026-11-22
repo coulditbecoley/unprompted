@@ -29,6 +29,7 @@ const calls = [];
 let remote = "old content";
 let unavailable = false;
 let failing = null; // a command name whose pipeline entry answers with an error
+let shed = null; // what the reserve key holds: the month crawler counting is paused for
 globalThis.fetch = async (url, init = {}) => {
   const address = String(url);
   if (address.startsWith("https://redis.invalid")) {
@@ -38,7 +39,7 @@ globalThis.fetch = async (url, init = {}) => {
     calls.push(...commands);
     if (commands.some(c => String(c[0]).toLowerCase().startsWith("eval"))) throw new Error("limiter unavailable in this fixture");
     return Response.json(commands.map(c => String(c[0]).toLowerCase() === failing ? { error: "ERR simulated" }
-      : { result: String(c[0]).toLowerCase() === "hgetall" ? [] : 1 }));
+      : { result: String(c[0]).toLowerCase() === "hgetall" ? [] : String(c[0]).toLowerCase() === "get" ? shed : 1 }));
   }
   if (address.startsWith("https://api.github.com/repos/coulditbecoley/unprompted/contents/")) {
     calls.push([init.method ?? "GET", address]);
@@ -652,6 +653,30 @@ test("route integration: analytics and stale editor protection", async (t) => {
     assert.deepEqual(increments(), [pair, pair]);
     assert.ok(first <= 5, `first fetch cost ${first} commands`); // + TTL and first/last seen, once
     assert.deepEqual(calls.slice(first).map(c => String(c[0]).toLowerCase()), ["hincrby", "xadd"]);
+  });
+  await t.test("the reserve pauses crawler counting and keeps counting people", async t => {
+    const ua = "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)";
+    const names = () => calls.map(c => String(c[0]).toLowerCase());
+    let now = Date.now();
+    t.mock.method(Date, "now", () => now);
+    try {
+      shed = new Date().toISOString().slice(0, 7);
+      now += 31 * 60_000; // the half-hourly look is due
+      calls.length = 0;
+      await recordRequest("/consensus", ua);
+      assert.equal(names().at(-1), "get"); // counted, and learned of the pause in the same round trip
+      calls.length = 0;
+      await recordRequest("/consensus", ua);
+      await recordRequest("/chart/ai-coding-assistants", ua);
+      assert.deepEqual(names(), []); // paused: a crawler fetch now costs nothing
+      await track(request("/api/track", { path: "/" }));
+      assert.ok(names().includes("xadd")); // a person is still recorded
+      shed = "2000-01"; // another month's pause is not this month's
+      now += 31 * 60_000;
+      calls.length = 0;
+      await recordRequest("/consensus", ua);
+      assert.deepEqual(names().slice(0, 2), ["get", "hincrby"]); // asked again, resumed
+    } finally { shed = null; }
   });
   await t.test("the counters a crawler fetch no longer writes are derived on read", () => {
     const pair = (agent, path) => `gp:${agent}\u0000${path}`;
