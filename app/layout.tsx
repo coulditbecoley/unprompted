@@ -45,6 +45,12 @@ export const metadata: Metadata = {
  */
 const NO_FLASH = `(function(){try{var t=localStorage.getItem('unprompted-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
+// Google tag (GTM container) as Google issued it. Its hosts are allowed in
+// the Content-Security-Policy in vercel.json; a tag added inside GTM that
+// loads from another host needs that host added there too.
+const GTM_ID = "GTM-MV3QJ8MJ";
+const GTAG_INIT = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${geist.variable} ${geistMono.variable}`}>
@@ -56,6 +62,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="/feed.xml"
         />
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+        <script async src={`https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`} />
+        <script dangerouslySetInnerHTML={{ __html: GTAG_INIT }} />
       </head>
       <body>
         {/*
