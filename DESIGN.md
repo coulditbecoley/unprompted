@@ -315,6 +315,18 @@ Scroll reveals are gated on `prefers-reduced-motion: no-preference` as well as
 on browser support, because a scroll-timeline animation is not shortened by the
 global 0.01ms rule below and would otherwise leave sections invisible.
 
+The landing page alone has a moving background, added at the owner's request
+in November 2026: a fixed canvas of twinkling dots behind every section
+(`components/home-backdrop.tsx`, React Bits Pro "Flicker") and a slow drift on
+the hero glow. It is the one thing that does loop. It mounts after load, takes
+the theme's colours, is masked to half strength behind the text column, and
+never mounts under reduced motion. The component's source is licensed and
+cannot sit in this public repository, so `scripts/fetch-react-bits.mjs`
+downloads it at install and build time with `REACTBITS_LICENSE_KEY`; without
+the key a stub renders nothing and the static glow and dot grid remain. Cards
+inside the lower sections also enter one by one on the same scroll timeline as
+`.reveal`.
+
 `prefers-reduced-motion: reduce` collapses every animation and transition to
 0.01ms globally, and the smooth scroll with it.
 

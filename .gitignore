@@ -1,4 +1,6 @@
 node_modules/
+# React Bits Pro source: licensed, fetched by scripts/fetch-react-bits.mjs, never committed.
+/components/react-bits/
 .next/
 out/
 .env
