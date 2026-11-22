@@ -341,10 +341,12 @@ one, and the second is the fact worth having.
 asserts the whole counter hash after a single event. Every fault it has caught
 lived in the seam between them, where a mock would have passed.
 
-**Cost.** A recorded event is five to eleven Redis commands, so the free tier's
-ten thousand a day is roughly a thousand agent hits, or about seventeen full
-65-page crawls. Past that the paid tier is $0.20 per 100k commands — 100k a day
-is about $6 a month. Both public write endpoints are rate limited per caller and
+**Cost.** Upstash bills every command, pipelined or scripted, and the free tier
+allows 500,000 a month. An agent hit is two commands (one composite counter, one
+journal entry), a browser event three to five, so the tier holds roughly 200,000
+agent hits a month. It was eleven or twelve per agent hit until November 2026,
+when crawler traffic spent the allowance in twenty days and nothing was counted
+for the rest of the month. Past the free tier it is $0.20 per 100k commands. Both public write endpoints are rate limited per caller and
 both fail open, with an 800ms budget: a slow Redis must never become a slow
 site, and an uncounted event is a better outcome than a blocked reader.
 

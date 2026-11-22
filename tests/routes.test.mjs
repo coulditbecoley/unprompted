@@ -55,7 +55,7 @@ globalThis.fetch = async (url, init = {}) => {
 
 const { POST: track } = await import("../app/api/track/route.ts");
 const { POST: commit } = await import("../app/api/admin/commit/route.ts");
-const { totals } = await import("../lib/analytics.ts");
+const { totals, recordRequest, expand } = await import("../lib/analytics.ts");
 const { deriveSessionToken } = await import("../lib/auth.ts");
 const cookie = `unprompted_admin=${await deriveSessionToken("offline-test")}`;
 const request = (path, body, headers = {}) => new Request(`http://localhost${path}`, {
@@ -639,6 +639,34 @@ test("route integration: analytics and stale editor protection", async (t) => {
     for (const id of uuids) assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.notEqual(uuids[0], uuids[1]);
     assert.ok(!calls.some(c => /^(xtrim|xdel)$/i.test(String(c[0]))));
+  });
+  await t.test("a crawler fetch costs two commands, not eleven", async () => {
+    // Upstash bills each pipelined command. Eleven per crawler fetch spent the
+    // month's 500,000 by 20 November 2026 and capture stopped for everyone.
+    const ua = "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)";
+    const pair = "gp:GPTBot\u0000/brand/ai-coding-assistants/cursor";
+    calls.length = 0;
+    await recordRequest("/brand/ai-coding-assistants/cursor", ua);
+    const first = calls.length;
+    await recordRequest("/brand/ai-coding-assistants/cursor", ua);
+    assert.deepEqual(increments(), [pair, pair]);
+    assert.ok(first <= 5, `first fetch cost ${first} commands`); // + TTL and first/last seen, once
+    assert.deepEqual(calls.slice(first).map(c => String(c[0]).toLowerCase()), ["hincrby", "xadd"]);
+  });
+  await t.test("the counters a crawler fetch no longer writes are derived on read", () => {
+    const pair = (agent, path) => `gp:${agent}\u0000${path}`;
+    const day = expand({ [pair("GPTBot", "/brand/ai-coding-assistants/cursor")]: "3", [pair("other automation", "/")]: 2, "t:human": "4" });
+    assert.equal(day["t:agent"], "5");
+    assert.equal(day["g:GPTBot"], "3");
+    assert.equal(day["g:other automation"], "2");
+    assert.equal(day["p:training"], "5");
+    assert.equal(day["ba:cursor (ai-coding-assistants)"], "3");
+    assert.equal(day["t:human"], "4");
+    // A day written in full is history: never re-derived from today's registry.
+    const stored = { [pair("GPTBot", "/")]: "3", "g:GPTBot": "3", "p:search": "3", "t:agent": "3" };
+    assert.equal(expand(stored), stored);
+    // The day the change shipped holds both; the larger is the whole day.
+    assert.equal(expand({ [pair("GPTBot", "/")]: "5", "g:GPTBot": "3", "p:training": "3", "t:agent": "3" })["g:GPTBot"], "5");
   });
   await t.test("a failed journal command warns once and never fails the request", async t => {
     const warn = t.mock.method(console, "warn", () => {});

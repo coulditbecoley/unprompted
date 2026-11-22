@@ -101,8 +101,8 @@ export async function POST(request: Request) {
   // a metered quota, so a script pointed at it burns the budget the real
   // numbers depend on and inflates them on the way. The ceiling is set well
   // above what a person browsing quickly produces: a fast reader generates
-  // maybe twenty events a minute, and the limiter costs one command against the
-  // five to eleven each recorded event already spends.
+  // maybe twenty events a minute, and the limiter costs a few commands against
+  // the three to five each recorded browser event already spends.
   if (!(await rateLimit(request, "track"))) {
     return new NextResponse(null, { status: 204 });
   }

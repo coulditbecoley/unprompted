@@ -8,12 +8,14 @@
  * own after ninety days. The one exception is the event journal
  * (`${namespace}:events`), which is kept until `sync_analytics.py` exports it.
  *
- * Written to be cheap rather than complete. Upstash's free tier allows ten
- * thousand commands a day, so every event is one pipelined round trip of about
- * five commands, and all of a day's counters share a single hash rather than
- * spreading across one key per metric. That is roughly two thousand events a
- * day before the tier matters, which is far more than this site currently sees.
- * If it ever does, the fix is a paid tier, not a rewrite.
+ * Written to be cheap rather than complete. Upstash's free tier allows 500,000
+ * commands a month and bills every command in a pipeline (and every call inside
+ * a script) separately. An agent hit used to cost eleven or twelve; crawlers
+ * went from about a hundred fetches a day to several thousand in November 2026
+ * and spent the whole month's allowance by the 20th, after which nothing was
+ * counted at all. An agent hit is now two commands, three at most every ten
+ * minutes: one composite counter and one journal entry. Everything else about
+ * it is a sum of that counter and is derived on read (`expand`).
  *
  * Nothing here identifies a person. There is no cookie, no device id, no
  * fingerprint and no stored IP: a visitor is counted, never followed. Referrers
@@ -24,7 +26,7 @@
 import { Redis } from "@upstash/redis";
 import { cache } from "react";
 
-import { identifyAgent, type Agent } from "./agents";
+import { identifyAgent, purposeOf, type Agent } from "./agents";
 
 /**
  * Vercel's Upstash integration provisions KV_REST_API_URL and KV_REST_API_TOKEN
@@ -79,7 +81,6 @@ export function analyticsEnabled(): boolean {
 }
 
 const DAY_TTL = 60 * 60 * 24 * 90; // ninety days, then it prunes itself
-const FEED_MAX = 200;
 
 /**
  * Separator inside the agent/path composite field.
@@ -98,7 +99,6 @@ export const PAIR_SEP = "\u0000";
 const namespace = process.env.ANALYTICS_NAMESPACE ?? "a";
 if (namespace !== "a" && !/^test-[a-z0-9-]{8,64}$/.test(namespace)) throw new Error("Invalid analytics namespace");
 const dayKey = (date: string) => `${namespace}:d:${date}`;
-const FEED_KEY = `${namespace}:feed`;
 const SEEN_KEY = `${namespace}:seen`;
 /**
  * Every accepted event, kept: the durable journal that `sync_analytics.py`
@@ -135,8 +135,40 @@ async function readWithin<T>(work: Promise<T>): Promise<T> {
 const readDay = cache(async (date: string) => {
   const r = redis();
   if (!r) throw new Error("Analytics not configured");
-  return readWithin(r.hgetall<Record<string, string>>(dayKey(date)));
+  return expand(await readWithin(r.hgetall<Record<string, string>>(dayKey(date))));
 });
+
+/**
+ * The agent counters a day no longer stores, rebuilt from the one it does.
+ *
+ * `gp:<agent>\0<path>` is written per agent hit; `g:`, `p:`, `t:agent` and
+ * `ba:` are sums of it. A day written before that change already holds them
+ * and is returned untouched (its composites add up to no more than its stored
+ * total), so history is never relabelled by today's registry. The day the
+ * change shipped holds both, hence the max. Mirrored by `expand` in
+ * scripts/sync_analytics.py, which stores the result in the archive.
+ */
+export function expand<T extends Record<string, unknown> | null>(hash: T): T {
+  if (!hash) return hash;
+  const derived = new Map<string, number>();
+  const add = (field: string, n: number) => derived.set(field, (derived.get(field) ?? 0) + n);
+  for (const [field, raw] of Object.entries(hash)) {
+    const cut = field.indexOf(PAIR_SEP);
+    if (!field.startsWith("gp:") || cut < 0) continue;
+    const name = field.slice(3, cut);
+    const n = Number(raw) || 0;
+    add("t:agent", n);
+    add(`g:${name}`, n);
+    const purpose = purposeOf(name);
+    if (purpose) add(`p:${purpose}`, n);
+    const brand = brandOf(field.slice(cut + 1));
+    if (brand) add(`ba:${brand}`, n);
+  }
+  if ((derived.get("t:agent") ?? 0) <= (Number(hash["t:agent"]) || 0)) return hash;
+  const out: Record<string, unknown> = { ...hash };
+  for (const [field, n] of derived) out[field] = String(Math.max(Number(hash[field]) || 0, n));
+  return out as T;
+}
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -204,6 +236,10 @@ export async function record(hit: Hit): Promise<void> {
   return within(write(r, hit), undefined);
 }
 
+const SEEN_EVERY_MS = 10 * 60_000;
+const seenAt = new Map<string, number>(); // agent -> when this instance last stamped it
+let expiryPlaced = ""; // the day key this instance has already given its TTL
+
 async function write(r: Redis, hit: Hit): Promise<void> {
   if (!/^\/[A-Za-z0-9\-._~/%]*$/.test(hit.path) || hit.path.length > 300) return;
   if (hit.path.startsWith("/admin") || hit.path.startsWith("/api/")) return;
@@ -215,10 +251,10 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   const fields: string[] = [];
 
   if (hit.agent) {
-    fields.push(`g:${hit.agent.name}`);
-    fields.push(`p:${hit.agent.purpose}`);
+    // The only counter an agent hit writes. Its agent, purpose, brand and
+    // total are sums of this one and are derived on read (`expand`): crawlers
+    // are nearly all the traffic, and each field here is a billed command.
     fields.push(`gp:${hit.agent.name}${PAIR_SEP}${hit.path}`);
-    fields.push("t:agent");
   } else if (hit.event) {
     fields.push(`c:${hit.event}`);
   } else if (!hit.missing) {
@@ -241,7 +277,8 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   // read 60 times" quietly mixed a crawler sweeping every page with a person
   // choosing one, and the second is the fact worth having.
   const brand = brandOf(hit.path);
-  if (brand && !hit.missing && !hit.event) fields.push(`${hit.agent ? "ba" : "b"}:${brand}`);
+  // (An agent's are derived from its composite counter; see `expand`.)
+  if (brand && !hit.missing && !hit.event && !hit.agent) fields.push(`b:${brand}`);
 
   const comparison = comparisonOf(hit.path, hit.query);
   if (comparison && !hit.agent && !hit.event && !hit.missing) fields.push(`m:${comparison}`);
@@ -263,14 +300,12 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   try {
     const pipe = r.pipeline();
     for (const field of fields) pipe.hincrby(key, field, 1);
-    pipe.expire(key, DAY_TTL);
-    // A rolling window of individual events, so the dashboard can show what is
-    // happening now rather than only what a day totalled. Capped, so it can
-    // never grow without bound.
-    pipe.lpush(FEED_KEY, JSON.stringify(entry));
-    pipe.ltrim(FEED_KEY, 0, FEED_MAX - 1);
-    pipe.expire(FEED_KEY, DAY_TTL);
-    // The same fields, journalled without a cap. A null field is left out
+    // Once per instance per day, not once per event: the TTL only has to be
+    // set, and each repeat was a billed command that changed nothing.
+    const expiring = fields.length > 0 && expiryPlaced !== key;
+    if (expiring) pipe.expire(key, DAY_TTL);
+    // The event itself, journalled without a cap. The dashboard's recent
+    // events are read back from here (`feed`), not from a second copy. A null field is left out
     // (absent means null), since a stream value is always a string.
     // ponytail: no MAXLEN; trimming waits for verified independent backup (W6).
     pipe.xadd(EVENTS_KEY, "*", Object.fromEntries(
@@ -281,9 +316,14 @@ async function write(r: Redis, hit: Hit): Promise<void> {
     // in this crawler's refresh cycle", which a per-day count cannot answer.
     // Never expires: two fields per agent is a rounding error against a rolling
     // ninety days of paths.
-    if (hit.agent) {
-      pipe.hsetnx(SEEN_KEY, `${hit.agent.name}:first`, Date.now());
-      pipe.hset(SEEN_KEY, { [`${hit.agent.name}:last`]: Date.now() });
+    //
+    // Refreshed at most every ten minutes per agent per instance. Cadence is a
+    // question about days, and a crawler sweeping the site would otherwise pay
+    // two more commands for every page it fetched.
+    const stamp = hit.agent && Date.now() - (seenAt.get(hit.agent.name) ?? 0) > SEEN_EVERY_MS ? hit.agent.name : null;
+    if (stamp) {
+      if (!seenAt.has(stamp)) pipe.hsetnx(SEEN_KEY, `${stamp}:first`, Date.now());
+      pipe.hset(SEEN_KEY, { [`${stamp}:last`]: Date.now() });
     }
 
     // Pipelines are not atomic: any one command can fail while the rest land,
@@ -291,6 +331,12 @@ async function write(r: Redis, hit: Hit): Promise<void> {
     const results = await pipe.exec({ keepErrors: true });
     const failed = results.find((res) => res.error);
     if (failed) journalFailed(String(failed.error));
+    else {
+      // Remembered only once Redis accepted them, so a failed write is retried
+      // by the next event rather than skipped for the life of the instance.
+      if (expiring) expiryPlaced = key;
+      if (stamp) seenAt.set(stamp, Date.now());
+    }
   } catch (err) {
     // Never thrown into the page request, and never retried: replaying the
     // counters would double them. Warned about, rate-limited, instead.
@@ -505,24 +551,25 @@ export type FeedEntry = {
   referrer: string | null;
 };
 
-/** The rolling window of individual events, newest first. */
+/** The most recent events, newest first, read from the tail of the journal. */
 export async function feed(limit = 60): Promise<FeedEntry[]> {
   const r = redis();
   if (!r) return [];
   try {
-    const rows = await readWithin(r.lrange<FeedEntry | string>(FEED_KEY, 0, limit - 1));
-    return rows
-      .map((row) => {
-        // The SDK deserialises JSON automatically, but a value written by an
-        // older build may still arrive as a string.
-        if (typeof row !== "string") return row;
-        try {
-          return JSON.parse(row) as FeedEntry;
-        } catch {
-          return null;
-        }
-      })
-      .filter((row): row is FeedEntry => Boolean(row));
+    const rows = await readWithin(r.xrevrange<Record<string, unknown>>(EVENTS_KEY, "+", "-", limit));
+    const text = (v: unknown) => (v === undefined || v === null ? null : String(v));
+    // A journal entry leaves a null field out, and the SDK parses what it can
+    // ("false", a number), so each field is put back into the feed's shape.
+    return Object.values(rows ?? {}).map((e) => ({
+      at: Number(e.at) || 0,
+      path: text(e.path) ?? "",
+      missing: e.missing === true || e.missing === "true",
+      agent: text(e.agent),
+      vendor: text(e.vendor),
+      purpose: text(e.purpose),
+      event: text(e.event),
+      referrer: text(e.referrer),
+    }));
   } catch {
     return [];
   }

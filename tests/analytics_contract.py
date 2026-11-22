@@ -124,13 +124,9 @@ clear()
 get("/consensus", "Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)")
 time.sleep(2.5)
 case(
-    "agent page view writes exactly five fields, counted once",
-    {
-        "g:GPTBot": 1,
-        "p:training": 1,
-        f"gp:GPTBot{NUL}/consensus": 1,
-        "t:agent": 1,
-    },
+    # One field: the agent, purpose and total are sums of it, derived on read.
+    "agent page view writes one composite field, counted once",
+    {f"gp:GPTBot{NUL}/consensus": 1},
     counters(),
 )
 
@@ -140,13 +136,7 @@ get("/wp-admin", "Mozilla/5.0 (compatible; ClaudeBot/1.0)")
 time.sleep(2.5)
 case(
     "agent miss adds x: and does not add a human view",
-    {
-        "g:ClaudeBot": 1,
-        "p:training": 1,
-        f"gp:ClaudeBot{NUL}/unrecognized": 1,
-        "t:agent": 1,
-        "x:/unrecognized": 1,
-    },
+    {f"gp:ClaudeBot{NUL}/unrecognized": 1, "x:/unrecognized": 1},
     counters(),
 )
 
@@ -261,9 +251,11 @@ time.sleep(2.5)
 seen = redis("hgetall", "a:seen") or []
 pairs = {seen[i]: seen[i + 1] for i in range(0, len(seen) - 1, 2)}
 first, last = pairs.get("PerplexityBot:first"), pairs.get("PerplexityBot:last")
-ok = bool(first and last and int(last) > int(first))
-RESULTS.append((ok, "cadence keeps first fixed and moves last", f"first={first} last={last}"))
-print(f"  {'PASS' if ok else 'FAIL'}  cadence keeps first fixed and moves last")
+# `last` is refreshed at most every ten minutes per agent, so two fetches a
+# second apart no longer move it; what is checked is that both were written.
+ok = bool(first and last and int(last) >= int(first))
+RESULTS.append((ok, "cadence records first and last", f"first={first} last={last}"))
+print(f"  {'PASS' if ok else 'FAIL'}  cadence records first and last")
 
 # 15 -- a brand page read by an agent is counted apart from a person's --------------
 clear()
@@ -272,13 +264,7 @@ time.sleep(2.5)
 c = counters()
 case(
     "an agent reading a brand page does not inflate human look-ups",
-    {
-        "g:GPTBot": 1,
-        "p:training": 1,
-        f"gp:GPTBot{NUL}/brand/ai-coding-assistants/cursor": 1,
-        "t:agent": 1,
-        "ba:cursor (ai-coding-assistants)": 1,
-    },
+    {f"gp:GPTBot{NUL}/brand/ai-coding-assistants/cursor": 1},
     c,
 )
 
