@@ -347,7 +347,7 @@ export default function Home() {
             <span className="step-n mono">03</span>
             <h3>Count</h3>
             <p>
-              We record every brand named and which came first, then publish the
+              We record every brand mentioned and which was named first, then publish the
               totals next to the full answers so anyone can check them.
             </p>
           </li>

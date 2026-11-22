@@ -1097,7 +1097,7 @@ test("methodology table reads current banks and latest published readings separa
   const start = html.indexOf('aria-label="Method versions by category"');
   const table = html.slice(start, html.indexOf("</table>", start));
   assert.ok(start >= 0);
-  assert.match(html, /The current collection method can be newer than the latest published reading/);
+  assert.match(html, /The rules in use today can be newer than the latest published results/);
   assert.doesNotMatch(html, /Read recent changes/);
   for (const category of categories.CATEGORIES) {
     const bank = load(fs.readFileSync(path.join(data.REPO_ROOT, "questions", `${category.slug}.yml`), "utf8"));

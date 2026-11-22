@@ -143,7 +143,7 @@ export default async function ConsensusPage({
             <summary>How to read this</summary>
             <ul>
               <li>The percentage is how often the assistant named that brand first.</li>
-              <li><b>No single pick</b> means two or more brands tied, or no brand was named first.</li>
+              <li><b>No single pick</b> means the brands named first most often are tied, or no brand was named first.</li>
               <li>Select a question, or a “No single pick” link, to read the answers.</li>
               <li><b>Bold</b> marks a pick that differs from most assistants. With no majority, every pick is bold.</li>
               <li>A majority means more than half the assistants picked the same brand.</li>

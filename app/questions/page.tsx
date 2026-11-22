@@ -149,7 +149,7 @@ export default async function QuestionsPage({
         Check the answers behind the chart.
       </h1>
       <p className="section-lead">
-        Read the full AI answers behind every number. Each question is asked
+        Read the saved AI answers behind the numbers. Each question is asked
         {" "}{run.runs_per_question} times per assistant.
         Failed or declined answers are shown here, but left out of the
         percentages.
@@ -216,7 +216,7 @@ export default async function QuestionsPage({
       </p>
       <p className="cmp-note">
         Choose a question to read its full answers and the links recorded with
-        them. A link may be a citation or just a search result, so a link alone
+        them. A link may be quoted in the answer or simply found in a web search, so a link alone
         does not show which brand it supports.
       </p>
 
@@ -243,7 +243,7 @@ export default async function QuestionsPage({
                 {params.question === q.id ? "Hide full answer text" : "Read full answers to this question"}
               </a>
             </p>}
-            {rows.length === 0 && <p className="cmp-note">{selectedBrand ? `No answers to this question mention ${selectedBrand} with these filters.` : "Nothing was recorded for this question in these results."}</p>}
+            {rows.length === 0 && <p className="cmp-note">{selectedBrand ? `No answers to this question mention ${selectedBrand} with these filters.` : "No tries match these filters for this question."}</p>}
 
             {engines.map((engine) => {
               const runs = rows

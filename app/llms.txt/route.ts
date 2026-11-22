@@ -42,7 +42,7 @@ export async function GET() {
     "",
     "## Method",
     "",
-    "A fixed bank of buyer questions is asked of every active engine five times",
+    "A fixed bank of buyer questions is asked of every active assistant five times",
     "each, every week. Answers are read into structured records, brand names are",
     "canonicalised, and publication checks decide whether the week publishes or is held.",
     "The full method, every question and every raw answer are public.",

@@ -28,9 +28,9 @@ export function boardCard(category: string, date?: string, brand?: string) {
   const rank = brand ? full.findIndex((b) => b.brand === brand) : -1;
   const focus = rank >= 0 ? full[rank] : undefined;
   const headline = focus
-    ? `AI assistants name ${focus.brand} in ${Math.round(focus.rotation * 100)}% of answers.`
+    ? `AI assistants mention ${focus.brand} in ${Math.round(focus.rotation * 100)}% of answers.`
     : brand
-      ? `${brand} was not named in the latest reading.`
+      ? `${brand} was not mentioned in the latest results.`
       : leader
       ? `AI names ${leader.brand} first in ${Math.round(leader.firstShare * 100)}% of answers.`
       : "What AI recommends when nobody's paying.";

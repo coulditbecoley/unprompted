@@ -155,7 +155,8 @@ export default async function ComparePage({
           <li><b>Named first</b> means it is the first brand in the answer.</li>
           <li>Failed or declined answers are left out of the percentages.</li>
           <li><b>Typical place in the list</b> is the middle position among the answers that mention the brand.</li>
-          <li>Asking the same question several times can give similar answers, so a clear lead here does not prove a lasting preference.</li>
+          <li>Asking the same question several times can give similar answers.</li>
+          <li>A clear lead here does not prove a lasting preference.</li>
         </ul>
       </details>
 
@@ -224,7 +225,7 @@ export default async function ComparePage({
         How many of each assistant’s answers mentioned each brand.
       </p>
       <p className="cmp-note">
-        Both brands are counted from the same answers. Failed or declined answers are left out, and so is any assistant with no answers left.
+        Both brands are counted from the same answers, leaving out failed or declined ones. An assistant with no answers left is not shown.
       </p>
       {L.assistants.length === 0 ? <p className="cmp-note">No answers are available for an assistant comparison in these results.</p> : (
         <div className="panel cmp-assistants">

@@ -56,7 +56,7 @@ export async function generateMetadata({
 
   const description = row
       ? `${brand} was named in ${row.named} of ${row.totalRuns} AI answers about ${inSentence(categoryLabel(category))}, measured on ${run!.measured_on || run!.run_date}, and named first in ${Math.round(row.firstShare * 100)}% of them.`
-      : `Tracking how often AI assistants name ${brand}.`;
+      : `Tracking how often AI assistants mention ${brand}.`;
   const url = `/brand/${category}/${slug}`;
   return {
     title: `${brand} in AI answers`,
@@ -138,7 +138,7 @@ export default async function BrandPage({
             {Math.round(row.firstShare * 100)}% of them.
           </>
         ) : (
-          <>{brand} was not named in any answer in the latest results.</>
+          <>{brand} was not mentioned in any answer in the latest results.</>
         )}
       </p>
       {/* Trust is asked at the top, not after the history table. */}
@@ -218,7 +218,7 @@ export default async function BrandPage({
       {row && (
         <ShareRow
           url={`https://unprompted.report/brand/${category}/${slug}`}
-          headline={`AI assistants named ${brand} in ${Math.round(row.rotation * 100)}% of answers about ${inSentence(label)}, and first in ${Math.round(row.firstShare * 100)}%.`}
+          headline={`AI assistants mentioned ${brand} in ${Math.round(row.rotation * 100)}% of answers about ${inSentence(label)}, and first in ${Math.round(row.firstShare * 100)}%.`}
         />
       )}
 
@@ -275,7 +275,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Usually named alongside</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            When an answer named {brand}, these brands were often mentioned in the same answer.
+            When an answer mentioned {brand}, these brands were often in the same answer.
           </p>
           <div className="seq-board">
             <TrimTop />
@@ -288,7 +288,7 @@ export default async function BrandPage({
             ))}
           </div>
           <p className="kpi-note" style={{ marginTop: 10 }}>
-            Share of the {companions.of} answers that named {brand}.
+            Out of the {companions.of} answers that mentioned {brand}.
           </p>
         </div>
       )}
@@ -297,7 +297,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Question by question</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            How many answers to each question named {brand}, strongest first. Open a question to read those answers.
+            How many answers to each question mentioned {brand}, strongest first. Open a question to read those answers.
           </p>
           <div className="seq-board">
             <TrimTop />
@@ -352,7 +352,7 @@ export default async function BrandPage({
         </Link>
         {run && row && (
           <Link className="btn btn-ghost" href={`/questions?${new URLSearchParams({ c: category, date: run.run_date, brand })}`}>
-            Read the answers that named {brand}
+            Read the answers that mentioned {brand}
           </Link>
         )}
       </div>

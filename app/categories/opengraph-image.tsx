@@ -2,7 +2,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { latestRun, standings } from "@/lib/data";
 import { shareCard } from "@/app/compare/share-card";
 
-export const alt = "Unprompted Categories: published AI brand charts and their current first-pick leaders.";
+export const alt = "Unprompted Categories: published AI brand charts and the brand named first most often in each.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -12,13 +12,13 @@ export default function Image() {
     return run ? [{ category, run, leader: standings(run)[0] }] : [];
   });
   return shareCard({
-    label: "Categories / Latest published readings",
+    label: "Categories / Latest published results",
     headline: `${published.length} of ${CATEGORIES.length} categories have results.`,
     detail: "See which brands AI assistants name first.",
     stats: published.slice(0, 3).map(({ category, run, leader }) => [
       `${category.label} / ${run.measured_on || run.run_date}`,
-      leader ? `${leader.brand} / ${Math.round(leader.firstShare * 100)}%` : "No brand named",
+      leader ? `${leader.brand} / ${Math.round(leader.firstShare * 100)}%` : "No brand mentioned",
     ]),
-    footer: "First-pick shares / Measurement dates shown per category",
+    footer: "How often each leader is named first / Dates shown per category",
   });
 }
