@@ -8,7 +8,7 @@ export function generateMetadata(): Metadata {
   const categories = categoriesBySector().flatMap(group => group.categories);
   const published = categories.filter(category => latestRun(category.slug));
   const title = "Browse AI brand charts by category";
-  const description = `${published.length} of ${categories.length} categories have published results. See which brands lead and how often assistants agree on their first pick.`;
+  const description = `${published.length} of ${categories.length} categories have published results. See which brands are named first and how often the assistants agree.`;
   return { title, description, alternates: { canonical: "/categories" }, openGraph: { title, description, url: "/categories", type: "website", siteName: "Unprompted" } };
 }
 
@@ -46,7 +46,7 @@ export default async function CategoriesPage({ searchParams }: {
       </h1>
       <p className="section-lead">
         Choose a category to see which brands AI assistants name first.
-        Check the measurement date: the latest published answers may be weeks old.
+        Check the date on each card: the latest results may be weeks old.
       </p>
       <CategoryBrowser key={initialQuery} groups={groups} counts={counts} initialQuery={initialQuery} />
     </section>

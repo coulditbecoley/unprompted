@@ -255,7 +255,7 @@ def test_method_change_suppresses_movement_holds_and_report_headlines(tmp_path):
     now, old = brand_week(current), brand_week(previous)
     assert run_checks(current, now, old, previous=previous).passed
     text = build_report(current, [previous], tmp_path / "missing.yml")
-    assert "methodology version changed" in text and "## The Snub" not in text
+    assert "counting rules changed" in text and "## The Snub" not in text
     current["method_version"] = 1
     assert any("moved" in r for r in run_checks(current, now, old, previous=previous).reasons)
     text = build_report(current, [previous], tmp_path / "missing.yml")

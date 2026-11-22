@@ -28,13 +28,13 @@ export const metadata: Metadata = {
     template: "%s · Unprompted",
   },
   description:
-    "A free, public, weekly chart of which brands AI assistants actually name when people ask real buying questions. Every question asked five times. Method and raw data public.",
+    "A free, public, weekly chart of which brands AI assistants actually name when people ask real buying questions. Every question is asked five times. How we count and every answer are public.",
   openGraph: {
     type: "website",
     siteName: "Unprompted",
     title: "Unprompted — what AI recommends when nobody's paying",
     description:
-      "Which brands do AI assistants actually name? Measured weekly, five runs per question, method and raw data public.",
+      "Which brands do AI assistants actually name? Measured weekly. Every question is asked five times, and every answer is public.",
   },
   robots: { index: true, follow: true },
 };

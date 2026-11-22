@@ -1034,7 +1034,7 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 .coverage-note {
   border-left: 2px solid var(--warn);
   padding: 2px 0 2px 12px;
-  margin-top: -6px;
+  margin-top: 10px;
 }
 .coverage-note strong { color: var(--warn); }
 

@@ -93,6 +93,19 @@ unrecognised brand names · `.unprompted/` local checkpoints and batch state
 (gitignored; never delete: paid answers live there) · `private/` paid reports
 and newsletter drafts (gitignored).
 
+**Words on the public site.** Readers are marketers and founders, not
+engineers. One word per idea, everywhere a reader can see it:
+*results* (not reading, measurement, run) · *mentioned* (not named, came up,
+share, rotation) for a brand appearing at all · *named first* (not first pick,
+recommended first) · *assistant* (not engine, provider, model) · *counting
+rules* (not method version) · *asked N times* (not runs, attempts) · *failed or
+declined answers* (not errors and refusals) · *too small to call* (not within
+the noise) · *re-checked* (not re-read, reprocessed). Lead with the plain point,
+one caveat per sentence, fine print in a "How to read this" expander. Never drop
+a caveat to save words: counts beside percentages, visibility is not quality,
+small gaps may be chance, changed rules break trends. Code, admin pages and
+`METHODOLOGY.md` keep their own terms.
+
 **Rules that are easy to break.**
 - Never switch branches or commit in the main checkout; use git worktrees.
   No merges to main on Mondays from 13:00 until the finished heartbeat.

@@ -334,32 +334,32 @@ export function marginOfError(p: number, n: number): number {
 }
 
 export function comparisonReason(run: RunRecord, previous?: RunRecord): string | null {
-  if (!previous) return "No earlier published measurement is available for comparison.";
+  if (!previous) return "There are no earlier results to compare with yet.";
   for (const key of ["method_version", "runs_per_question"] as const) {
     if ([run, previous].some(r => !Number.isInteger(r[key]) || r[key] < 1))
-      return "Recorded methodology is incomplete; movement is unavailable.";
+      return "The record of how these results were collected is incomplete, so no change is shown.";
   }
-  if (!run.category || run.category !== previous.category) return "These measurements cover different categories.";
-  if (run.method_version !== previous.method_version) return "The methodology version changed; movement is not comparable.";
-  if (run.runs_per_question !== previous.runs_per_question) return "The number of repetitions changed; movement is not comparable.";
-  if (!run.engines?.length || !previous.engines?.length) return "Recorded methodology is incomplete; movement is unavailable.";
+  if (!run.category || run.category !== previous.category) return "These results cover different categories.";
+  if (run.method_version !== previous.method_version) return "The counting rules changed since the last results, so no change is shown.";
+  if (run.runs_per_question !== previous.runs_per_question) return "The number of times each question was asked changed, so no change is shown.";
+  if (!run.engines?.length || !previous.engines?.length) return "The record of how these results were collected is incomplete, so no change is shown.";
   if (JSON.stringify([...run.engines].sort()) !== JSON.stringify([...previous.engines].sort()))
-    return "The engine roster changed; movement is not comparable.";
+    return "The set of assistants changed since the last results, so no change is shown.";
   const dates = [run, previous].map(r => r.measured_on || r.run_date);
-  if (!dates.every(Boolean) || dates[0] <= dates[1]) return "These readings do not represent successive measurements.";
+  if (!dates.every(Boolean) || dates[0] <= dates[1]) return "These results were not collected one after the other, so no change is shown.";
   const questions = [run, previous].map(r => [...new Set(r.extractions.map(e => e.question_id))].sort());
   if (!questions[0].length || JSON.stringify(questions[0]) !== JSON.stringify(questions[1]))
-    return "Question coverage changed; movement is not comparable.";
+    return "The set of questions with recorded answers changed, so no change is shown.";
   // JSON object key order is not a methodology change.
   const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable)
     : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, stable(v)])) : value;
   const snapshots = [run.methodology ?? {}, previous.methodology ?? {}];
   for (const key of ["questions", "engines", "system_prompt", "extraction_prompt", "extractor", "aliases"]) {
     if (snapshots.every(s => key in s) && JSON.stringify(stable(snapshots[0][key])) !== JSON.stringify(stable(snapshots[1][key])))
-      return "The recorded reading configuration changed; movement is not comparable.";
+      return "The way answers were collected or counted changed, so no change is shown.";
   }
   for (const key of ["extractor", "extractor_model"] as const) {
-    if (run[key] && previous[key] && run[key] !== previous[key]) return "The extractor changed; movement is not comparable.";
+    if (run[key] && previous[key] && run[key] !== previous[key]) return "The AI that reads the answers changed, so no change is shown.";
   }
   return null;
 }

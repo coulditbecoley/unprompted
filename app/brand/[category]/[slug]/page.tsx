@@ -132,13 +132,13 @@ export default async function BrandPage({
       <p className="brand-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
         {row ? (
           <>
-            AI assistants named <strong>{brand}</strong> in {row.named} of{" "}
+            AI assistants mentioned <strong>{brand}</strong> in {row.named} of{" "}
             {row.totalRuns} answers about {inSentence(label)}, measured on{" "}
-            {run!.measured_on || run!.run_date}, and recommended it first in{" "}
+            {run!.measured_on || run!.run_date}, and named it first in{" "}
             {Math.round(row.firstShare * 100)}% of them.
           </>
         ) : (
-          <>{brand} was not named in any answer in the latest measurement.</>
+          <>{brand} was not named in any answer in the latest results.</>
         )}
       </p>
       {/* Trust is asked at the top, not after the history table. */}
@@ -149,10 +149,10 @@ export default async function BrandPage({
 
       {row && (
         <div className="kpi-row">
-          <Kpi i={0} label="Board position" value={`#${rank + 1}`} unit={` of ${board.length}`} note="Ranked by how often it was the first pick." />
-          <Kpi i={1} label="Named in" value={Math.round(row.rotation * 100)} unit="%" note={`${row.named} of ${row.totalRuns} answers mentioned it.`} meter={row.rotation} />
-          <Kpi i={2} label="Named first" value={Math.round(row.firstShare * 100)} unit="%" note="Share of answers where it was the first recommendation." meter={row.firstShare} />
-          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Its usual place in the list when it was named (the median)." />
+          <Kpi i={0} label="Board position" value={`#${rank + 1}`} unit={` of ${board.length}`} note="Ranked by how often it was named first." />
+          <Kpi i={1} label="Mentioned in" value={Math.round(row.rotation * 100)} unit="%" note={`${row.named} of ${row.totalRuns} answers mentioned it.`} meter={row.rotation} />
+          <Kpi i={2} label="Named first" value={Math.round(row.firstShare * 100)} unit="%" note="How often it was the first brand named." meter={row.firstShare} />
+          <Kpi i={3} label="Typical position" value={row.medianPosition ?? "—"} note="Its usual place in the list when it was mentioned." />
         </div>
       )}
 
@@ -206,8 +206,8 @@ export default async function BrandPage({
                 <h2 className="pick-h" style={{ marginTop: 22 }}>How it was described</h2>
                 <ToneBar tone={tone} />
                 <p className="tone-caveat">
-                  Judged from the wording of each answer by our reading model, not stated by
-                  the assistants. Treat it as softer evidence than the counts.
+                  A separate AI judged the tone from the wording of each answer. The
+                  assistants did not say this themselves, so trust it less than the counts.
                 </p>
               </>
             ) : null}
@@ -226,7 +226,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Where it sits on the board</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            Its closest neighbours in the latest reading. Pale bar: named at all. Solid bar: named first.
+            Nearby brands in the latest results. Pale bar: mentioned at all. Solid bar: named first.
           </p>
           <LeaderBars rows={neighbours} start={from} highlight={brand} hrefFor={(b) => brandHref(category, b)} />
           <div className="btn-row" style={{ marginTop: 12 }}>
@@ -250,7 +250,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Which assistants name it</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            The same questions, split by who answered. Pale bar: named at all. Solid bar: named first.
+            The same questions, split by assistant. Pale bar: mentioned at all. Solid bar: named first.
           </p>
           <div className="seq-board">
             <TrimTop />
@@ -275,7 +275,7 @@ export default async function BrandPage({
         <div className="reveal">
           <h2 className="sub-h">Usually named alongside</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            When an answer named {brand}, these brands often came up in the same answer.
+            When an answer named {brand}, these brands were often mentioned in the same answer.
           </p>
           <div className="seq-board">
             <TrimTop />
@@ -321,7 +321,7 @@ export default async function BrandPage({
         <TrimTop />
         <div className="seq-row seq-head hist-row">
           <span className="label">Measured</span>
-          <span className="label">Named in</span>
+          <span className="label">Mentioned</span>
           <span className="label" style={{ textAlign: "right" }}>First</span>
         </div>
         {history
@@ -358,9 +358,9 @@ export default async function BrandPage({
       </div>
 
       <p className="mono" style={{ fontSize: 12, color: "var(--fg-3)", marginTop: 20 }}>
-        Tracked across {runs.length} measurement{runs.length === 1 ? "" : "s"}. Nobody can pay
+        Tracked across {runs.length} set{runs.length === 1 ? "" : "s"} of results. Nobody can pay
         to appear. <Link href="/methodology">How we measure</Link> ·{" "}
-        <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">the raw answers behind every figure</a>.
+        <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">the full answers behind every figure</a>.
       </p>
     </section>
   );
@@ -387,9 +387,9 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
 
   return (
     <div className="reveal">
-      <h2 className="sub-h">Named in, week by week</h2>
+      <h2 className="sub-h">Mentions over time</h2>
       <p className="section-lead" style={{ marginBottom: 14 }}>
-        Share of answers that mentioned it, one point per measurement, evenly spaced.
+        How often it was mentioned, one point per set of results. Points are spaced evenly, even when the gaps in time are not.
       </p>
       <div className="panel spark-panel" data-labelled={labelled}>
         <div className="spark-axis mono" aria-hidden="true">
@@ -402,7 +402,7 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Share of answers naming it across ${history.length} measurements, currently ${Math.round(last.rotation * 100)} percent. Lines connect comparable measurements only.`}
+          aria-label={`Answers mentioning it across ${history.length} sets of results, currently ${Math.round(last.rotation * 100)} percent. Lines join only results that can be fairly compared.`}
         >
           <defs>
             <linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1">
@@ -452,8 +452,8 @@ function Sparkline({ history }: { history: ReturnType<typeof brandHistory> }) {
         {hasBreak && (
           <p className="kpi-note" style={{ marginTop: 10 }}>
             {history.slice(1).every((h) => h.breakReason)
-              ? "The method changed between every one of these measurements, so the points are not joined: they cannot be compared as a trend."
-              : "The line breaks where the method changed and weeks cannot be compared."}
+              ? "The counting rules changed between every one of these results, so the points are not joined. They cannot be read as a trend."
+              : "The line breaks where the counting rules changed, because those weeks cannot be fairly compared."}
           </p>
         )}
       </div>

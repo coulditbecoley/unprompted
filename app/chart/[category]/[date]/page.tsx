@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ category:
   const run = meta && loadHistory(category, true).find(r => r.run_date === date);
   if (!meta || !run) notFound();
   const title = `${meta.label} · ${date}`;
-  const description = `${meta.label}, measured on ${run.measured_on || run.run_date}. Published reading ${run.run_date}; methodology version ${run.method_version}. Rankings and supporting answers are public.`;
+  const description = `${meta.label}, measured on ${run.measured_on || run.run_date}. Published ${run.run_date}, counting rules version ${run.method_version}. The rankings and the answers behind them are public.`;
   const url = `/chart/${category}/${date}`;
   return {
     title, description,

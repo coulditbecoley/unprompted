@@ -76,7 +76,7 @@ export function GET() {
         snub
           ? `<p><strong>The Snub:</strong> ${esc(snub.brand)} — ${snub.isDropout ? `named on ${esc(baselineDate!)}, not named in this measurement` : `down ${Math.abs(snub.rotationDelta)} points since ${esc(baselineDate!)}`}.</p>`
           : "",
-        `<p><a href="${SITE}/chart/${run.category}/${run.run_date}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">check the raw data</a></p>`,
+        `<p><a href="${SITE}/chart/${run.category}/${run.run_date}">See the full board</a> · <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">see the full records</a></p>`,
       ].join("");
 
       return `  <entry>
