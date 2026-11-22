@@ -101,6 +101,53 @@ class Unreachable(Exception):
     """
 
 
+def refusal(exc: Exception) -> str:
+    """Why Redis refused, when it said. Upstash puts the reason in the body of
+    the 400 ("max requests limit exceeded"), and "Bad Request" alone hid a spent
+    monthly allowance behind what read as a malformed request."""
+    if not isinstance(exc, urllib.error.HTTPError):
+        return ""
+    try:
+        return ": " + exc.read(300).decode("utf-8", "replace").strip()
+    except OSError:
+        return ""
+
+
+BRAND_PATH = re.compile(r"^/brand/([^/]+)/([^/?#]+)")
+# The two buckets lib/agents.ts files under a name that is not in agents.json.
+UNNAMED_PURPOSE = {"(no user agent)": "training", "other automation": "training"}
+
+
+def expand(counters: dict[str, int], meta: dict[str, dict[str, str]]) -> dict[str, int]:
+    """The agent counters the site no longer stores, rebuilt from the one it does.
+
+    An agent hit writes only `gp:<agent>\\0<path>`; `g:`, `p:`, `t:agent` and
+    `ba:` are sums of it (each was a billed Redis command per crawler fetch,
+    which is how November 2026 spent the month's allowance in twenty days).
+    Mirrors `expand` in lib/analytics.ts. A day written before the change is
+    returned untouched; the day it shipped holds both, hence the max. Stored in
+    the archive expanded, so every archived day has the same fields.
+    """
+    derived: Counter[str] = Counter()
+    for field, count in counters.items():
+        if not field.startswith("gp:") or PAIR_SEP not in field:
+            continue
+        name, path = field[3:].split(PAIR_SEP, 1)
+        derived["t:agent"] += count
+        derived[f"g:{name}"] += count
+        purpose = UNNAMED_PURPOSE.get(name) or meta.get(name, {}).get("purpose")
+        if purpose:
+            derived[f"p:{purpose}"] += count
+        brand = BRAND_PATH.match(path)
+        if brand:
+            derived[f"ba:{brand[2]} ({brand[1]})"] += count
+    if derived["t:agent"] <= counters.get("t:agent", 0):
+        return counters
+    # ponytail: an agent whose purpose is edited in agents.json mid-day shrinks
+    # one p: total, and write_raw then keeps that day's earlier, smaller copy.
+    return {**counters, **{f: max(counters.get(f, 0), n) for f, n in derived.items()}}
+
+
 def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
     """One day's counters, or {} when the key has expired or never existed."""
     key = urllib.parse.quote(f"{namespace()}:d:{day}", safe="")
@@ -111,7 +158,7 @@ def fetch_day(url: str, token: str, day: str) -> dict[str, int]:
         with urllib.request.urlopen(request, timeout=20) as response:
             body = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise Unreachable(f"{day}: {exc}") from exc
+        raise Unreachable(f"{day}: {exc}{refusal(exc)}") from exc
     # Upstash answers HTTP 200 with {"error": ...} for a rejected command. Read as
     # "no result" that was archived as a day nothing happened: the silent loss
     # Unreachable exists to prevent.
@@ -152,7 +199,7 @@ def command(url: str, token: str, *args: object) -> object:
         with urllib.request.urlopen(request, timeout=20) as response:
             body = json.loads(response.read())
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise Unreachable(f"{args[0]}: {exc}") from exc
+        raise Unreachable(f"{args[0]}: {exc}{refusal(exc)}") from exc
     if not isinstance(body, dict) or "error" in body or "result" not in body:
         raise Unreachable(f"{args[0]}: Redis returned an error: {str(body.get('error') if isinstance(body, dict) else body)[:200]}")
     return body["result"]
@@ -647,7 +694,7 @@ def _main(detail: dict) -> int:
             continue
         if not counters:
             continue
-        if write_raw(out_dir, day, counters, meta):
+        if write_raw(out_dir, day, expand(counters, meta), meta):
             fresh += 1
 
     # Notes are rebuilt from the archive rather than from Redis, so a day that

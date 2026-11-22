@@ -206,3 +206,33 @@ def test_stream_disappearing_during_export_is_not_success(stream, tmp_path, monk
     with pytest.raises(sa.Unreachable, match="ended before"):
         sa.export_events("https://r", "t", tmp_path, NS)
     assert not (tmp_path / "events/cursor.json").exists()
+
+
+def test_a_refused_read_reports_why_redis_refused_it(monkeypatch):
+    """"HTTP Error 400: Bad Request" was all the log said for a spent monthly allowance."""
+    def refuse(request, timeout=None):
+        raise sa.urllib.error.HTTPError("https://r", 400, "Bad Request", {},
+                                        io.BytesIO(b'{"error":"ERR max requests limit exceeded. Limit: 500000"}'))
+    monkeypatch.setattr(sa.urllib.request, "urlopen", refuse)
+    with pytest.raises(sa.Unreachable, match="max requests limit exceeded"):
+        sa.fetch_day("https://r", "t", "2026-11-21")
+    with pytest.raises(sa.Unreachable, match="max requests limit exceeded"):
+        sa.command("https://r", "t", "XREVRANGE", "a:events", "+", "-", "COUNT", 1)
+
+
+def test_agent_counters_the_site_no_longer_writes_are_derived_for_the_archive():
+    meta = {"GPTBot": {"vendor": "OpenAI", "purpose": "training"}, "ChatGPT-User": {"vendor": "OpenAI", "purpose": "live"}}
+    pair = lambda agent, path: f"gp:{agent}{sa.PAIR_SEP}{path}"  # noqa: E731
+    day = sa.expand({pair("GPTBot", "/brand/ai-coding-assistants/cursor"): 3, pair("ChatGPT-User", "/"): 1,
+                     pair("other automation", "/unrecognized"): 2, "t:human": 4, "x:/unrecognized": 2}, meta)
+    assert day["t:agent"] == 6 and day["g:GPTBot"] == 3 and day["g:other automation"] == 2
+    assert day["p:training"] == 5 and day["p:live"] == 1
+    assert day["ba:cursor (ai-coding-assistants)"] == 3
+    assert day["t:human"] == 4 and day["x:/unrecognized"] == 2
+    assert sa.snapshot(day, meta)["GPTBot"] == {"vendor": "OpenAI", "purpose": "training"}
+    # A day written in full is history: never re-derived from today's registry.
+    stored = {pair("GPTBot", "/"): 3, "g:GPTBot": 3, "p:search": 3, "t:agent": 3}
+    assert sa.expand(stored, meta) is stored
+    # The day the change shipped holds both; the larger is the whole day.
+    mixed = sa.expand({pair("GPTBot", "/"): 5, "g:GPTBot": 3, "p:training": 3, "t:agent": 3}, meta)
+    assert mixed["g:GPTBot"] == 5 and mixed["p:training"] == 5 and mixed["t:agent"] == 5

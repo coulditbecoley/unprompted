@@ -59,6 +59,19 @@ const AGENTS: Array<[RegExp, Agent]> = registry.agents.map((a) => [
  */
 const GENERIC = /bot\b|crawler|spider|scrape|curl\/|wget|python-requests|axios\/|node-fetch|Go-http-client|okhttp|libwww|HeadlessChrome/i;
 
+/** The two buckets below, which are nobody's product and so not in the registry. */
+const UNNAMED = new Set(["(no user agent)", "other automation"]);
+
+/**
+ * Why an agent fetches, by the name it was stored under, or null for a name
+ * the registry no longer has. Lets a reader derive the purpose split from the
+ * per-agent counters instead of the writer paying to store both.
+ */
+export function purposeOf(name: string): AgentPurpose | null {
+  if (UNNAMED.has(name)) return "training";
+  return AGENTS.find(([, agent]) => agent.name === name)?.[1].purpose ?? null;
+}
+
 /** A named agent, the generic bucket, or null for something that looks human. */
 export function identifyAgent(userAgent: string | null): Agent | null {
   if (!userAgent) {
