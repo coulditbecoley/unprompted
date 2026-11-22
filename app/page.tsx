@@ -45,7 +45,7 @@ export function generateMetadata(): Metadata {
   const run = latestRun(CATEGORY);
   const top = run ? standings(run)[0] : undefined;
   if (!run || !top) return { alternates: { canonical: "/" } };
-  const description = `Which brands do AI assistants recommend when nobody pays? In the latest reading, measured ${run.measured_on || run.run_date}, ${top.brand} was named first in ${Math.round(top.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}. Every question and answer is public.`;
+  const description = `Which brands do AI assistants recommend when nobody pays? In the latest results, measured ${run.measured_on || run.run_date}, ${top.brand} was named first in ${Math.round(top.firstShare * 100)}% of answers about ${inSentence(categoryLabel(CATEGORY))}. Every question and answer is public.`;
   return {
     description,
     alternates: { canonical: "/" },
@@ -108,7 +108,7 @@ export default function Home() {
     ? [
         [
           "Can a brand pay to appear or rank higher?",
-          "No. Unprompted is run by Skald Studio, which sells AI visibility work, and says so on every page. No company has any say in the questions, the method or the results, no placement is for sale, and no charted company is a Skald Studio client.",
+          "No. Unprompted is run by Skald Studio, which sells AI visibility work, and says so on every page. No company has any say in the questions, how answers are counted or the results, no placement is for sale, and no charted company is a Skald Studio client.",
         ],
         [
           "Does being named first mean a product is the best?",
@@ -116,11 +116,11 @@ export default function Home() {
         ],
         [
           `Why ask every question ${runsPerQ} times?`,
-          `AI assistants rarely give the same answer twice. One answer is a coin flip, so each question is asked ${runsPerQ} times per assistant and the page reports how often a brand came up.`,
+          `AI assistants rarely give the same answer twice. One answer is a coin flip, so each question is asked ${runsPerQ} times per assistant and the page reports how often each brand was mentioned.`,
         ],
         [
           "Is this what I would see in the ChatGPT or Gemini app?",
-          "Not exactly. We ask each provider's API, with its own web search where it has one. The consumer apps add their own instructions, personalisation and shopping features, which an API does not reproduce.",
+          "Not exactly. We ask each assistant through the direct connection its maker offers to developers, with web search switched on where it has one. The apps add their own instructions, personalisation and shopping features, so their answers can differ.",
         ],
         [
           "Can I check the numbers myself?",
@@ -234,7 +234,7 @@ export default function Home() {
           <div className="shell"><div className="kpi-row">
             <Kpi i={0} label="Questions" value={questions.length} note="Real buying questions, worded the way people ask them." />
             <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`Each question asked ${runsPerQ} times per assistant.`} />
-            <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant recommended." />
+            <Kpi i={2} label="Brands mentioned" value={board.length} note="Every product any assistant mentioned." />
             <Kpi i={3} label="AI assistants" value={engineNames.length} note={engineNames.join(" · ")} />
           </div></div>
         )}
@@ -259,7 +259,7 @@ export default function Home() {
               runsPerQuestion={run.runs_per_question}
             />
             <Freshness runDate={measured!} />
-            {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
+            {!run.methodology?.questions && <p className="cmp-note">Older results: the questions are shown in today&rsquo;s wording, because the wording used back then was not saved.</p>}
             <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${CATEGORY}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
             <Insights board={board} />
             <HowToRead runsPerQuestion={run.runs_per_question} />
@@ -291,8 +291,8 @@ export default function Home() {
                 <h3>{snub.brand}</h3>
                 <p>
                   {snub.isDropout
-                    ? `Named on ${baselineDate}. Not named at all this time.`
-                    : `Named in ${Math.abs(snub.rotationDelta)} points fewer answers than on ${baselineDate}.`}
+                    ? `Mentioned on ${baselineDate}. Not mentioned at all this time.`
+                    : `Mentioned ${Math.abs(snub.rotationDelta)} percentage points less often than on ${baselineDate}.`}
                 </p>
               </div>
             )}
@@ -300,11 +300,11 @@ export default function Home() {
             {board.length > 1 && (
               <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">At a glance</p>
-                <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as recommended first</h2>
+                <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as named first</h2>
                 <p className="section-lead" style={{ marginBottom: 16 }}>
-                  The pale bar is how often a brand came up at all. The solid bar is how
-                  often it was the first pick. When the two differ, the assistants know the
-                  brand but reach for something else first.
+                  The pale bar is how often a brand was mentioned at all. The solid bar is
+                  how often it was named first. When the two differ, the assistants know the
+                  brand but name something else first.
                 </p>
                 <LeaderBars rows={board.slice(0, 6)} hrefFor={(b) => brandHref(CATEGORY, b)} />
               </div>
@@ -348,7 +348,7 @@ export default function Home() {
             <h3>Count</h3>
             <p>
               We record every brand named and which came first, then publish the
-              totals with the raw answers so anyone can check them.
+              totals next to the full answers so anyone can check them.
             </p>
           </li>
         </ol>
@@ -365,7 +365,7 @@ export default function Home() {
           <div className="sec-head">
             <div>
               <p className="label">Other boards</p>
-              <h2>Latest published reading in each category</h2>
+              <h2>Latest results in each category</h2>
             </div>
             <Link className="btn btn-sm btn-ghost" href="/categories">
               All categories <span className="arr" aria-hidden="true">→</span>
@@ -385,7 +385,7 @@ export default function Home() {
                 <span className="meter" aria-hidden="true">
                   <i style={{ "--v": top.firstShare } as React.CSSProperties} />
                 </span>
-                <span className="mono ob-date">{date} · method v{method} · {assistants} assistants</span>
+                <span className="mono ob-date">{date} · counting rules v{method} · {assistants} assistants</span>
               </Link>
             ))}
           </div>

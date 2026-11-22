@@ -185,7 +185,7 @@ test("dated chart metadata preserves reading identity and measurement date", asy
   const meta = await exports.generateMetadata({ params: Promise.resolve(params) });
   assert.equal(meta.title, "AI Coding Assistants · 2026-09-14");
   assert.match(meta.description, /measured on 2026-09-07/);
-  assert.match(meta.description, /Published reading 2026-09-14/);
+  assert.match(meta.description, /Published 2026-09-14/);
   assert.equal(meta.alternates.canonical, "/chart/ai-coding-assistants/2026-09-14");
   assert.equal(meta.openGraph.url, meta.alternates.canonical);
   await assert.rejects(exports.generateMetadata({ params: Promise.resolve({ ...params, date: "2026-09-15" }) }), /not found/);
@@ -564,7 +564,7 @@ test("brand history retains absent brands, dates rereads by measurement, and mar
   assert.deepEqual(history.map(h => h.date), ["2026-08-03", "2026-08-10", "2026-08-17"]);
   assert.deepEqual(history.map(h => h.rotation), [1, 0, 1]);
   assert.deepEqual(history.slice(0, 2).map(h => h.breakReason), [null, null]);
-  assert.match(history[2].breakReason, /methodology version changed/);
+  assert.match(history[2].breakReason, /counting rules changed/);
   assert.equal(history[2].readingDate, "2026-08-18");
 });
 
@@ -1025,14 +1025,14 @@ test("homepage names each other board's own method and assistant count", async (
     return nativeRequire(id);
   } });
   const html = renderToStaticMarkup(exports.default());
-  assert.match(html, /Latest published reading in each category/);
+  assert.match(html, /Latest results in each category/);
   assert.doesNotMatch(html, /Measured the same way/);
   for (const category of categories.CATEGORIES.filter(c => c.slug !== categories.DEFAULT_CATEGORY)) {
     const run = data.latestRun(category.slug);
     const start = html.indexOf(`href="/chart/${category.slug}"`);
     const card = html.slice(start, html.indexOf("</a>", start));
     assert.ok(start >= 0, category.slug);
-    assert.ok(card.includes(`${run.measured_on || run.run_date} · method v${run.method_version} · ${run.engines.length} assistants`), category.slug);
+    assert.ok(card.includes(`${run.measured_on || run.run_date} · counting rules v${run.method_version} · ${run.engines.length} assistants`), category.slug);
   }
 });
 
@@ -1052,13 +1052,13 @@ test("latest-reading freshness notice is present in server-rendered HTML", async
   const { Freshness } = exports;
   const latest = renderToStaticMarkup(createElement(Freshness, { runDate: "2026-08-22" }));
   assert.match(latest, /Measured 2026-08-22/);
-  assert.match(latest, /No newer measurement has published/);
+  assert.match(latest, /These are the latest results/);
   assert.match(latest, /Updates every Monday/);
   assert.doesNotMatch(latest, /days old/);
   const older = renderToStaticMarkup(createElement(Freshness, { runDate: "2026-08-22", latestHref: "/chart/example" }));
-  assert.match(older, /An older reading/);
+  assert.match(older, /Older results/);
   assert.match(older, /href="\/chart\/example"/);
-  assert.doesNotMatch(older, /No newer measurement has published/);
+  assert.doesNotMatch(older, /These are the latest results/);
 });
 
 test("llms.txt names every category's published method version", async () => {

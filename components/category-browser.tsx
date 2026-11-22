@@ -111,11 +111,11 @@ export function CategoryBrowser({
                     {stat ? (
                       <div>
                       <p className="cat-stat mono">
-                        {stat.leader ? <><strong>{stat.leader}</strong> · {Math.round(stat.share * 100)}% named first</> : "No brand named in this reading"}
+                        {stat.leader ? <><strong>{stat.leader}</strong> · {Math.round(stat.share * 100)}% named first</> : "No brand named in these results"}
                       </p>
                       <span className="meter cat-count-meter" aria-hidden="true"><i style={{ "--v": stat.share } as React.CSSProperties} /></span>
                       <p className="cat-agreement">{stat.agreement
-                        ? `Assistants agree on the first pick for ${stat.agreement.settled} of ${stat.agreement.total} questions.`
+                        ? `Assistants name the same brand first on ${stat.agreement.settled} of ${stat.agreement.total} questions.`
                         : "Not enough assistants to compare agreement."}</p>
                       <p className="cat-scale">Measured {stat.measured}</p>
                       <span className="cat-open">Open board <span className="arr" aria-hidden="true">→</span></span>

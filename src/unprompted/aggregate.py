@@ -166,33 +166,33 @@ def comparison_reason(run: dict, previous: dict | None) -> str | None:
     Where both records freeze configuration, those snapshots must match too.
     """
     if previous is None:
-        return "No earlier published measurement is available for comparison."
+        return "There are no earlier results to compare with yet."
     for key in ("method_version", "runs_per_question"):
         if any(type(r.get(key)) is not int or r[key] < 1 for r in (run, previous)):
-            return "Recorded methodology is incomplete; movement is unavailable."
+            return "The record of how these results were collected is incomplete, so no change is shown."
     if run.get("category") != previous.get("category") or not run.get("category"):
-        return "These measurements cover different categories."
+        return "These results cover different categories."
     if run["method_version"] != previous["method_version"]:
-        return "The methodology version changed; movement is not comparable."
+        return "The counting rules changed since the last results, so no change is shown."
     if run["runs_per_question"] != previous["runs_per_question"]:
-        return "The number of repetitions changed; movement is not comparable."
+        return "The number of times each question was asked changed, so no change is shown."
     if not run.get("engines") or not previous.get("engines"):
-        return "Recorded methodology is incomplete; movement is unavailable."
+        return "The record of how these results were collected is incomplete, so no change is shown."
     if sorted(run["engines"]) != sorted(previous["engines"]):
-        return "The engine roster changed; movement is not comparable."
+        return "The set of assistants changed since the last results, so no change is shown."
     dates = [r.get("measured_on") or r.get("run_date", "") for r in (run, previous)]
     if not all(dates) or dates[0] <= dates[1]:
-        return "These readings do not represent successive measurements."
+        return "These results were not collected one after the other, so no change is shown."
     questions = [sorted({e["question_id"] for e in r.get("extractions", [])}) for r in (run, previous)]
     if not questions[0] or questions[0] != questions[1]:
-        return "Question coverage changed; movement is not comparable."
+        return "The set of questions with recorded answers changed, so no change is shown."
     snapshots = [r.get("methodology", {}) for r in (run, previous)]
     for key in ("questions", "engines", "system_prompt", "extraction_prompt", "extractor", "aliases"):
         if all(key in s for s in snapshots) and snapshots[0][key] != snapshots[1][key]:
-            return "The recorded reading configuration changed; movement is not comparable."
+            return "The way answers were collected or counted changed, so no change is shown."
     for key in ("extractor", "extractor_model"):
         if all(r.get(key) for r in (run, previous)) and run[key] != previous[key]:
-            return "The extractor changed; movement is not comparable."
+            return "The AI that reads the answers changed, so no change is shown."
     return None
 
 

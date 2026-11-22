@@ -108,7 +108,7 @@ export function ChartBoard({
             "@context": "https://schema.org",
             "@type": "Dataset",
             name: `${category.label}: which brands AI assistants recommend (${run.measured_on || run.run_date})`,
-            description: `How often ${engineNames.join(", ")} named each brand across ${questionText.length} buying questions about ${inSentence(category.label)}, ${run.runs_per_question} runs each.`,
+            description: `How often ${engineNames.join(", ")} named each brand across ${questionText.length} buying questions about ${inSentence(category.label)}, each asked ${run.runs_per_question} times.`,
             url: `https://unprompted.report/chart/${category.slug}/${run.run_date}`,
             dateModified: run.measured_on || run.run_date,
             isAccessibleForFree: true,
@@ -132,15 +132,15 @@ export function ChartBoard({
       <h1 className="display page-title rise">
         {leader
           ? <>{leader.brand} is named first most often: in <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.</>
-          : "No brand was named in this reading."}
+          : "No brand was named in these results."}
       </h1>
 
       {/* This sentence has to match what the board actually draws. */}
       <p className="section-lead rise" style={{ "--i": 1 } as React.CSSProperties}>
         We asked {engineNames.length} AI assistants ({engineNames.join(", ")}) the same {questionText.length} questions about{" "}
         {inSentence(category.label)}, {run.runs_per_question} times each, on{" "}
-        <span style={{ whiteSpace: "nowrap" }}>{run.measured_on || run.run_date}</span>. Below is how often each brand came up, and how
-        often it was the first one recommended.
+        <span style={{ whiteSpace: "nowrap" }}>{run.measured_on || run.run_date}</span>. Below is how often each brand was mentioned, and
+        how often it was named first.
       </p>
 
       {/*
@@ -155,24 +155,26 @@ export function ChartBoard({
       */}
       {missed.length > 0 && (
         <p className="section-lead coverage-note">
-          <strong>Smaller sample in this reading.</strong>{" "}
+          <strong>Fewer answers than we asked for this time.</strong>{" "}
           {missed.map((c, i) => (
             <span key={c.engine}>
               {i > 0 ? ", and " : ""}
-              {c.label}: {c.answered} usable answers from {c.attempted} attempts
+              {c.label}: {c.answered} answers from {c.attempted} tries
             </span>
           ))}
-          . {missed.reduce((n, c) => n + (c.attempted - c.answered), 0)} answers were
-          left out because the call failed, the assistant refused, or the answer could
-          not be read. They are not counted as answers that skipped a brand.
+          . {missed.reduce((n, c) => n + (c.attempted - c.answered), 0) === 1
+            ? "1 answer was"
+            : `${missed.reduce((n, c) => n + (c.attempted - c.answered), 0)} answers were`}{" "}
+          left out because the request failed, the assistant declined, or the answer
+          could not be read. They are not counted against any brand.
         </p>
       )}
 
       <div className="kpi-row">
-        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`First pick in ${Math.round(leader.firstShare * 100)}% of answers`} meter={leader.firstShare} />}
+        {leader && <Kpi i={0} label="Leader" value={leader.brand} note={`Named first in ${Math.round(leader.firstShare * 100)}% of answers`} meter={leader.firstShare} />}
         <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`${questionText.length} questions, each asked ${run.runs_per_question} times, by ${run.engines.length} assistants`} />
-        <Kpi i={2} label="Brands named" value={board.length} note="Every product any assistant brought up." />
-        <Kpi i={3} label="Readings on file" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
+        <Kpi i={2} label="Brands mentioned" value={board.length} note="Every product any assistant mentioned." />
+        <Kpi i={3} label="Results published" value={history.length} note={history.length > 1 ? `Since ${history[0].run_date}` : "This is the first one."} />
       </div>
 
       <Insights board={board} />
@@ -185,17 +187,17 @@ export function ChartBoard({
         {/* The file is `latestRun`, so the link appears only where the page shows that same run. */}
         {latestRun(category.slug)?.run_date === run.run_date && (
           <a className="btn btn-sm btn-ghost" href={`/chart/${category.slug}/board.csv`} download>
-            Download the numbers (CSV)
+            Download the numbers (spreadsheet)
           </a>
         )}
         {history.length > 1 && (
           <details className="readings">
-            <summary className="btn btn-sm btn-ghost">Past readings ({history.length})</summary>
+            <summary className="btn btn-sm btn-ghost">Past results ({history.length})</summary>
             <ul className="readings-list panel">
               {history.slice().reverse().map(r => (
                 <li key={r.run_date}>
                   <Link href={`/chart/${category.slug}/${r.run_date}`} aria-current={r.run_date === run.run_date ? "page" : undefined}>
-                    {r.run_date}{r.source_run ? " · reprocessed" : ""}
+                    {r.run_date}{r.source_run ? " · re-checked" : ""}
                   </Link>
                 </li>
               ))}
@@ -214,7 +216,7 @@ export function ChartBoard({
         runDate={run.measured_on || run.run_date}
         latestHref={latestRun(category.slug)?.run_date === run.run_date ? undefined : `/chart/${category.slug}`}
       />
-      {!run.methodology?.questions && <p className="cmp-note">Older reading: question wording comes from the current question list, because the wording used at the time was not saved.</p>}
+      {!run.methodology?.questions && <p className="cmp-note">Older results: the questions are shown in today&rsquo;s wording, because the wording used back then was not saved.</p>}
       <p className="cmp-note">{comparisonNote ?? <>Change is measured against <Link href={`/chart/${category.slug}/${older!.run_date}`}>{baselineDate}</Link>.</>}</p>
       <HowToRead runsPerQuestion={run.runs_per_question} />
 
@@ -241,10 +243,10 @@ export function ChartBoard({
 
       {board.length > 1 && (
         <div className="reveal" style={{ marginTop: 44 }}>
-          <h2 className="sub-h">Mentioned often vs. recommended first</h2>
+          <h2 className="sub-h">Mentioned often vs. named first</h2>
           <p className="section-lead" style={{ marginBottom: 14 }}>
-            Pale bar: how often the brand came up at all. Solid bar: how often it was the
-            first pick. A big gap means the assistants know it but reach for something else first.
+            Pale bar: how often the brand was mentioned at all. Solid bar: how often it was
+            named first. A big gap means the assistants know it, but name something else first.
           </p>
           <LeaderBars rows={board.slice(0, 8)} hrefFor={(b) => brandHref(category.slug, b)} />
         </div>
@@ -265,8 +267,8 @@ export function ChartBoard({
           <h3>{snub.brand}</h3>
           <p>
             {snub.isDropout
-              ? `Named on ${baselineDate}. Not named at all this time.`
-              : `Named in ${Math.abs(snub.rotationDelta)} points fewer answers than on ${baselineDate}.`}
+              ? `Mentioned on ${baselineDate}. Not mentioned at all this time.`
+              : `Mentioned ${Math.abs(snub.rotationDelta)} percentage points less often than on ${baselineDate}.`}
           </p>
         </div>
       )}
@@ -279,8 +281,8 @@ export function ChartBoard({
           <p className="section-lead">
             Some products here are made by the same companies whose assistants we ask.
             This compares how often an assistant named its own product with how often
-            the other assistants did. A gap is a measurement, not an accusation, and a
-            small gap on this sample is noise.
+            the other assistants did. A gap is not proof of bias, and a small gap could
+            just be chance.
           </p>
           <div className="seq-board reveal">
             <TrimTop />
@@ -320,8 +322,8 @@ export function ChartBoard({
                   }
                   title={
                     exceedsNoise(p.ownRate, p.ownRuns, p.rivalRate, p.rivalRuns)
-                      ? "Percentage points by which the owner out-names everyone else"
-                      : "Percentage points by which the owner out-names everyone else; within the noise at this sample size"
+                      ? "How much more often its maker's assistant named it than the others did, in percentage points"
+                      : "How much more often its maker's assistant named it than the others did, in percentage points. Too small a gap to call."
                   }
                 >
                   {p.gap > 0 ? "+" : ""}
@@ -331,7 +333,7 @@ export function ChartBoard({
             ))}
           </div>
           <p className="kpi-note" style={{ marginTop: 10 }}>
-            Gaps in grey are within the noise at this sample size.
+            A grey number means the gap is too small to call.
           </p>
         </>
       )}
@@ -342,9 +344,9 @@ export function ChartBoard({
             Sites the assistants drew on
           </h2>
           <p className="section-lead">
-            The websites that came up most often, as citations in the answers or
-            as search results the assistants pulled. This shows where they looked,
-            not proof of why they recommended anything.
+            The websites that showed up most, either quoted in an answer or found
+            when an assistant searched the web. This shows where they looked. It
+            does not prove why they recommended anything.
           </p>
           <div className="seq-board reveal">
             <TrimTop />

@@ -138,7 +138,7 @@ export function Delta({ move }: { move?: Movement }) {
     return (
       <span
         role="cell" className="mono seq-delta is-noise"
-        title="Within the noise of this sample. Reported, not called a move."
+        title="Too small a change to call. Shown, but not counted as a real move."
       >
         {up ? "+" : "−"}
         {Math.abs(move.rotationDelta)}
@@ -171,7 +171,7 @@ export function StatusBar({
     <div className="statusbar">
       {/* Plain words: "5 RUNS/Q" read as code to anyone outside the project. */}
       <span className="mono">Published {runDate}</span>
-      <span className="mono">Method v{methodVersion}</span>
+      <span className="mono">Counting rules v{methodVersion}</span>
       <span className="mono">Each question asked {runsPerQuestion}× per assistant</span>
       <span className="mono">
         {engines.length} assistant{engines.length === 1 ? "" : "s"}: {engines.join(" · ")}
@@ -228,7 +228,7 @@ export function SiteFooter() {
           </Link>
           <p>
             A free weekly record of which brands AI assistants recommend when
-            nobody&rsquo;s paying. Every question and raw answer is public.
+            nobody&rsquo;s paying. Every question and every answer is public.
           </p>
         </div>
         <nav className="foot-col" aria-label="Read">
@@ -241,9 +241,9 @@ export function SiteFooter() {
         <nav className="foot-col" aria-label="Check">
           <p className="label">Check</p>
           <Link href="/methodology">How we measure</Link>
-          <a href="https://github.com/coulditbecoley/unprompted">Source and raw data</a>
+          <a href="https://github.com/coulditbecoley/unprompted">Code and data</a>
           <a href="/feed.xml">RSS feed</a>
-          <a href="/llms.txt">llms.txt</a>
+          <a href="/llms.txt">Summary for AI tools</a>
         </nav>
       </div>
       <div className="shell">
@@ -268,13 +268,12 @@ export function AwaitingFirstRun() {
   return (
     <section className="empty">
       <p className="label">No data yet</p>
-      <h2>The first run has not happened.</h2>
+      <h2>The first results are not in yet.</h2>
       <p>
-        Unprompted publishes nothing until it has measured something. There is no
-        sample chart here, because a sample chart is a made-up number and this
-        publication only prints real ones.
+        Nothing is published here until real answers have been collected. There
+        is no example chart, because an example would be a made-up number.
       </p>
-      <p className="mono pending">Awaiting first measurement</p>
+      <p className="mono pending">Waiting for the first results</p>
     </section>
   );
 }
@@ -351,21 +350,21 @@ export function HowToRead({ runsPerQuestion }: { runsPerQuestion: number }) {
           </span>
           Squares
         </b>
-        One per question. Darker means more of its answers named the brand
-        ({runsPerQuestion} per assistant, all assistants together).
+        One per question. Darker means more answers to that question mentioned
+        the brand. Each question is asked {runsPerQuestion} times per assistant.
       </p>
       <p style={{ margin: 0 }}>
-        <b>Named</b>
-        Answers that mentioned the brand at all, out of every answer.
+        <b>Mentioned</b>
+        Answers that mentioned the brand, out of all answers.
       </p>
       <p style={{ margin: 0 }}>
         <b>First</b>
-        How often it was recommended first. The ranking uses this.
+        How often it was the first brand named. The ranking uses this.
       </p>
       <p style={{ margin: 0 }}>
-        <b>Δ change</b>
-        Up or down since the last comparable reading. Small moves get no
-        arrow: the sample cannot back them.
+        <b>Change</b>
+        Up or down since the last results we can fairly compare. Small changes
+        get no arrow, because they could be chance.
       </p>
       <p className="howto-more" style={{ margin: 0 }}>
         <Link href="/methodology#glossary">Every term explained →</Link>
@@ -431,7 +430,7 @@ export function LeaderBars({
   return (
     <div className="lb panel">
       <div className="lb-key mono" aria-hidden="true">
-        <span><i className="lb-sw is-named" />Named in any answer</span>
+        <span><i className="lb-sw is-named" />Mentioned in any answer</span>
         <span><i className="lb-sw is-first" />Named first</span>
       </div>
       {rows.map((r, i) => (
@@ -523,7 +522,7 @@ export function Insights({ board }: { board: BrandStanding[] }) {
   if (lead?.kind === "level") {
     items.push(
       <>
-        <b>{lead.a.brand}</b> and <b>{lead.b.brand}</b> are level on first picks, at {pct(lead.a.firstShare)}% each.
+        <b>{lead.a.brand}</b> and <b>{lead.b.brand}</b> were both named first in {pct(lead.a.firstShare)}% of answers.
       </>,
     );
   } else if (lead) {
@@ -531,8 +530,8 @@ export function Insights({ board }: { board: BrandStanding[] }) {
     const pa = pct(lead.a.firstShare);
     const pb = pct(lead.b.firstShare);
     const verdict = lead.clear
-      ? "That gap is larger than the noise at this sample size."
-      : "At this sample size that is too close to call: treat them as level.";
+      ? "In this set of answers, that is a clear lead."
+      : "That is too close to call, so treat them as tied.";
     items.push(
       pa === pb ? (
         <>
@@ -541,8 +540,7 @@ export function Insights({ board }: { board: BrandStanding[] }) {
         </>
       ) : (
         <>
-          <b>{lead.a.brand}</b> leads <b>{lead.b.brand}</b> by {pa - pb} point{pa - pb === 1 ? "" : "s"} on first
-          picks ({pa}% to {pb}%). {verdict}
+          <b>{lead.a.brand}</b> is named first more often than <b>{lead.b.brand}</b>: {pa}% to {pb}%. {verdict}
         </>
       ),
     );
@@ -550,9 +548,9 @@ export function Insights({ board }: { board: BrandStanding[] }) {
   if (gap) {
     items.push(
       <>
-        <b>{gap.brand}</b> comes up in {pct(gap.rotation)}% of answers but is named first in{" "}
-        {pct(gap.firstShare)}%: the widest gap in the top eight between being mentioned and being the
-        first pick.
+        <b>{gap.brand}</b> is mentioned in {pct(gap.rotation)}% of answers but named first in only{" "}
+        {pct(gap.firstShare)}%. That is the widest gap in the top eight between being mentioned and
+        being named first.
       </>,
     );
   }

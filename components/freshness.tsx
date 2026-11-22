@@ -58,17 +58,17 @@ export function Freshness({
           present in static HTML; the exact age is a client-side enhancement. */}
       {latestHref ? (
         <span role="status">
-          An older reading · <a href={latestHref}>see the latest board</a>
+          Older results · <a href={latestHref}>see the latest board</a>
         </span>
       ) : (
-        <span role="status">No newer measurement has published{age !== null && age > 8 ? ` · ${age} days old` : ""}</span>
+        <span role="status">These are the latest results{age !== null && age > 8 ? ` · ${age} days old` : ""}</span>
       )}
       <span className="next" suppressHydrationWarning>
         {when ? `Next update ${when}` : "Updates every Monday"}
       </span>
       <span className="spacer" />
       <a href="https://github.com/coulditbecoley/unprompted/tree/main/data/runs">
-        Check the raw data →
+        See the full records →
       </a>
     </div>
   );

@@ -210,8 +210,8 @@ export function LiveBoard({
           </span>
           <SortHead
             className="seq-rot"
-            label="Named"
-            hint="Sort by how many runs named this brand at all"
+            label="Mentioned"
+            hint="Sort by how often this brand was mentioned at all"
             k="named"
             sort={sort}
             onSort={onSort}
@@ -227,7 +227,7 @@ export function LiveBoard({
           <SortHead
             className="seq-delta"
             label="Δ"
-            hint="Sort by change from the comparison measurement"
+            hint="Sort by change since the last results we can fairly compare"
             k="move"
             sort={sort}
             onSort={onSort}

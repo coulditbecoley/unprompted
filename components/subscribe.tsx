@@ -64,7 +64,7 @@ export function Subscribe() {
    */
   function succeed(via: "provider" | "inbox") {
     setState("done");
-    setMessage(via === "provider" ? "Request accepted. Check your inbox for any confirmation step." : "Your request reached the operator. Automatic weekly delivery is not set up through this fallback.");
+    setMessage(via === "provider" ? "Request accepted. Check your inbox for any confirmation step." : "We got your request. Automatic weekly emails are not set up yet.");
     setEmail("");
     send({ path: window.location.pathname, event: `signup:${via}` });
   }
@@ -106,7 +106,7 @@ export function Subscribe() {
       setState("error");
       setMessage(
         data.error === "not_configured"
-          ? "The email digest is not set up yet. The RSS feed works today."
+          ? "Weekly emails are not set up yet. The RSS feed works today."
           : (data.error ?? "That did not work."),
       );
     } catch {
@@ -121,10 +121,10 @@ export function Subscribe() {
       <div className="subscribe-body">
         <p className="label">Get it every week</p>
         <h2 className="subscribe-head">
-          Get each new reading by email.
+          Get the new results by email.
         </h2>
         <p className="subscribe-lead">
-          A new reading is scheduled every Monday. No account and no paywall:
+          New results are due every Monday. No account and no paywall:
           everything here stays free whether you subscribe or not.
         </p>
 
@@ -163,8 +163,8 @@ export function Subscribe() {
         )}
 
         <p className="subscribe-alt mono">
-          Prefer a feed?{" "}
-          <a href="/feed.xml">Subscribe by RSS →</a> Same chart, no address
+          Use a feed reader?{" "}
+          <a href="/feed.xml">Subscribe by RSS →</a> Same chart, no email
           needed.
         </p>
 
