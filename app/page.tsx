@@ -28,6 +28,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
 import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
+import { HomeBackdrop } from "@/components/home-backdrop";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -131,6 +132,7 @@ export default function Home() {
 
   return (
     <>
+      <HomeBackdrop />
       <section className="hero">
         <div className="hero-bg" aria-hidden="true" />
         <div className="shell hero-grid">

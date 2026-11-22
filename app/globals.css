@@ -53,7 +53,7 @@
   --shadow-1: 0 1px 2px rgba(16, 20, 28, 0.06), 0 1px 1px rgba(16, 20, 28, 0.03);
   --shadow-2: 0 1px 2px rgba(16, 20, 28, 0.05), 0 10px 28px -12px rgba(16, 20, 28, 0.16);
   --shadow-hover: 0 2px 4px rgba(16, 20, 28, 0.06), 0 18px 40px -14px rgba(16, 20, 28, 0.24);
-  --glow: rgba(0, 96, 223, 0.10);
+  --glow: rgba(0, 96, 223, 0.17);
   --grid-dot: rgba(10, 10, 10, 0.07);
 }
 
@@ -84,7 +84,7 @@
     --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.5);
     --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 32px -14px rgba(0, 0, 0, 0.75);
     --shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 44px -16px rgba(0, 0, 0, 0.85);
-    --glow: rgba(77, 141, 255, 0.13);
+    --glow: rgba(77, 141, 255, 0.24);
     --grid-dot: rgba(255, 255, 255, 0.055);
   }
 }
@@ -113,7 +113,7 @@
   --shadow-1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 32px -14px rgba(0, 0, 0, 0.75);
   --shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 44px -16px rgba(0, 0, 0, 0.85);
-  --glow: rgba(77, 141, 255, 0.13);
+  --glow: rgba(77, 141, 255, 0.24);
   --grid-dot: rgba(255, 255, 255, 0.055);
 }
 
@@ -251,6 +251,19 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
   }
   }
 }
+/* Cards inside a section arrive one by one as they scroll in. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+  :is(.steps, .ob-grid, .faq, .insights) > * {
+    animation: revealCard linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 22%;
+  }
+  :is(.steps, .ob-grid, .insights) > :nth-child(2) { animation-range: entry 8% cover 26%; }
+  :is(.steps, .ob-grid, .insights) > :nth-child(3) { animation-range: entry 16% cover 30%; }
+  }
+}
+@keyframes revealCard { from { opacity: 0; transform: translateY(22px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes rise { from { opacity: 0.35; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .rise { animation: rise 620ms var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
 
@@ -1129,6 +1142,22 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
   background:
     radial-gradient(60% 55% at 22% 18%, var(--glow), transparent 70%),
     radial-gradient(40% 40% at 85% 10%, var(--glow), transparent 70%);
+}
+/* The landing page's moving background (components/home-backdrop.tsx): a fixed
+   canvas of twinkling dots behind every section. Strong in the margins, calmer
+   behind the column of text. Panels are opaque, so numbers never sit on it. */
+.home-bg {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, 0.5) 32%, rgba(0, 0, 0, 0.5) 68%, #000);
+  -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, 0.5) 32%, rgba(0, 0, 0, 0.5) 68%, #000);
+  animation: bgIn 1200ms var(--ease) both;
+}
+@keyframes bgIn { from { opacity: 0; } }
+/* The static dot grid is the fallback; once the canvas is in, it would double up. */
+main:has(.flicker-canvas) .hero-bg::after { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero-bg { animation: glowDrift 16s ease-in-out infinite alternate; }
+  @keyframes glowDrift { to { transform: translate3d(3%, 4%, 0) scale(1.08); } }
 }
 .hero-bg::after {
   content: ""; position: absolute; inset: 0;
