@@ -236,3 +236,30 @@ def test_agent_counters_the_site_no_longer_writes_are_derived_for_the_archive():
     # The day the change shipped holds both; the larger is the whole day.
     mixed = sa.expand({pair("GPTBot", "/"): 5, "g:GPTBot": 3, "p:training": 3, "t:agent": 3}, meta)
     assert mixed["g:GPTBot"] == 5 and mixed["p:training"] == 5 and mixed["t:agent"] == 5
+
+
+def test_the_reserve_pauses_crawler_counting_before_the_month_runs_out(stream, tmp_path, monkeypatch):
+    """Four fifths of the free month spent: the site is told to stop counting crawlers."""
+    import unprompted.storage as storage
+    recorded, sets = {}, []
+    monkeypatch.setattr(storage, "record_status", lambda *a, **kw: recorded.update(args=a, **kw))
+    monkeypatch.setattr(sa, "load_local_env", lambda: None)
+    monkeypatch.setenv("KV_REST_API_URL", "https://r")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "t")
+    monkeypatch.delenv("ANALYTICS_NAMESPACE", raising=False)
+    real = sa.command
+    monkeypatch.setattr(sa, "command", lambda url, token, *args: sets.append(args) if args[0] == "SET" else real(url, token, *args))
+    (tmp_path / "vault").mkdir()
+    monkeypatch.setattr(sys, "argv", ["sync_analytics.py", "--vault", str(tmp_path / "vault"), "--days", "1"])
+    month = sa.datetime.now(sa.timezone.utc).date().isoformat()[:7]
+
+    hits = {"n": 1000}
+    monkeypatch.setattr(sa, "fetch_day", lambda *a: {f"gp:GPTBot{sa.PAIR_SEP}/": hits["n"], "v:/": 3, "t:human": 3})
+    assert sa.main() == 0
+    assert sets == [] and "warning" not in recorded
+    assert recorded["redis_month_estimate"] == 1000 * 2 + 100 + 3 * 10 + 150
+
+    hits["n"] = 200_000  # 420,000 commands: past four fifths of 500,000
+    assert sa.main() == 0  # a pause is the plan working, not a failed sync
+    assert sets == [("SET", "a:shed", month)]
+    assert "crawler counting is paused" in recorded["warning"]

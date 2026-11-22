@@ -2932,6 +2932,10 @@ def test_house_checks_find_what_loses_a_week_without_any_engine_failing(monkeypa
     for name in rd.STALE_HOURS:
         record_status(status, name, True)
     assert rd.house_checks() == []
+    # A job that succeeded can still raise something (the Redis reserve does).
+    record_status(status, "sync_analytics", True, warning="crawler counting is paused")
+    assert rd.house_checks() == ["sync_analytics: crawler counting is paused"]
+    record_status(status, "sync_analytics", True)
     # A checkout left off main (how 2026-11-09 was lost) is named, and so is a detached HEAD.
     on["branch"] = "agensi-skill"
     assert any("on 'agensi-skill', not main" in i for i in rd.house_checks())

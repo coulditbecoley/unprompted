@@ -240,6 +240,20 @@ const SEEN_EVERY_MS = 10 * 60_000;
 const seenAt = new Map<string, number>(); // agent -> when this instance last stamped it
 let expiryPlaced = ""; // the day key this instance has already given its TTL
 
+/**
+ * The reserve. `sync_analytics.py` sets this key to the current UTC month
+ * ("2026-12") once it estimates four fifths of the month's free commands are
+ * spent, and agent hits then go unrecorded until the month turns. Crawlers are
+ * nearly all the spend; running the allowance to zero cost the browser counts
+ * and the archive as well (20 November 2026), and those are what the last
+ * fifth is kept for. Looked at every half hour per instance, in the pipeline
+ * an agent hit already sends. Deleting the key resumes counting.
+ */
+const SHED_KEY = `${namespace}:shed`;
+const SHED_EVERY_MS = 30 * 60_000;
+let shedMonth = "";
+let shedCheckedAt = 0;
+
 async function write(r: Redis, hit: Hit): Promise<void> {
   if (!/^\/[A-Za-z0-9\-._~/%]*$/.test(hit.path) || hit.path.length > 300) return;
   if (hit.path.startsWith("/admin") || hit.path.startsWith("/api/")) return;
@@ -249,6 +263,19 @@ async function write(r: Redis, hit: Hit): Promise<void> {
   const date = today();
   const key = dayKey(date);
   const fields: string[] = [];
+
+  const month = date.slice(0, 7);
+  const checking = Boolean(hit.agent) && Date.now() - shedCheckedAt > SHED_EVERY_MS;
+  if (hit.agent && shedMonth === month) {
+    if (!checking) return;
+    try {
+      shedMonth = String((await r.get(SHED_KEY)) ?? "");
+      shedCheckedAt = Date.now();
+    } catch {
+      return; // could not ask: still paused, and asked again by the next agent hit
+    }
+    if (shedMonth === month) return;
+  }
 
   if (hit.agent) {
     // The only counter an agent hit writes. Its agent, purpose, brand and
@@ -326,12 +353,18 @@ async function write(r: Redis, hit: Hit): Promise<void> {
       pipe.hset(SEEN_KEY, { [`${stamp}:last`]: Date.now() });
     }
 
+    if (checking) pipe.get(SHED_KEY); // last, so its answer is the last result
+
     // Pipelines are not atomic: any one command can fail while the rest land,
     // so each result is checked rather than only the request as a whole.
     const results = await pipe.exec({ keepErrors: true });
     const failed = results.find((res) => res.error);
     if (failed) journalFailed(String(failed.error));
     else {
+      if (checking) {
+        shedMonth = String(results[results.length - 1]?.result ?? "");
+        shedCheckedAt = Date.now();
+      }
       // Remembered only once Redis accepted them, so a failed write is retried
       // by the next event rather than skipped for the life of the instance.
       if (expiring) expiryPlaced = key;
