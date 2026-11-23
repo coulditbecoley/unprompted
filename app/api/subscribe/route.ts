@@ -6,31 +6,33 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Email capture, forwarded straight to a provider.
+ * Email capture, forwarded straight to SelfSend.
  *
  * The subscriber list is deliberately never stored here. Holding email
  * addresses would mean a database, a consent record, an unsubscribe flow and a
- * GDPR surface — real machinery, and all of it already solved by any newsletter
- * provider. So this route is a thin forwarder and the provider owns the list.
+ * GDPR surface. SelfSend, the operator's own mailing platform, already has all
+ * of that, so this route is a thin forwarder and SelfSend owns the list.
  *
- * Buttondown is the default because it can also send this publication's own
- * feed on a schedule, which means the weekly digest needs no sending code here
- * at all. Swapping providers is a change to one fetch.
+ * SELFSEND_SIGNUP_URL is the form address of a SelfSend sign-up link
+ * (https://<selfsend>/api/signup/<token>). The link decides which group the
+ * address joins, so moving signups to another group is a change in SelfSend,
+ * not here. That endpoint is built for plain HTML forms: it takes a
+ * form-encoded email and always answers with a redirect, to its thank-you page
+ * when it accepted the address and to the same page with ?state=... when it
+ * did not. It is called from here, not from the browser, because the CSP is
+ * form-action 'self' and the endpoint sends no CORS headers.
  *
- * With no key configured the route returns 503 and says so. That status is
- * load-bearing: while there is no provider, the form falls back to delivering
- * the address to the operator's inbox, and it needs to be able to tell "no
- * provider yet" apart from "the provider refused". The fallback runs in the
- * browser rather than here, because Web3Forms rejects server-side calls on the
- * free plan outright -- "use our API in client side" -- so a server-side
- * forward would have failed every time while looking perfectly reasonable.
- *
- * Setting BUTTONDOWN_API_KEY switches this to the real provider, and the
- * fallback stops firing on its own. Nothing else changes.
+ * Whenever SelfSend is not set up or does not accept the address, the route
+ * returns 503 with `inbox: true`. That status is load-bearing: the form then
+ * delivers the address to the operator's inbox instead, so a signup is never
+ * lost to an outage. The fallback runs in the browser because Web3Forms
+ * rejects server-side calls on the free plan.
  */
 
-const ENDPOINT = "https://api.buttondown.com/v1/subscribers";
 const MAX_EMAIL = 254;
+
+const fallback = (error: string) =>
+  NextResponse.json({ error, inbox: true }, { status: 503 });
 
 export async function POST(request: Request) {
   // Closes M-3 from the 2026-08-25 audit: this forwarded every request it was
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const token = process.env.BUTTONDOWN_API_KEY;
+  const endpoint = process.env.SELFSEND_SIGNUP_URL;
 
   let payload: unknown;
   try {
@@ -54,42 +56,34 @@ export async function POST(request: Request) {
 
   const email = String((payload as { email?: string })?.email ?? "").trim();
 
-  // Deliberately permissive: the provider does real verification, and rejecting
+  // Deliberately permissive: SelfSend validates again, and rejecting
   // unusual-but-valid addresses is a worse failure than passing one through.
   if (!email || email.length > MAX_EMAIL || !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "That does not look like an email address." }, { status: 400 });
   }
 
-  if (!token) {
-    return NextResponse.json(
-      { error: "not_configured", inbox: true },
-      { status: 503 },
-    );
-  }
+  if (!endpoint) return fallback("not_configured");
 
   try {
-    const res = await fetch(ENDPOINT, {
+    // ponytail: SelfSend throttles this endpoint per caller address, and every
+    // call from here shares this server's. Fine at this volume, and a throttled
+    // signup still reaches the inbox; send the visitor's address along if
+    // signups ever arrive faster than five a minute.
+    const res = await fetch(endpoint, {
       signal: AbortSignal.timeout(10000),
       method: "POST",
-      headers: {
-        Authorization: `Token ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email_address: email, tags: ["unprompted.report"] }),
+      redirect: "manual",
+      body: new URLSearchParams({ email }),
     });
+    const location = res.headers.get("location") ?? "";
 
-    // Already subscribed is a success from the visitor's point of view. Telling
-    // them it failed would be both confusing and a small privacy leak about who
-    // is on the list.
-    if (res.ok || res.status === 409) {
+    // Already subscribed and unsubscribed addresses get the same plain
+    // thank-you redirect, so this never leaks who is on the list.
+    if (res.status === 303 && !location.includes("state=")) {
       return NextResponse.json({ ok: true });
     }
-
-    return NextResponse.json(
-      { error: "The provider rejected that. Try again in a moment." },
-      { status: 502 },
-    );
+    return fallback("unavailable");
   } catch {
-    return NextResponse.json({ error: "Could not reach the email provider." }, { status: 502 });
+    return fallback("unavailable");
   }
 }

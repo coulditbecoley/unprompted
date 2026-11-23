@@ -16,7 +16,7 @@ import { send } from "@/components/beacon";
  * the whole strategy.
  */
 /**
- * Deliver one address to the operator's inbox while there is no mailing list.
+ * Deliver one address to the operator's inbox when the mailing list cannot take it.
  *
  * Named so a mailbox rule can file signups apart from contact messages, and so
  * exporting the list into a real provider later is a search rather than a
@@ -64,7 +64,7 @@ export function Subscribe() {
    */
   function succeed(via: "provider" | "inbox") {
     setState("done");
-    setMessage(via === "provider" ? "Request accepted. Check your inbox for any confirmation step." : "We got your request. Automatic weekly emails are not set up yet.");
+    setMessage(via === "provider" ? "You are on the list. New results will come by email." : "We got your request and will add you to the list.");
     setEmail("");
     send({ path: window.location.pathname, event: `signup:${via}` });
   }
@@ -94,7 +94,7 @@ export function Subscribe() {
         return;
       }
 
-      // 503 with `inbox` means there is no mailing provider yet, so the address
+      // 503 with `inbox` means the mailing list did not take the address, so it
       // goes to the operator instead. Sent from here rather than from the route
       // because Web3Forms refuses server-side calls on the free plan; a server
       // forward failed every time while looking entirely reasonable.
@@ -105,8 +105,8 @@ export function Subscribe() {
 
       setState("error");
       setMessage(
-        data.error === "not_configured"
-          ? "Weekly emails are not set up yet. The RSS feed works today."
+        data.inbox
+          ? "That did not go through. Try again in a moment, or use the RSS feed."
           : (data.error ?? "That did not work."),
       );
     } catch {
