@@ -29,7 +29,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
 import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
-import { DotField } from "@/components/motion";
+import { DotField, Spotlight } from "@/components/motion";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -67,6 +67,19 @@ function Words({ text }: { text: string }) {
         </Fragment>
       ))}
     </>
+  );
+}
+
+/** A number that counts up once on load. CSS only (`.count` in globals.css):
+ *  the real number is in the HTML, and the moving digits are drawn over it. */
+function Count({ to, suffix = "" }: { to: number; suffix?: string }) {
+  // ponytail: CSS counters cannot print thousands separators, so a number that
+  // needs one is shown still. Swap for a scripted counter if that matters.
+  if (to >= 1000) return <>{to.toLocaleString("en-US")}{suffix}</>;
+  return (
+    <span className="count" data-suffix={suffix} style={{ "--to": to } as React.CSSProperties}>
+      <span>{to}{suffix}</span>
+    </span>
   );
 }
 
@@ -149,6 +162,7 @@ export default function Home() {
   return (
     <>
       <DotField />
+      <Spotlight />
       <section className="hero">
         <div className="hero-bg" aria-hidden="true" />
         <div className="shell hero-grid">
@@ -165,7 +179,7 @@ export default function Home() {
                 <>
                   AI names{" "}
                   <span className="verdict-brand">{leader.brand}</span> first in{" "}
-                  <span className="verdict-num">{Math.round(leader.firstShare * 100)}%</span> of answers.
+                  <span className="verdict-num"><Count to={Math.round(leader.firstShare * 100)} suffix="%" /></span> of answers.
                 </>
               ) : (
                 <>What AI recommends when nobody&rsquo;s paying.</>
@@ -250,10 +264,10 @@ export default function Home() {
 
         {run && (
           <div className="shell"><div className="kpi-row">
-            <Kpi i={0} label="Questions" value={questions.length} note="Real buying questions, worded the way people ask them." />
-            <Kpi i={1} label="Answers read" value={answered.toLocaleString("en-US")} note={`Each question asked ${runsPerQ} times per assistant.`} />
-            <Kpi i={2} label="Brands mentioned" value={board.length} note="Every product any assistant mentioned." />
-            <Kpi i={3} label="AI assistants" value={engineNames.length} note={engineNames.join(" · ")} />
+            <Kpi i={0} label="Questions" value={<Count to={questions.length} />} note="Real buying questions, worded the way people ask them." />
+            <Kpi i={1} label="Answers read" value={<Count to={answered} />} note={`Each question asked ${runsPerQ} times per assistant.`} />
+            <Kpi i={2} label="Brands mentioned" value={<Count to={board.length} />} note="Every product any assistant mentioned." />
+            <Kpi i={3} label="AI assistants" value={<Count to={engineNames.length} />} note={engineNames.join(" · ")} />
           </div></div>
         )}
       </section>

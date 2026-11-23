@@ -326,6 +326,14 @@ cards inside the lower sections enter one by one, both on the same scroll
 timeline as `.reveal`. Standalone copies of all three are kept in the vault
 under `Web Designs/Website Assets`.
 
+A second pass the same month added, on the landing page only (scoped by
+`.home-bg ~ section` in `globals.css`): the headline figure and the stat tiles
+count up once on load (`Count` in `app/page.tsx`, a CSS counter drawn over the
+real number, which stays in the HTML); a marker sweeps once under the leading
+brand; share bars below the first screen fill as they scroll in; cards light up
+under the pointer (`Spotlight` in `components/motion.tsx`, the only script);
+the main button gets a sheen on hover; and the common questions slide open.
+
 `prefers-reduced-motion: reduce` collapses every animation and transition to
 0.01ms globally, and the smooth scroll with it.
 
