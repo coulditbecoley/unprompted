@@ -1,29 +1,30 @@
 {
-  "at": "2026-11-23T14:57:28+00:00",
+  "at": "2026-11-23T23:06:57+00:00",
   "categories": {
     "ai-coding-assistants": {
-      "minutes": 0.3,
-      "outcome": "failed",
-      "reasons": [
-        "the run raised SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-dkxcjzln\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-0720-7302-b381-540746a7d75d\n--------\nuser\nSafety test of"
-      ]
+      "dollars": 18.95,
+      "minutes": 18.5,
+      "outcome": "passed",
+      "reasons": []
     },
     "ai-image-generators": {
-      "minutes": 0.3,
-      "outcome": "failed",
+      "dollars": 17.51,
+      "minutes": 16.6,
+      "outcome": "held",
       "reasons": [
-        "the run raised SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-bxzc3r4z\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-4a45-72c2-b40a-63daba9b242f\n--------\nuser\nSafety test of"
+        "1 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: OpenArt"
       ]
     },
     "ai-writing-tools": {
-      "minutes": 0.1,
-      "outcome": "failed",
+      "dollars": 14.62,
+      "minutes": 16.6,
+      "outcome": "held",
       "reasons": [
-        "the run raised SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-kd84sqd9\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-6fa5-72e3-9940-e7be4d49355c\n--------\nuser\nSafety test of"
+        "1 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: Writer"
       ]
     }
   },
-  "detail": "ai-coding-assistants: failed or refused \u2014 SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-dkxcjzln\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-0720-7302-b381-540746a7d75d\n--------\nuser\nSafety test of\nai-image-generators: failed or refused \u2014 SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-bxzc3r4z\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-4a45-72c2-b40a-63daba9b242f\n--------\nuser\nSafety test of\nai-writing-tools: failed or refused \u2014 SystemExit: codex could not report which model it uses, so this week could not say what that row measured:\ncodex: isolation check was inconclusive; exit 1: OpenAI Codex v0.171.0\n--------\nworkdir: C:\\Users\\coley\\AppData\\Local\\Temp\\unprompted-identify-kd84sqd9\nmodel: gpt-6-astra\nprovider: openai\napproval: never\nsandbox: read-only\nreasoning effort: none\nreasoning summaries: none\nsession id: 01a208e9-6fa5-72e3-9940-e7be4d49355c\n--------\nuser\nSafety test of\nCommit and push follow; deployment is not verified.",
+  "detail": "ai-coding-assistants: passed local publication checks\nai-image-generators: held \u2014 1 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: OpenArt\nai-writing-tools: held \u2014 1 unrecognised brand name(s) appeared in at least 2% of runs and need a decision: Writer\nCommit and push follow; deployment is not verified.",
   "exit_code": 2,
   "run_date": "2026-11-23",
   "status": "held"
