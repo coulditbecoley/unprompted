@@ -1827,3 +1827,93 @@ h2:hover > .section-link, h3:hover > .section-link, h2:focus-within > .section-l
 }
 
 /* === codex pages: end === */
+
+/* === Landing page motion, second pass ====================================
+   Everything here is scoped to the landing page by `.home-bg ~ section` (the
+   dot field is the page's first element). All of it is CSS except the card
+   spotlight, which needs the pointer position (Spotlight in motion.tsx). */
+
+/* Numbers count up once on load. The real number stays in the page as text
+   (transparent, so it still sets the width and is read, found and copied); the
+   moving digits are drawn over it. */
+@property --n { syntax: "<integer>"; initial-value: 0; inherits: false; }
+@property --spot { syntax: "<number>"; initial-value: 0; inherits: false; }
+@keyframes countTo { from { --n: 0; } to { --n: var(--to); } }
+@media screen and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .count { position: relative; display: inline-block; font-variant-numeric: tabular-nums; }
+  .count > span { color: transparent; }
+  .count::after {
+    content: counter(n) attr(data-suffix); counter-reset: n var(--n);
+    position: absolute; left: 0; top: 0; white-space: nowrap;
+    animation: countTo 1500ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
+  }
+}
+
+/* The leading brand in the headline is swept with a marker once, after it
+   lands. A band, not a line, so it does not read as a link. */
+.home-bg ~ section .verdict-brand {
+  --mark: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: linear-gradient(var(--mark), var(--mark)) no-repeat 0 88% / 0% 0.3em;
+  animation: underline 900ms var(--ease) 700ms forwards;
+}
+@keyframes underline { to { background-size: 100% 0.3em; } }
+
+/* A sheen crosses the main button on hover. */
+.home-bg ~ section .btn-go,
+.home-bg ~ section .btn-go:hover:not(:disabled) {
+  background: var(--accent) linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.3) 50%, transparent 60%) no-repeat 130% 0 / 250% 100%;
+  transition: background-position 0s, filter var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.home-bg ~ section .btn-go:hover:not(:disabled) { background-position: -70% 0; transition-duration: 800ms, var(--fast), var(--fast), var(--fast); }
+
+/* Cards light up under the pointer. */
+.home-bg ~ section :is(.kpi, .step, .ob-card, .pick-card, .faq-item, .buffer) {
+  background-image: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--accent) calc(var(--spot) * 13%), transparent), transparent 72%);
+  transition: --spot 400ms var(--ease), transform 260ms var(--ease), box-shadow 260ms var(--ease), border-color var(--fast) var(--ease);
+}
+@media (hover: hover) {
+  .home-bg ~ section :is(.kpi, .step, .ob-card, .pick-card, .faq-item, .buffer):hover { --spot: 1; }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+  /* Bars below the first screen fill as they scroll in, instead of on load
+     where nobody saw them. */
+  .home-bg ~ section :is(.reveal, .ob-card, .pick-card) .meter > i {
+    animation: barGrow linear both; animation-delay: 0s;
+    animation-timeline: view(); animation-range: entry 20% cover 32%;
+  }
+  .home-bg ~ section .lb-bar:last-child .meter > i { animation-range: entry 60% cover 40%; }
+  /* Each assistant's favourite: cards arrive in turn, like the other grids. */
+  .home-bg ~ section .pick-card {
+    animation: revealCard linear both; animation-delay: 0s;
+    animation-timeline: view(); animation-range: entry 0% cover 22%;
+  }
+  .home-bg ~ section .pick-card:nth-child(3n + 2) { animation-range: entry 8% cover 26%; }
+  .home-bg ~ section .pick-card:nth-child(3n + 3) { animation-range: entry 16% cover 30%; }
+  /* The line across the top of each step draws itself. */
+  .home-bg ~ section .step::before {
+    transform-origin: left; animation: barGrow linear both;
+    animation-timeline: view(); animation-range: entry 100% cover 45%;
+  }
+  /* The sign-up box and the biggest drop rise in like every other section. */
+  .home-bg ~ section :is(.subscribe, .snub) {
+    animation: revealCard linear both;
+    animation-timeline: view(); animation-range: entry 0% cover 20%;
+  }
+  }
+}
+
+/* Common questions open and close smoothly, and the plus turns into a minus. */
+.faq-item > summary::after { transition: transform 300ms var(--ease); }
+.faq-item[open] > summary::after { transform: rotate(180deg); }
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+  .faq-item { interpolate-size: allow-keywords; }
+  .faq-item::details-content {
+    block-size: 0; opacity: 0; overflow: clip;
+    transition: block-size 340ms var(--ease), opacity 340ms var(--ease), content-visibility 340ms allow-discrete;
+  }
+  .faq-item[open]::details-content { block-size: auto; opacity: 1; }
+  }
+}

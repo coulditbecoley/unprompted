@@ -131,3 +131,23 @@ export function DotField({ gap = 24, size = 1.6, speed = 1, reach = 170, tokens 
     </div>
   );
 }
+
+const SPOT = ".kpi, .step, .ob-card, .pick-card, .faq-item, .buffer";
+
+/** Tells the card under the pointer where the pointer is, so CSS can draw a
+ *  soft light there (`--mx` / `--my` in globals.css). Renders nothing. */
+export function Spotlight() {
+  useEffect(() => {
+    if (!window.matchMedia("(hover: hover)").matches) return;
+    const move = (e: PointerEvent) => {
+      const card = (e.target as Element | null)?.closest?.<HTMLElement>(SPOT);
+      if (!card) return;
+      const box = card.getBoundingClientRect();
+      card.style.setProperty("--mx", `${e.clientX - box.left}px`);
+      card.style.setProperty("--my", `${e.clientY - box.top}px`);
+    };
+    document.addEventListener("pointermove", move, { passive: true });
+    return () => document.removeEventListener("pointermove", move);
+  }, []);
+  return null;
+}
