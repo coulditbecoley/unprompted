@@ -2389,6 +2389,10 @@ def test_the_claude_canary_stops_a_harness_that_can_write(monkeypatch, tmp_path)
         monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, b=broken, **k: b)
         with pytest.raises(cli_provider.ProviderError, match="inconclusive"):
             claude.qualify()  # a harness that never started proved nothing
+    limited = SimpleNamespace(returncode=1, stdout="", stderr="banner line\n" * 60 + "ERROR: usage limit")
+    monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: limited)
+    with pytest.raises(cli_provider.ProviderError, match="usage limit"):
+        claude.qualify()  # the reason comes last, after the banner: 2026-11-23 hid a Codex usage limit
     def reads(prompt, cwd, extra=()):
         return SimpleNamespace(returncode=0, stdout=Path(_re.search(r"read the file (\S+)", prompt).group(1)).read_text(), stderr="")
     monkeypatch.setattr(cli_provider.CliProvider, "_exec", lambda self, *a, **k: reads(*a, **k))

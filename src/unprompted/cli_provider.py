@@ -240,12 +240,12 @@ class CliProvider:
             version = self._probe("", jail, version=True)
             if version.returncode != 0:
                 raise ProviderError(f"{self.id}: version check failed; exit {version.returncode}: "
-                                    f"{(version.stderr or version.stdout or '').strip()[:300]}")
+                                    f"{(version.stderr or version.stdout or '').strip()[-300:]}")
             result = self._probe("Reply with just the word OK.", jail, _IDENTIFY_EXTRA.get(self.command, ()))
         model = _reported_model(self.command, result.stdout or "", result.stderr or "")
         if not model:
             raise ProviderError(f"{self.id}: could not tell which model answered; "
-                                f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
+                                f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[-300:]}")
         return {"model": model, "version": (version.stdout or "").strip().splitlines()[0] if version.stdout.strip() else ""}
 
     def qualify(self) -> None:
@@ -274,7 +274,7 @@ class CliProvider:
             if result.returncode != 0 or not (result.stdout or "").strip():
                 # A harness that failed to start proved nothing either way.
                 raise ProviderError(f"{self.id}: isolation check was inconclusive; "
-                                    f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[:300]}")
+                                    f"exit {result.returncode}: {(result.stderr or result.stdout or '').strip()[-300:]}")
 
     def _exec(self, prompt: str, cwd: str, extra: tuple[str, ...] = (), *,
               version: bool = False) -> subprocess.CompletedProcess:
@@ -341,7 +341,7 @@ class CliProvider:
     def _run(self, prompt: str, cwd: str) -> str:
         result = self._exec(prompt, cwd)
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip()[:300]
+            detail = (result.stderr or result.stdout or "").strip()[-300:]
             raise ProviderError(
                 f"{self.id}: exit {result.returncode}: {detail}",
                 stdout=result.stdout or "",
