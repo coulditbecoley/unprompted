@@ -317,15 +317,14 @@ global 0.01ms rule below and would otherwise leave sections invisible.
 
 The landing page alone has a moving background, added at the owner's request
 in November 2026: a fixed canvas of twinkling dots behind every section
-(`components/home-backdrop.tsx`, React Bits Pro "Flicker") and a slow drift on
-the hero glow. It is the one thing that does loop. It mounts after load, takes
-the theme's colours, is masked to half strength behind the text column, and
-never mounts under reduced motion. The component's source is licensed and
-cannot sit in this public repository, so `scripts/fetch-react-bits.mjs`
-downloads it at install and build time with `REACTBITS_LICENSE_KEY`; without
-the key a stub renders nothing and the static glow and dot grid remain. Cards
-inside the lower sections also enter one by one on the same scroll timeline as
-`.reveal`.
+(`DotField` in `components/motion.tsx`) and a slow drift on the hero glow. It
+is the one thing that does loop. It is our own code, with no library behind
+it: it draws at about 30 frames a second, takes the theme's colours, is masked
+to half strength behind the text column, and draws nothing under reduced
+motion. Section headings arrive a word at a time (`Words` in `app/page.tsx`) and
+cards inside the lower sections enter one by one, both on the same scroll
+timeline as `.reveal`. Standalone copies of all three are kept in the vault
+under `Web Designs/Website Assets`.
 
 `prefers-reduced-motion: reduce` collapses every animation and transition to
 0.01ms globally, and the smooth scroll with it.

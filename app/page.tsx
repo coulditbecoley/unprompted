@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 import fs from "node:fs";
 import path from "node:path";
 import { load as loadYaml } from "js-yaml";
@@ -28,7 +29,7 @@ import { CATEGORIES } from "@/lib/categories";
 import { inSentence } from "@/lib/shared";
 import { loadProviders } from "@/lib/providers";
 import { AwaitingFirstRun, HowToRead, Insights, Kpi, LeaderBars, StatusBar, TopPicks, brandHref } from "@/components/ui";
-import { HomeBackdrop } from "@/components/home-backdrop";
+import { DotField } from "@/components/motion";
 
 type QuestionSpec = {
   questions: { id: string; text: string }[];
@@ -52,6 +53,21 @@ export function generateMetadata(): Metadata {
     alternates: { canonical: "/" },
     openGraph: { type: "website", siteName: "Unprompted", title: "Unprompted — what AI recommends when nobody's paying", description },
   };
+}
+
+/** A heading that arrives one word at a time as it scrolls in. The motion is
+ *  all CSS (`.word` in globals.css); this only wraps each word, on the server,
+ *  so the heading is ordinary text in the HTML. */
+function Words({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(" ").map((word, i) => (
+        <Fragment key={i}>
+          <span className="word" style={{ "--i": i } as React.CSSProperties}>{word}</span>{" "}
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
 export default function Home() {
@@ -132,7 +148,7 @@ export default function Home() {
 
   return (
     <>
-      <HomeBackdrop />
+      <DotField />
       <section className="hero">
         <div className="hero-bg" aria-hidden="true" />
         <div className="shell hero-grid">
@@ -248,7 +264,7 @@ export default function Home() {
             <div className="sec-head">
               <div>
                 <p className="label">The board</p>
-                <h2>Who the assistants recommend</h2>
+                <h2><Words text="Who the assistants recommend" /></h2>
               </div>
               <Link className="btn btn-sm" href={`/chart/${CATEGORY}`}>
                 Open full board <span className="arr" aria-hidden="true">→</span>
@@ -302,7 +318,7 @@ export default function Home() {
             {board.length > 1 && (
               <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">At a glance</p>
-                <h2 style={{ margin: "4px 0 6px" }}>Mentioned often is not the same as named first</h2>
+                <h2 style={{ margin: "4px 0 6px" }}><Words text="Mentioned often is not the same as named first" /></h2>
                 <p className="section-lead" style={{ marginBottom: 16 }}>
                   The pale bar is how often a brand was mentioned at all. The solid bar is
                   how often it was named first. When the two differ, the assistants know the
@@ -315,7 +331,7 @@ export default function Home() {
             {picks.length > 1 && (
               <div className="reveal" style={{ marginTop: 52 }}>
                 <p className="label">Assistant by assistant</p>
-                <h2 style={{ margin: "4px 0 6px" }}>Each assistant&rsquo;s favourite</h2>
+                <h2 style={{ margin: "4px 0 6px" }}><Words text="Each assistant’s favourite" /></h2>
                 <TopPicks picks={picks} labels={engineLabels} hrefFor={(b) => brandHref(CATEGORY, b)} />
               </div>
             )}
@@ -327,7 +343,7 @@ export default function Home() {
 
       <section className="shell section reveal" id="how" style={{ paddingTop: 0 }}>
         <p className="label">How it works</p>
-        <h2 style={{ margin: "4px 0 18px" }}>Three steps, every Monday</h2>
+        <h2 style={{ margin: "4px 0 18px" }}><Words text="Three steps, every Monday" /></h2>
         <ol className="steps">
           <li className="step card-lift">
             <span className="step-n mono">01</span>
@@ -367,7 +383,7 @@ export default function Home() {
           <div className="sec-head">
             <div>
               <p className="label">Other boards</p>
-              <h2>Latest results in each category</h2>
+              <h2><Words text="Latest results in each category" /></h2>
             </div>
             <Link className="btn btn-sm btn-ghost" href="/categories">
               All categories <span className="arr" aria-hidden="true">→</span>
@@ -397,7 +413,7 @@ export default function Home() {
       {faq.length > 0 && (
         <section className="shell section reveal" id="faq" style={{ paddingTop: 0 }}>
           <p className="label">Common questions</p>
-          <h2 style={{ margin: "4px 0 18px" }}>Before you trust a number here</h2>
+          <h2 style={{ margin: "4px 0 18px" }}><Words text="Before you trust a number here" /></h2>
           {/* Same words for readers and for search engines, from one list. */}
           <script
             type="application/ld+json"

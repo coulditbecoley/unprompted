@@ -1025,7 +1025,8 @@ test("homepage names each other board's own method and assistant count", async (
     return nativeRequire(id);
   } });
   const html = renderToStaticMarkup(exports.default());
-  assert.match(html, /Latest results in each category/);
+  // Headings are wrapped word by word for the scroll entrance, so read the text.
+  assert.match(html.replace(/<[^>]+>/g, ""), /Latest results in each category/);
   assert.doesNotMatch(html, /Measured the same way/);
   for (const category of categories.CATEGORIES.filter(c => c.slug !== categories.DEFAULT_CATEGORY)) {
     const run = data.latestRun(category.slug);

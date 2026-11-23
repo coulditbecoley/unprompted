@@ -263,6 +263,20 @@ h1, h2, h3 { letter-spacing: -0.022em; line-height: 1.15; text-wrap: balance; }
   :is(.steps, .ob-grid, .insights) > :nth-child(3) { animation-range: entry 16% cover 30%; }
   }
 }
+/* Headings arrive a word at a time (Words in app/page.tsx). The words
+   are real text in the HTML and only the entrance is scripted by CSS, so a
+   browser without scroll timelines, or a reader, just gets the heading. */
+.word { display: inline-block; }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+  .word {
+    animation: wordIn linear both;
+    animation-timeline: view();
+    animation-range: entry calc(20% + var(--i, 0) * 12%) entry calc(120% + var(--i, 0) * 12%);
+  }
+  }
+}
+@keyframes wordIn { from { opacity: 0; transform: translateY(0.5em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes revealCard { from { opacity: 0; transform: translateY(22px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes rise { from { opacity: 0.35; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .rise { animation: rise 620ms var(--ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
@@ -1143,8 +1157,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
     radial-gradient(60% 55% at 22% 18%, var(--glow), transparent 70%),
     radial-gradient(40% 40% at 85% 10%, var(--glow), transparent 70%);
 }
-/* The landing page's moving background (components/home-backdrop.tsx): a fixed
-   canvas of twinkling dots behind every section. Strong in the margins, calmer
+/* The landing page's moving background (DotField in components/motion.tsx): a
+   fixed canvas of twinkling dots behind every section. Strong in the margins, calmer
    behind the column of text. Panels are opaque, so numbers never sit on it. */
 .home-bg {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -1154,7 +1168,8 @@ a.cat-card:hover { border-color: var(--fg-3); transform: translateY(-1px); }
 }
 @keyframes bgIn { from { opacity: 0; } }
 /* The static dot grid is the fallback; once the canvas is in, it would double up. */
-main:has(.flicker-canvas) .hero-bg::after { display: none; }
+.home-bg canvas { display: block; width: 100%; height: 100%; }
+main:has(.home-bg canvas) .hero-bg::after { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   .hero-bg { animation: glowDrift 16s ease-in-out infinite alternate; }
   @keyframes glowDrift { to { transform: translate3d(3%, 4%, 0) scale(1.08); } }
