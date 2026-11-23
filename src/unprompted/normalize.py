@@ -233,6 +233,11 @@ class AliasMap:
                     r"https?://(?:support\.)?writer\.com(?:/|[)\s]|$)", line, re.I
                 ):
                     return "Writer.com"
+                # Writing v5: the name closing a bold product label ("**Writer:**",
+                # "**Jasper or Writer:**"). A role such as "**Technical Writer:**"
+                # or a lower-case noun does not qualify.
+                if re.search(r"(?:\*\*|\bor |, )Writer:?\*\*", visible):
+                    return "Writer.com"
             return None
         # "Superhuman AI" is the same name wearing a noise word, as in resolve().
         if "superhuman" not in (key, *_strippings(name)) or "Superhuman Mail" not in self.canonical_names:

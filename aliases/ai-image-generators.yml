@@ -68,6 +68,11 @@ canonical:
     - krea ai
   Freepik:
     - freepik
+  # Owner decision 2026-11-23: a site people use to reach Flux and other
+  # models, named beside Krea and Freepik, so it is charted the same way.
+  OpenArt:
+    - openart
+    - openart ai
   Canva:
     - canva
     - canva magic media

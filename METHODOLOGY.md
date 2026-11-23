@@ -1,8 +1,20 @@
 # Methodology
 
-**Version 2** · effective 2026-08-24; **AI writing tools version 4** · effective 2026-11-17
+**Version 2** · effective 2026-08-24; **AI writing tools version 5** · effective 2026-11-24
 
-Writing version 4 (method version 7) widens the Superhuman context rule. On
+Writing version 5 (method version 8) widens the Writer context rule. On
+2026-11-23 the writing week was held because eleven answers named Writer as a
+bold product label ("**Writer:** Aimed at enterprises", "**Jasper or Writer:**")
+without citing writer.com on the same line, so all eleven stayed quarantined,
+although each one plainly meant the enterprise writing product. Bare Writer now
+also resolves to Writer.com when the capitalised name closes a bold label, on its
+own or after "or" or a comma. A longer label such as "**Technical Writer:**" and
+the lower-case noun still do not resolve, and there is still no unconditional
+alias. Week-over-week movement is not reported across the change. The stored
+2026-11-23 answers are re-read under version 5 and labelled method 8; the
+questions, repetitions and engines are unchanged, so only the reading differs.
+
+Writing version 4 (2026-11-17, method version 7) widens the Superhuman context rule. On
 2026-11-16 the writing week was held because engines described Superhuman as an
 "email app" or a "premium inbox" rather than an "email client", so eleven of the
 fourteen answers that named it left it quarantined, although each one plainly
